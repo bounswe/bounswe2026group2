@@ -1,10 +1,12 @@
 ## 1. Description
  Brief and explanotory description of the problem
 
-## 2. Acceptance Criteria
-Acceptance conditon of the issue
-  - Criteria 1
-  - Criteria 2
+## 2. Tasks / Acceptance Criteria
+Checklist of actionable steps.
+
+- [ ] Task 1
+- [ ] Task 2
+- [ ] Task 3
 
 ## 3. Dependencies
 List blocking or related issues.
