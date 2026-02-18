@@ -1,3 +1,11 @@
+---
+name: Meeting Notes Template
+about: Track a unit of work within the project lifecycle
+title: "Upload Weekly Meeting Notes to Wiki: Week XX"
+labels: []
+assignees: []
+---
+
 ## 1. Description
  Brief and explanotory description of the problem
 
