@@ -1,7 +1,7 @@
 ---
-name: Meeting Notes Template
+name: Issue Template
 about: Track a unit of work within the project lifecycle
-title: "Upload Weekly Meeting Notes to Wiki: Week XX"
+title: ""
 labels: []
 assignees: []
 ---
