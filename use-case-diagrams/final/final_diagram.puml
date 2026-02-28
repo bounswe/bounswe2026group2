@@ -1,0 +1,98 @@
+@startuml
+left to right direction
+skinparam roundcorner 8
+' Çizgilerin birbirine girmemesi için ortho yerine polyline daha esnek olabilir
+skinparam linetype polyline
+
+actor "Contributer" as Producer
+
+rectangle "Content Management System" {
+    
+    ' Sol Sütun: Ana Aksiyonlar
+    package "Core Actions" {
+        usecase "Login" as UC_Login
+        usecase "View" as UC_ViewNode
+        usecase "Create Post" as UC_CreatePost
+        usecase "Logout" as UC_Logout
+    }
+    package "Login" as Login{
+        usecase "Enter a Email Adress" as email
+        usecase "Enter a Password" as pass
+        usecase "Verify the Email" as Verify
+    }
+    package "View" as View{
+        usecase "Navigate" as Navigate 
+        usecase "Dashboard" as Dashboard
+        usecase "Profile" as Profile
+    }
+    package "Navigate" as navigate {
+        usecase "Map" as nMap
+        usecase "Search Bar" as Searchbar
+        usecase "Preview Marker" as Pmarker
+    }
+
+    ' Orta/Sağ Sütun: Detaylar
+    package "Location Details" as Location{
+        usecase "Add Location" as UC_Location
+        usecase "Pinpoint a Location" as pin
+        usecase "Use Current Location" as Current 
+    }
+    
+    package "Story Details" as Story{
+        usecase "Post a Story" as UC_Story
+        usecase "Add a Text" as text
+        usecase "Add a Voice Recording" as recording
+        usecase "Add Photo" as Photo
+        usecase "Add Video" as Video
+    }
+
+    package "Time Details" {
+        usecase "Add Time" as UC_Time
+        usecase "Add Exact Date" as date
+        usecase "Choose A Range" as range
+    }
+    package "Transcription" as Transcription{
+        usecase "Transcribe Audio" as Taudio
+        usecase "Review the Transcript" as Trew
+    }
+
+    ' --- İlişkiler ---
+    
+    Producer --> UC_Login
+    Producer --> UC_ViewNode
+    Producer --> UC_CreatePost
+    UC_ViewNode --> Navigate
+    Navigate --> Searchbar
+    Navigate --> nMap
+    UC_ViewNode --> Dashboard
+    UC_Location --> pin
+    Producer --> UC_Logout
+
+    ' Create Post Uzantıları
+    UC_CreatePost ..> UC_Time : <<include>>
+    UC_CreatePost <.. UC_Location : <<extend>>
+    UC_CreatePost ..> UC_Story : <<include>>
+    UC_Login ..> email: <<include>>
+    UC_Login ..> pass : <<include>>
+    nMap <.. Pmarker : <<extend>>
+    pin <.. Current : <<extend>>
+
+
+    ' Alt Detaylar (Aynı gruptakiler birbirine yakın durur)
+    UC_Story <.. Photo : <<extend>>
+    UC_Story <.. Video : <<extend>>
+    UC_Time <.. range : <<extend>>
+    UC_Time <.. date : <<extend>>
+    UC_Story <.. text: <<extend>>
+    UC_Story <.. recording: <<extend>>
+    UC_Location <.. nMap: <<extend>>
+    UC_Location <.. Searchbar: <<extend>>
+    recording <.. Taudio : <<extend>>
+    Video <.. Taudio : <<extend>>
+    Taudio ..> Trew : <<include>>
+    Dashboard ..> Profile : <<include>>
+    email ..> Verify : <<include>>
+
+}
+
+@enduml
