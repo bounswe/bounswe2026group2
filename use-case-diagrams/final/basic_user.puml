@@ -1,0 +1,120 @@
+@startuml BasicUser
+left to right direction
+skinparam roundcorner 8
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontColor #333333
+
+skinparam usecase {
+  BackgroundColor #F5F5F5
+  BorderColor #888888
+  FontColor #333333
+}
+
+skinparam actor {
+  BackgroundColor #F5F5F5
+  BorderColor #555555
+  FontColor #333333
+}
+
+skinparam rectangle {
+  BackgroundColor #FAFAFA
+  BorderColor #555555
+  FontColor #333333
+}
+
+skinparam package {
+  BackgroundColor #EEEEEE
+  BorderColor #999999
+  FontColor #333333
+}
+
+skinparam ArrowColor #555555
+
+actor "Basic User" as BU
+
+' --- Core use cases (same distance from actor) ---
+usecase "Navigate" as UC_Navigate
+usecase "Filter posts" as UC_Filter
+usecase "View post" as UC_ViewPost
+usecase "View profile" as UC_Profile
+usecase "Log in" as UC_Login
+
+BU --> UC_Navigate
+BU --> UC_Filter
+BU --> UC_ViewPost
+BU --> UC_Profile
+BU --> UC_Login
+
+' Force core nodes to sit on same "column" visually
+UC_Navigate -[hidden]-> UC_Filter
+UC_Filter   -[hidden]-> UC_ViewPost
+UC_ViewPost -[hidden]-> UC_Profile
+UC_Profile  -[hidden]-> UC_Login
+
+' --- Log in includes ---
+usecase "Provide Username" as UC_ProvideUsername
+usecase "Provide Password" as UC_ProvidePassword
+
+UC_Login ..> UC_ProvideUsername : <<include>>
+UC_Login ..> UC_ProvidePassword : <<include>>
+
+' Keep login sub-steps visually near each other (optional but helps)
+UC_ProvideUsername -[hidden]-> UC_ProvidePassword
+
+' --- Navigate extensions ---
+usecase "Search bar" as UC_Search
+usecase "Map" as UC_Map
+usecase "Preview marker" as UC_Preview
+usecase "Current location" as UC_Location
+usecase "PC Usage" as UC_PC
+
+UC_Navigate <|-- UC_Search  
+UC_Navigate <|-- UC_Map     
+UC_Map <.. UC_Preview  : <<extend>>
+UC_Navigate <.. UC_Location : <<extend>>
+UC_Preview ..> UC_PC : <<include>>
+
+' --- Filter specializations (preserve original direction) ---
+usecase "Filter by date" as UC_FilterDate
+usecase "Filter by content type" as UC_FilterType
+
+UC_FilterDate --|> UC_Filter
+UC_FilterType --|> UC_Filter
+
+' --- View post extensions ---
+usecase "Watch videos" as UC_Videos
+usecase "Look at photos" as UC_Photos
+usecase "Read text stories" as UC_Stories
+usecase "Share post" as UC_Share
+usecase "Interact with post" as UC_Interact
+
+UC_ViewPost <|-- UC_Videos   
+UC_ViewPost <|-- UC_Photos    
+UC_ViewPost <|-- UC_Stories  
+UC_ViewPost <.. UC_Share    : <<extend>>
+UC_ViewPost <.. UC_Interact : <<extend>>
+
+' --- Interact includes login + its extensions ---
+usecase "Save post" as UC_Save
+usecase "Like post" as UC_Like
+usecase "Comment on post" as UC_Comment
+usecase "Report post" as UC_Report
+
+UC_Interact ..> UC_Login : <<include>>
+UC_Interact <.. UC_Save    : <<extend>>
+UC_Interact <|-- UC_Like    
+UC_Interact <|-- UC_Comment 
+UC_Interact <|-- UC_Report  
+
+' --- Profile extension ---
+usecase "Change password" as UC_ChangePass
+UC_Profile <.. UC_ChangePass : <<extend>>
+
+' --- Login/logout relationship (preserve original) ---
+usecase "Log out" as UC_Logout
+UC_Login <.. UC_Logout : <<extend>>
+UC_Logout ..> UC_Login : <<include>>
+
+@enduml
