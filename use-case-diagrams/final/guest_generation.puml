@@ -1,0 +1,93 @@
+@startuml Guest
+left to right direction
+skinparam roundcorner 8
+
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontColor #333333
+
+skinparam usecase {
+  BackgroundColor #F5F5F5
+  BorderColor #888888
+  FontColor #333333
+}
+
+skinparam actor {
+  BackgroundColor #F5F5F5
+  BorderColor #555555
+  FontColor #333333
+}
+
+skinparam rectangle {
+  BackgroundColor #FAFAFA
+  BorderColor #555555
+  FontColor #333333
+}
+
+skinparam package {
+  BackgroundColor #EEEEEE
+  BorderColor #999999
+  FontColor #333333
+}
+
+skinparam ArrowColor #555555
+
+actor "Guest User" as Guest
+
+
+    usecase "Sign Up" as UC_SignUp
+    usecase "Select\nLocation" as UC_Navigate
+    usecase "Filter Posts" as UC_Filter
+    usecase "Look at Posts" as UC_LookPosts
+
+
+    usecase "Provide an\nUnregistered\nEmail Address" as UC_Email
+    usecase "Provide a\nUnique Username" as UC_Username
+    usecase "Provide a\nSafe Password" as UC_Password
+
+    usecase "Pinpoint\non Map" as UC_Pinpoint
+    usecase "Search with\nSearchbar" as UC_Searchbar
+    usecase "Use Current\nLocation" as UC_CurrentLocation
+    usecase "Preview\nMarker" as UC_PreviewMarker
+
+    usecase "Filter by\nDate" as UC_Dates
+    usecase "Filter by\nContent Type" as UC_ContentType
+
+    usecase "Watch\nVideo" as UC_Video
+    usecase "Read\nText Story" as UC_TextStory
+    usecase "Listen to\nAudio Recording" as UC_Audio
+    usecase "Look at\nImages" as UC_Images
+
+    ' --- Relationships ---
+
+    Guest --> UC_SignUp
+    Guest --> UC_Navigate
+    Guest --> UC_LookPosts
+
+    ' Sign Up (all mandatory steps)
+    UC_SignUp ..> UC_Email    : <<include>>
+    UC_SignUp ..> UC_Username : <<include>>
+    UC_SignUp ..> UC_Password : <<include>>
+
+    ' Select Location (sub-options - Generalization)
+    UC_Navigate <|-- UC_Pinpoint
+    UC_Navigate <|-- UC_Searchbar
+    UC_Navigate <|-- UC_CurrentLocation
+
+    ' Optional extras on map
+    UC_Pinpoint <.. UC_PreviewMarker : <<extend>>
+
+    ' Filter Posts
+    UC_Filter <|-- UC_Dates
+    UC_Filter <|-- UC_ContentType
+
+    ' Look at Posts
+    UC_LookPosts <|-- UC_Video
+    UC_LookPosts <|-- UC_TextStory
+    UC_LookPosts <|-- UC_Audio
+    UC_LookPosts <|-- UC_Images
+    UC_LookPosts ..> UC_Filter : <<extend>>
+
+
+@enduml
