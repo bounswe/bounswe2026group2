@@ -12,10 +12,11 @@ const BUTTON_LABELS = [
   "Random Dog",
   "Quotes",
   "Cat Facts",
-  "Button 4",
+  "ibo button",
   "Button5-Furkan",
   "User Data",
   "Ankara Weather Now",
   "Button Akif",
+
 
 ];
