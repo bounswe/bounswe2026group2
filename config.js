@@ -10,7 +10,7 @@ const NUM_BUTTONS = 8;
 const BUTTON_LABELS = [
   "Button 1",
   "Button 2",
-  "Cat Facts",
+  "Button 3",
   "Button 4",
   "Button 5",
   "Button 6",
