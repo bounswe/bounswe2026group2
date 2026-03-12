@@ -6,11 +6,11 @@
  */
 
 function onButton1Click() {
-  console.log("Button 1 clicked -- implement me!");
+  window.location.href = "random_dog_api.html";
 }
 
 function onButton2Click() {
-  console.log("Button 2 clicked -- implement me!");
+  window.location.href = "quotes.html";
 }
 
 function onButton3Click() {
@@ -22,9 +22,24 @@ function onButton4Click() {
 }
 
 function onButton5Click() {
-  console.log("Button 5 clicked -- implement me!");
+  window.location.href = "api-furkan.html";
 }
 
+async function onButton6Click() {
+  try {
+    const response = await fetch('https://jsonplaceholder.typicode.com/users/1');
+    const data = await response.json();
+
+    const newWindow = window.open("", "_blank");
+    newWindow.document.write(`
+      <h3>API Response</h3>
+      <p><b>Description:</b> This data is a sample user profile retrieved from the JSONPlaceholder APIs.</p>
+      <pre>${JSON.stringify(data, null, 2)}</pre>
+    `);
+    } catch (error) {
+      alert("Error!");
+    }
+}
 function onButton8Click() {
   window.location.href = "cat.html"
 }
