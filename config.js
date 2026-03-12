@@ -14,6 +14,6 @@ const BUTTON_LABELS = [
   "Button 4",
   "Button5-Furkan",
   "Button 6",
-  "Button 7",
+  "Ankara Weather Now",
   "Button 8",
 ];
