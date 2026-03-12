@@ -1,5 +1,17 @@
-FROM nginx:alpine
+# Base image
+FROM node:18
 
-COPY . /usr/share/nginx/html
+# App directory
+WORKDIR /app
 
-EXPOSE 80
+# Copy project files
+COPY . .
+
+# Install dependencies (varsa)
+RUN npm install
+
+# App port
+EXPOSE 3000
+
+# Start application
+CMD ["npm", "start"]

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Random Joke API</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6f8;
+      margin: 0;
+      text-align: center;
+    }
+
+    header {
+      background-color: #2c3e50;
+      color: white;
+      padding: 20px;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .container {
+      margin-top: 40px;
+    }
+
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      width: 400px;
+      margin: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    img {
+      width: 120px;
+      margin-bottom: 20px;
+    }
+
+    #joke {
+      font-size: 18px;
+      margin-top: 15px;
+      color: #333;
+    }
+
+    .description {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #777;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  Random Joke Generator
+</header>
+
+<div class="container">
+  <div class="card">
+
+    <img src="https://cdn-icons-png.flaticon.com/512/742/742751.png" alt="joke icon">
+
+    <h2>Get a Random Joke</h2>
+
+    <p id="joke">Loading joke...</p>
+
+    <p class="description">
+      This page retrieves a random joke from the 
+      <b>Official Joke API</b> and displays it below.
+    </p>
+
+  </div>
+</div>
+
+<script>
+fetch("https://official-joke-api.appspot.com/random_joke")
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("joke").innerText =
+      data.setup + " - " + data.punchline;
+  });
+</script>
+
+</body>
+</html>
