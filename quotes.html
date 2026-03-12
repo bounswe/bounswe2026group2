@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quotes</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+      padding: 24px;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 640px;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+      padding: 48px 40px;
+      text-align: center;
+    }
+
+    .card h1 {
+      font-size: 1.875rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 32px;
+    }
+
+    #quote-text {
+      font-size: 1.25rem;
+      color: #334155;
+      line-height: 1.7;
+      font-style: italic;
+      margin-bottom: 16px;
+      min-height: 80px;
+    }
+
+    #quote-author {
+      font-size: 1rem;
+      color: #64748b;
+      font-weight: 500;
+      margin-bottom: 40px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    button {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 12px;
+      background-color: #4f46e5;
+      color: #ffffff;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transition: background-color 150ms, box-shadow 150ms;
+    }
+
+    button:hover {
+      background-color: #4338ca;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+    }
+
+    button:active {
+      background-color: #3730a3;
+    }
+
+    #back-btn {
+      background-color: #64748b;
+    }
+
+    #back-btn:hover {
+      background-color: #475569;
+      box-shadow: 0 4px 12px rgba(100, 116, 139, 0.35);
+    }
+
+    #back-btn:active {
+      background-color: #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Quotes</h1>
+    <p id="quote-text">Loading...</p>
+    <p id="quote-author"></p>
+    <div class="btn-row">
+      <button id="new-btn" onclick="fetchQuote()">New Quote</button>
+      <button id="back-btn" onclick="window.location.href='index.html'">Back</button>
+    </div>
+  </div>
+
+  <script>
+    async function fetchQuote() {
+      document.getElementById("quote-text").textContent = "Loading...";
+      document.getElementById("quote-author").textContent = "";
+
+      const response = await fetch("https://dummyjson.com/quotes/random");
+      const data = await response.json();
+
+      document.getElementById("quote-text").textContent = `"${data.quote}"`;
+      document.getElementById("quote-author").textContent = `— ${data.author}`;
+    }
+
+    fetchQuote();
+  </script>
+</body>
+</html>
