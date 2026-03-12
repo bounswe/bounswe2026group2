@@ -8,9 +8,9 @@
 const NUM_BUTTONS = 5;
 
 const BUTTON_LABELS = [
-  "Button 1",
-  "Button 2",
-  "Button 3",
-  "Button 4",
-  "Button 5",
+  "Submit",
+  "Cancel",
+  "Reset",
+  "Examlpe",
+  "Button5-Furkan"
 ];
