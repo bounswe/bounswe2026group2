@@ -13,7 +13,7 @@ const BUTTON_LABELS = [
   "Cat Facts",
   "Button 4",
   "Button5-Furkan",
-  "Button 6",
+  "User Data",
   "Ankara Weather Now",
   "Button 8",
 ];
