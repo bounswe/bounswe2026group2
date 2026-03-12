@@ -24,3 +24,20 @@ function onButton4Click() {
 function onButton5Click() {
   console.log("Button 5 clicked -- implement me!");
 }
+
+async function onButton6Click() {
+  try {
+    const response = await fetch('https://jsonplaceholder.typicode.com/users/1');
+    const data = await response.json();
+
+    const newWindow = window.open("", "_blank");
+    newWindow.document.write(`
+      <h3>API Response</h3>
+      <p><b>Description:</b> This data is a sample user profile retrieved from the JSONPlaceholder APIs.</p>
+      <pre>${JSON.stringify(data, null, 2)}</pre>
+    `);
+    } catch (error) {
+      alert("Error!");
+    }
+}
+
