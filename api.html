@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Public API Example</title>
+</head>
+<body>
+
+<h1>Random Joke</h1>
+<p id="joke"></p>
+
+<p>This page displays a random joke retrieved from a public API.</p>
+
+<script>
+fetch("https://official-joke-api.appspot.com/random_joke")
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("joke").innerText =
+      data.setup + " - " + data.punchline;
+  });
+</script>
+
+</body>
+</html>
