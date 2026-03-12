@@ -6,15 +6,19 @@
  */
 
 function onButton1Click() {
-  console.log("Button 1 clicked -- implement me!");
+  window.location.href = "random_dog_api.html";
 }
 
 function onButton2Click() {
-  console.log("Button 2 clicked -- implement me!");
+  window.location.href = "quotes.html";
 }
 
 function onButton3Click() {
-  console.log("Button 3 clicked -- implement me!");
+  // Navigate to Cat Facts page
+  // API: https://catfact.ninja/fact
+  // Returns: { fact: "string", length: number }
+  // Displays: Random educational facts about cats
+  window.location.href = "catfact.html";
 }
 
 function onButton4Click() {
@@ -22,7 +26,7 @@ function onButton4Click() {
 }
 
 function onButton5Click() {
-  console.log("Button 5 clicked -- implement me!");
+  window.location.href = "api-furkan.html";
 }
 
 async function onButton6Click() {
