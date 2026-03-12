@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><title>Random Cat</title></head>
+<body style="text-align:center; font-family:Arial; padding:20px;">
+<h1>Random Cat</h1>
+<div id="content">Loading...</div>
+<p style="color:gray;">This button fetches a random cat image from TheCatAPI. It displays a random cat photo along with its dimensions.</p>
+<br><a href="index.html">Go Back</a>
+<script>
+    fetch("https://api.thecatapi.com/v1/images/search")
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            var cat = data[0];
+            document.getElementById("content").innerHTML =
+                "<img src='" + cat.url + "' width='400'>" +
+                "<p><strong>Width:</strong> " + cat.width + "px</p>" +
+                "<p><strong>Height:</strong> " + cat.height + "px</p>";
+        });
+</script>
+</body>
+</html>

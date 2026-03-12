@@ -14,11 +14,7 @@ function onButton2Click() {
 }
 
 function onButton3Click() {
-  // Navigate to Cat Facts page
-  // API: https://catfact.ninja/fact
-  // Returns: { fact: "string", length: number }
-  // Displays: Random educational facts about cats
-  window.location.href = "catfact.html";
+  console.log("Button 3 clicked -- implement me!");
 }
 
 function onButton4Click() {
@@ -44,4 +40,6 @@ async function onButton6Click() {
       alert("Error!");
     }
 }
-
+function onButton8Click() {
+  window.location.href = "cat.html"
+}
