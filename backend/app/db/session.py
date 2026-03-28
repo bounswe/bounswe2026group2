@@ -8,11 +8,19 @@ from app.core.config import settings
 
 # Supabase (and most managed Postgres) give you a postgresql:// URL.
 # SQLAlchemy async needs postgresql+asyncpg://, so we swap the scheme here.
-_url = settings.DATABASE_URL.replace(
-    "postgresql://", "postgresql+asyncpg://", 1
-).replace(
-    "postgres://", "postgresql+asyncpg://", 1
-)
+# We only replace if the URL doesn't already have the correct scheme.
+_raw_url = settings.DATABASE_URL
+if _raw_url.startswith("postgresql+asyncpg://"):
+    _url = _raw_url
+elif _raw_url.startswith("postgresql://"):
+    _url = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif _raw_url.startswith("postgres://"):
+    _url = _raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+else:
+    raise ValueError(
+        f"DATABASE_URL has an unexpected scheme. "
+        f"Expected postgresql:// or postgres://, got: {_raw_url[:30]!r}"
+    )
 
 # SQL query logging
 # ─────────────────
