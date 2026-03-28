@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  # ── 1. UNIT TESTS ────────────────────────────────────────────────────────────
+
+  backend-unit:
+    name: Backend Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: echo "pytest tests/unit/ -v"  # placeholder
+        # Covers: email/password validation, coordinate parsing, JWT helpers,
+        #         model constraints, file size checks
+
+  frontend-unit:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Run frontend unit tests
+        run: echo "test"  # placeholder
+        # Covers: form validation components, date formatting, coordinate display,
+        #         isolated component rendering
+
+  # ── 2. INTEGRATION TESTS ─────────────────────────────────────────────────────
+
+  backend-integration:
+    name: Backend Integration Tests
+    runs-on: ubuntu-latest
+    needs: [backend-unit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run integration tests
+        working-directory: backend
+        run: echo "pytest tests/integration/ -v"  # placeholder
+        # Covers: registration flow (API → service → DB), login + token issuance,
+        #         story creation with user FK, geospatial data retrieval,
+        #         permission enforcement at API boundary
+
+  # ── 3. API TESTS ─────────────────────────────────────────────────────────────
+
+  backend-api:
+    name: Backend API Tests
+    runs-on: ubuntu-latest
+    needs: [backend-integration]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Run API tests
+        working-directory: backend
+        run: echo "pytest tests/api/ -v"  # placeholder
+        # Covers: POST /auth/register, POST /auth/login, POST /stories,
+        #         GET /stories, GET /stories/{id}, GET /stories/search, GET /health
+        # Each endpoint tested for: success, error cases, invalid input,
+        #         missing/expired/valid auth tokens, status codes, response schema
+
+  # ── 4. E2E TESTS ─────────────────────────────────────────────────────────────
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [backend-api, frontend-unit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run E2E tests
+        run: echo "playwright test"  # placeholder
+
+  # ── 5. DEPLOY ─────────────────────────────────────────────────────────────────
+
+  trigger-deploy:
+    name: Trigger Deployment
+    runs-on: ubuntu-latest
+    needs: e2e
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+
+    steps:
+      - name: Trigger Deploy Workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'deploy.yml',
+              ref: context.ref,
+            });
