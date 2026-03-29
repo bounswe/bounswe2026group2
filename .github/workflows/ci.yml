@@ -26,6 +26,19 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,6 +57,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/localhistory
           LOG_SQL: "false"
+          STORAGE_ENDPOINT: http://localhost:9000
+          STORAGE_ACCESS_KEY: minioadmin
+          STORAGE_SECRET_KEY: minioadmin
+          STORAGE_REGION: us-east-1
         run: uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 
       - name: Wait for backend to be ready
@@ -59,6 +76,7 @@ jobs:
           echo "$RESPONSE"
           echo "$RESPONSE" | grep '"status":"ok"'
           echo "$RESPONSE" | grep '"db":"ok"'
+          echo "$RESPONSE" | grep '"storage":"ok"'
 
   # ── 1. UNIT TESTS ────────────────────────────────────────────────────────────
 
