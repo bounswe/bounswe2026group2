@@ -21,6 +21,19 @@ services:
     depends_on:
       - db
 
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web UI (http://localhost:9001, login: minioadmin/minioadmin)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
   # frontend:
   #   build:
   #     context: ./frontend
@@ -29,3 +42,4 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:

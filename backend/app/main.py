@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.db.session import engine
+from app.services.storage import check_connection
 
 
 @asynccontextmanager
@@ -11,6 +12,8 @@ async def lifespan(app: FastAPI):
     # Startup: verify the DB connection is reachable
     async with engine.connect():
         pass
+    # Startup: verify storage backend is reachable
+    check_connection()
     yield
     # Shutdown: release connection pool
     await engine.dispose()
@@ -26,7 +29,7 @@ def root():
 
 @app.get("/health")
 async def health():
-    # Check DB connectivity — returns degraded status instead of crashing
+    # Check DB connectivity
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
@@ -34,7 +37,16 @@ async def health():
     except Exception as e:
         db_status = f"unreachable: {e}"
 
+    # Check storage connectivity
+    try:
+        check_connection()
+        storage_status = "ok"
+    except Exception as e:
+        storage_status = f"unreachable: {e}"
+
+    all_ok = db_status == "ok" and storage_status == "ok"
     return {
-        "status": "ok" if db_status == "ok" else "degraded",
+        "status": "ok" if all_ok else "degraded",
         "db": db_status,
+        "storage": storage_status,
     }
