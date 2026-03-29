@@ -11,3 +11,6 @@ alembic
 # Config
 pydantic-settings
 python-dotenv
+
+# Object storage (S3-compatible — works with MinIO locally and Supabase Storage in prod)
+boto3
