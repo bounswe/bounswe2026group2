@@ -1,7 +1,10 @@
-FROM nginx:alpine
+FROM node:22-alpine
 
-COPY index.html /usr/share/nginx/html/index.html
+WORKDIR /app
 
-EXPOSE 80
+COPY package.json package-lock.json ./
+RUN npm ci
 
-CMD ["nginx", "-g", "daemon off;"]
+COPY . .
+
+CMD ["npm", "run", "dev", "--", "--host"]
