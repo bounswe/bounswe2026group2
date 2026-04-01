@@ -1,0 +1,118 @@
+.first-post-badge-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.6);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  padding: 24px;
+}
+
+.first-post-badge-overlay--visible {
+  opacity: 1;
+}
+
+.first-post-badge {
+  background:
+    radial-gradient(ellipse at 30% 0%, rgba(196, 136, 58, 0.08) 0%, transparent 60%),
+    #FAF6F0;
+  border-radius: 20px;
+  padding: 48px 40px;
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 24px 80px rgba(44, 57, 48, 0.2),
+    0 0 0 1px rgba(196, 136, 58, 0.15);
+  animation: badgePopIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+.first-post-badge__glow {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(196, 136, 58, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+  animation: badgeGlowPulse 2.5s ease-in-out infinite;
+}
+
+.first-post-badge__icon {
+  margin-bottom: 20px;
+  animation: badgeIconSpin 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
+}
+
+.first-post-badge__title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2C3930;
+  margin: 0 0 10px;
+}
+
+.first-post-badge__subtitle {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 0.95rem;
+  color: #5A5246;
+  line-height: 1.6;
+  margin: 0 0 28px;
+}
+
+.first-post-badge__subtitle strong {
+  color: #C4883A;
+}
+
+.first-post-badge__button {
+  font-family: 'Source Sans 3', 'Source Sans Pro', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 12px 32px;
+  border: none;
+  border-radius: 8px;
+  background: #2C3930;
+  color: #FAF6F0;
+  cursor: pointer;
+  transition: all 0.25s;
+  letter-spacing: 0.02em;
+}
+
+.first-post-badge__button:hover {
+  background: #3A4D42;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(44, 57, 48, 0.2);
+}
+
+@keyframes badgePopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes badgeIconSpin {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(-30deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes badgeGlowPulse {
+  0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+}
