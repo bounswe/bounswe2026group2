@@ -21,10 +21,12 @@
 
 This builds and starts all services via Docker Compose.
 
-| Service  | URL                   |
-|----------|-----------------------|
-| Backend  | http://localhost:8000 |
-| API Docs | http://localhost:8000/docs |
+| Service  | URL                        |
+|----------|----------------------------|
+| Frontend | http://localhost:3000       |
+| Backend  | http://localhost:8000       |
+| API Docs | http://localhost:8000/docs  |
+| MinIO    | http://localhost:9001       |
 
 ## Stopping
 
