@@ -1,6 +1,8 @@
 fastapi
 uvicorn
 pytest
+anyio[trio]
+pytest-anyio
 httpx
 
 # Database
