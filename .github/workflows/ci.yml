@@ -2,7 +2,22 @@ name: CI
 
 on:
   push:
+    branches: [main, dev]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # ── 0. HEALTH CHECK ──────────────────────────────────────────────────────────
@@ -83,7 +98,6 @@ jobs:
   backend-unit:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
-    needs: [backend-health]
 
     steps:
       - name: Checkout code
@@ -100,9 +114,7 @@ jobs:
 
       - name: Run backend unit tests
         working-directory: backend
-        run: echo "pytest tests/unit/ -v"  # placeholder
-        # Covers: email/password validation, coordinate parsing, JWT helpers,
-        #         model constraints, file size checks
+        run: python -m pytest tests/ -v
 
   frontend-unit:
     name: Frontend Unit Tests
@@ -115,88 +127,65 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
 
       - name: Run frontend unit tests
-        run: echo "test"  # placeholder
-        # Covers: form validation components, date formatting, coordinate display,
-        #         isolated component rendering
+        working-directory: frontend
+        run: npm test
 
   # ── 2. INTEGRATION TESTS ─────────────────────────────────────────────────────
+  # Activate when backend routers and models are implemented.
 
-  backend-integration:
-    name: Backend Integration Tests
-    runs-on: ubuntu-latest
-    needs: [backend-unit]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        working-directory: backend
-        run: pip install -r requirements.txt
-
-      - name: Run integration tests
-        working-directory: backend
-        run: echo "pytest tests/integration/ -v"  # placeholder
-        # Covers: registration flow (API → service → DB), login + token issuance,
-        #         story creation with user FK, geospatial data retrieval,
-        #         permission enforcement at API boundary
+  # backend-integration:
+  #   name: Backend Integration Tests
+  #   runs-on: ubuntu-latest
+  #   needs: [backend-unit]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: '3.11' }
+  #     - run: pip install -r requirements.txt
+  #       working-directory: backend
+  #     - run: python -m pytest tests/integration/ -v
+  #       working-directory: backend
 
   # ── 3. API TESTS ─────────────────────────────────────────────────────────────
+  # Activate when API endpoints (stories, auth) are implemented.
 
-  backend-api:
-    name: Backend API Tests
-    runs-on: ubuntu-latest
-    needs: [backend-integration]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        working-directory: backend
-        run: pip install -r requirements.txt
-
-      - name: Run API tests
-        working-directory: backend
-        run: echo "pytest tests/api/ -v"  # placeholder
-        # Covers: POST /auth/register, POST /auth/login, POST /stories,
-        #         GET /stories, GET /stories/{id}, GET /stories/search, GET /health
-        # Each endpoint tested for: success, error cases, invalid input,
-        #         missing/expired/valid auth tokens, status codes, response schema
+  # backend-api:
+  #   name: Backend API Tests
+  #   runs-on: ubuntu-latest
+  #   needs: [backend-integration]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with: { python-version: '3.11' }
+  #     - run: pip install -r requirements.txt
+  #       working-directory: backend
+  #     - run: python -m pytest tests/api/ -v
+  #       working-directory: backend
 
   # ── 4. E2E TESTS ─────────────────────────────────────────────────────────────
+  # Activate when frontend routing and backend API are connected.
 
-  e2e:
-    name: E2E Tests
-    runs-on: ubuntu-latest
-    needs: [backend-api, frontend-unit]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run E2E tests
-        run: echo "playwright test"  # placeholder
+  # e2e:
+  #   name: E2E Tests
+  #   runs-on: ubuntu-latest
+  #   needs: [backend-api, frontend-unit]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: npx playwright test
 
   # ── 5. DEPLOY ─────────────────────────────────────────────────────────────────
 
   trigger-deploy:
     name: Trigger Deployment
     runs-on: ubuntu-latest
-    needs: e2e
+    needs: [backend-health, backend-unit, frontend-unit]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
 
     steps:
