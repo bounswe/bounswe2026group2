@@ -20,6 +20,7 @@ services:
       - ./backend/.env
     depends_on:
       - db
+      - minio
 
   minio:
     image: minio/minio
@@ -34,11 +35,13 @@ services:
     volumes:
       - minio_data:/data
 
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #   ports:
-  #     - "3000:3000"
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
