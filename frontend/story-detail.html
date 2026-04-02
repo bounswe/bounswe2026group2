@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local History Map - Story Detail</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#fef9f0",
+            surface: "#ffffff",
+            primary: "#775a19",
+            "primary-light": "#c5a059",
+            secondary: "#506169",
+            tertiary: "#35618f",
+            border: "#e7e2d9",
+            textmain: "#1d1c16",
+            textmuted: "#5f584c"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"],
+            headline: ["Noto Serif", "serif"]
+          },
+          boxShadow: {
+            soft: "0 20px 50px rgba(0,0,0,0.08)"
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-background text-textmain font-body min-h-screen">
+  <main class="max-w-6xl mx-auto px-6 py-10 lg:px-10">
+    <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div>
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Story Detail</p>
+        <h1 class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">The Old Fisherman's Quarter of Kadikoy</h1>
+        <p class="mt-4 max-w-3xl text-base leading-7 text-textmuted">
+          A remembered shoreline community, carried through family memory, neighborhood ritual, and the changing urban texture of Istanbul.
+        </p>
+      </div>
+      <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+        Open Story Creation
+      </a>
+    </header>
+
+    <section class="grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
+      <article class="overflow-hidden rounded-3xl border border-border bg-surface shadow-soft">
+        <div class="h-72 bg-[url('https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=1600&q=80')] bg-cover bg-center"></div>
+
+        <div class="p-8">
+          <div class="flex flex-wrap items-center gap-3 text-sm text-textmuted">
+            <span class="rounded-full bg-[rgba(119,90,25,0.1)] px-3 py-1 font-semibold text-primary">Kadikoy, Istanbul</span>
+            <span>1965 - 1985</span>
+            <span>by mehmet_arif</span>
+          </div>
+
+          <div class="mt-6 space-y-5 text-base leading-8 text-textmain">
+            <p>
+              In the narrow streets behind the market, a row of wooden houses once stood where fishermen repaired their nets in the evening. My grandfather was one of them.
+            </p>
+            <p>
+              Before dawn he walked to the pier carrying a worn leather bag, with the smell of salt and diesel filling the air. The neighborhood cats followed his routine as if they had memorized the tides.
+            </p>
+            <p>
+              By the 1980s, most of those houses had been replaced with concrete apartments. Still, one stone fountain survives in the back streets, and for those who know where to look, it is enough to recover the shape of the older quarter.
+            </p>
+          </div>
+
+          <div class="mt-8 grid gap-4 md:grid-cols-3">
+            <div class="rounded-2xl bg-[linear-gradient(135deg,#e9dfcd,#f7f3eb)] p-4 text-center text-sm text-textmuted">Photo Archive</div>
+            <div class="rounded-2xl bg-[linear-gradient(135deg,#e9dfcd,#f7f3eb)] p-4 text-center text-sm text-textmuted">Audio Memory</div>
+            <div class="rounded-2xl bg-[linear-gradient(135deg,#e9dfcd,#f7f3eb)] p-4 text-center text-sm text-textmuted">Street View Reference</div>
+          </div>
+
+          <div class="mt-8 flex flex-wrap gap-3">
+            <button class="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Like Story</button>
+            <button class="rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Save for Later</button>
+            <button class="rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Share</button>
+          </div>
+        </div>
+      </article>
+
+      <aside class="space-y-6">
+        <section class="rounded-3xl border border-border bg-surface p-6">
+          <h2 class="font-headline text-2xl font-bold text-textmain">Location</h2>
+          <div class="mt-4 flex h-56 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#efe7d5,#f8f4ec)] text-center text-sm text-textmuted">
+            Map placeholder for story location
+          </div>
+        </section>
+
+        <section class="rounded-3xl border border-border bg-surface p-6">
+          <h2 class="font-headline text-2xl font-bold text-textmain">Comments</h2>
+          <div class="mt-5 space-y-4">
+            <div class="rounded-2xl bg-[rgba(119,90,25,0.06)] p-4">
+              <p class="text-sm font-semibold text-textmain">ayse_k</p>
+              <p class="mt-2 text-sm leading-6 text-textmuted">My grandmother used to describe the same streets and the cats near the pier. This brought that image back immediately.</p>
+            </div>
+            <div class="rounded-2xl bg-[rgba(53,97,143,0.06)] p-4">
+              <p class="text-sm font-semibold text-textmain">can_photo</p>
+              <p class="mt-2 text-sm leading-6 text-textmuted">I photographed the old fountain last year. The inscription is fading, but it is still visible if you visit in the morning light.</p>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
