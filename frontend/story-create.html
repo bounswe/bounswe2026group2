@@ -36,22 +36,30 @@
   </script>
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
-  <main class="max-w-5xl mx-auto px-6 py-10 lg:px-10">
+  <main class="w-full px-4 py-10 lg:px-8 xl:px-10 2xl:px-14">
     <header class="mb-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
         <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Story Creation</p>
         <h1 class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">Share a piece of local history</h1>
-        <p class="mt-4 max-w-2xl text-base leading-7 text-textmuted">
+        <p class="mt-4 max-w-4xl text-base leading-7 text-textmuted">
           Add a memory, attach media, choose a location, and place your story on the map for others to discover.
         </p>
       </div>
-      <a href="story-detail.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
-        Preview Story Detail
-      </a>
+      <div class="flex flex-wrap gap-3">
+        <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+          Login Page
+        </a>
+        <a href="map.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+          Map Page
+        </a>
+        <a href="story-detail.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+          Preview Story Detail
+        </a>
+      </div>
     </header>
 
-    <section class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-      <form class="rounded-3xl border border-border bg-surface p-8 shadow-soft">
+    <section class="grid gap-8 lg:grid-cols-[minmax(0,2.25fr)_17rem] xl:grid-cols-[minmax(0,2.7fr)_16rem] 2xl:grid-cols-[minmax(0,3fr)_16rem]">
+      <form action="story-detail.html" class="rounded-3xl border border-border bg-surface p-8 shadow-soft">
         <div class="space-y-6">
           <div>
             <label for="title" class="mb-2 block text-sm font-semibold text-textmain">Title</label>
@@ -62,6 +70,24 @@
             <label for="story" class="mb-2 block text-sm font-semibold text-textmain">Your Story</label>
             <textarea id="story" rows="7" placeholder="Write what happened here, who was involved, and why this place matters." class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm leading-6 focus:border-primary focus:ring-primary"></textarea>
           </div>
+
+          <section>
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[0.18em] text-primary">Map Placement</p>
+              <h2 class="mt-2 font-headline text-3xl font-bold text-textmain">Choose where the story belongs</h2>
+              <p class="mt-3 max-w-3xl text-sm leading-7 text-textmuted">
+                Place the memory on the map before publishing so the story becomes part of the shared city archive.
+              </p>
+            </div>
+            <div class="mt-6 flex h-[24rem] items-center justify-center rounded-[1.75rem] bg-[linear-gradient(135deg,#e7dcc8,#f6f1e8)] text-center text-base text-textmuted lg:h-[32rem]">
+              Interactive map placeholder
+            </div>
+            <div class="mt-4">
+              <a href="map.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+                Open Full Map
+              </a>
+            </div>
+          </section>
 
           <div class="grid gap-6 md:grid-cols-2">
             <div>
@@ -86,9 +112,9 @@
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
-            <button type="button" class="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+            <a href="map.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
               Save as Draft
-            </button>
+            </a>
             <button type="submit" class="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95">
               Publish Story
             </button>
@@ -96,21 +122,14 @@
         </div>
       </form>
 
-      <aside class="rounded-3xl border border-border bg-[rgba(119,90,25,0.06)] p-8">
-        <h2 class="font-headline text-2xl font-bold text-textmain">Publishing Checklist</h2>
-        <ul class="mt-6 space-y-4 text-sm text-textmuted">
-          <li class="rounded-2xl bg-white/80 p-4">Add a clear title that helps others identify the place or event.</li>
-          <li class="rounded-2xl bg-white/80 p-4">Use the story field to capture who, what, when, and why it matters.</li>
-          <li class="rounded-2xl bg-white/80 p-4">Attach media if available to make the archive entry richer.</li>
-          <li class="rounded-2xl bg-white/80 p-4">Confirm the location and date so the story can be mapped correctly.</li>
+      <aside class="rounded-3xl border border-border bg-[rgba(119,90,25,0.06)] p-6 lg:self-start">
+        <h2 class="font-headline text-xl font-bold text-textmain">Publishing Checklist</h2>
+        <ul class="mt-5 space-y-3 text-sm leading-6 text-textmuted">
+          <li class="rounded-2xl bg-white/80 p-4">Add a title that identifies the place or event.</li>
+          <li class="rounded-2xl bg-white/80 p-4">Explain what happened and why it matters.</li>
+          <li class="rounded-2xl bg-white/80 p-4">Attach media when available.</li>
+          <li class="rounded-2xl bg-white/80 p-4">Confirm the date and location.</li>
         </ul>
-
-        <div class="mt-8 rounded-2xl border border-border bg-surface p-5">
-          <p class="text-sm font-semibold text-primary">Map Placement</p>
-          <div class="mt-4 flex h-56 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#efe7d5,#f8f4ec)] text-center text-sm text-textmuted">
-            Interactive map placeholder
-          </div>
-        </div>
       </aside>
     </section>
   </main>

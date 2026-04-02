@@ -104,10 +104,10 @@
 <div class="flex items-center gap-8">
 <h1 class="text-2xl font-bold font-headline text-[#1d1c16] dark:text-[#f2ede4] tracking-tight">Local History Map</h1>
 <nav class="hidden md:flex items-center gap-6">
-<a class="text-[#775a19] dark:text-[#c5a059] font-bold border-b-2 border-[#775a19] pb-1 font-body" href="#">Map</a>
-<a class="text-[#1d1c16] dark:text-[#f2ede4] font-medium hover:text-[#35618f] transition-colors duration-300 font-body" href="#">Archive</a>
-<a class="text-[#1d1c16] dark:text-[#f2ede4] font-medium hover:text-[#35618f] transition-colors duration-300 font-body" href="#">Chronicles</a>
-<a class="text-[#1d1c16] dark:text-[#f2ede4] font-medium hover:text-[#35618f] transition-colors duration-300 font-body" href="#">About</a>
+<a class="text-[#775a19] dark:text-[#c5a059] font-bold border-b-2 border-[#775a19] pb-1 font-body" href="map.html">Map</a>
+<a class="text-[#1d1c16] dark:text-[#f2ede4] font-medium hover:text-[#35618f] transition-colors duration-300 font-body" href="story-detail.html">Archive</a>
+<a class="text-[#1d1c16] dark:text-[#f2ede4] font-medium hover:text-[#35618f] transition-colors duration-300 font-body" href="story-create.html">Create Story</a>
+<a class="text-[#1d1c16] dark:text-[#f2ede4] font-medium hover:text-[#35618f] transition-colors duration-300 font-body" href="index.html">Login</a>
 </nav>
 </div>
 <div class="flex items-center gap-4">
@@ -163,7 +163,7 @@
 <span class="material-symbols-outlined text-sm">history_edu</span>
               MEMOIR #442
             </span>
-<button class="text-primary font-bold text-xs hover:underline">Read Archive →</button>
+<a class="text-primary font-bold text-xs hover:underline" href="story-detail.html">Read Archive →</a>
 </div>
 </div>
 </div>
@@ -187,10 +187,10 @@
 <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
         12 new stories shared today near Galata
       </div>
-<button class="bg-gradient-to-br from-primary to-primary-container text-surface px-8 py-4 rounded-xl font-bold flex items-center gap-3 shadow-xl hover:scale-105 active:scale-95 transition-all">
-<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">my_location</span>
+<a class="bg-gradient-to-br from-primary to-primary-container text-surface px-8 py-4 rounded-xl font-bold flex items-center gap-3 shadow-xl hover:scale-105 active:scale-95 transition-all" href="story-create.html">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">edit_square</span>
         Stories Near Me
-      </button>
+      </a>
 </div>
 <!-- Discovery Panel (Asymmetric Sidebar) -->
 <aside class="absolute top-24 right-8 w-72 glass-panel rounded-2xl p-6 shadow-sm pointer-events-auto border border-outline-variant/5">
@@ -199,11 +199,11 @@
 <span class="material-symbols-outlined text-outline">tune</span>
 </div>
 <div class="space-y-6">
-<div class="group cursor-pointer">
+<a class="group cursor-pointer block" href="story-detail.html">
 <div class="text-[10px] font-bold text-tertiary tracking-widest uppercase mb-1">Current Narrative</div>
 <h4 class="font-bold text-sm mb-1 group-hover:text-primary transition-colors">The Levantines of Beyoğlu</h4>
 <p class="text-xs text-on-surface-variant line-clamp-2 leading-relaxed">Tracing the architectural footprint of 19th-century trade families...</p>
-</div>
+</a>
 <div class="h-px bg-outline-variant/10"></div>
 <div>
 <div class="text-[10px] font-bold text-tertiary tracking-widest uppercase mb-3">Time Filter</div>
