@@ -1,12 +1,20 @@
 {
-  "name": "frontend-tests",
-  "version": "1.0.0",
+  "name": "local-history-frontend",
   "private": true,
+  "version": "0.0.1",
+  "type": "module",
   "scripts": {
-    "test": "jest"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.0"
   },
   "devDependencies": {
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0"
+    "@vitejs/plugin-react": "^4.3.0",
+    "vite": "^6.0.0"
   }
 }
