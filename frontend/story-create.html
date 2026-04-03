@@ -117,7 +117,7 @@
           </div>
 
           <!-- Map -->
-          <div class="mt-4 rounded-[1.75rem] overflow-hidden border border-border/50" style="height: 400px;">
+          <div class="mt-4 -mx-8 h-[360px] overflow-hidden border-y border-border/50 sm:mx-0 sm:h-[400px] sm:rounded-[1.75rem] sm:border">
             <div id="create-map" style="height: 100%; width: 100%;"></div>
           </div>
 
@@ -441,8 +441,15 @@
     }, 1500);
   });
 
+  function syncCreateMapSize() {
+    window.requestAnimationFrame(function () {
+      createMap.invalidateSize();
+    });
+  }
+
   // Fix Leaflet map rendering when container is initially hidden or laid out
-  setTimeout(function () { createMap.invalidateSize(); }, 200);
+  setTimeout(syncCreateMapSize, 200);
+  window.addEventListener("resize", syncCreateMapSize);
 </script>
 </body>
 </html>
