@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Index, String, Text, text
+from sqlalchemy import CheckConstraint, Enum, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -20,6 +20,10 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_stories_user_id", "user_id"),
         Index("ix_stories_status", "status"),
         Index("ix_stories_visibility", "visibility"),
+        CheckConstraint(
+            "date_end IS NULL OR date_start IS NULL OR date_end >= date_start",
+            name="ck_stories_date_range_valid",
+        ),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
@@ -42,6 +46,12 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=StoryVisibility.PRIVATE,
         server_default=text("'private'"),
     )
+
+    place_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    date_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="stories")
     media_files: Mapped[list["MediaFile"]] = relationship(
