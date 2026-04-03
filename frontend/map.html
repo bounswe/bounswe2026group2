@@ -151,7 +151,7 @@
                         href="index.html">Login</a>
                 </nav>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3 sm:gap-4">
                 <!-- Search -->
                 <div class="relative hidden sm:block" id="search-container">
                     <span
@@ -163,6 +163,11 @@
                         class="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-xl shadow-soft overflow-hidden hidden z-50">
                     </div>
                 </div>
+                <button id="btn-profile" type="button"
+                    class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-textmain shadow-sm transition hover:bg-stone-50"
+                    aria-label="Open profile">
+                    <span class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
+                </button>
             </div>
         </div>
     </header>
