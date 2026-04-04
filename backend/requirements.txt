@@ -13,5 +13,9 @@ pydantic-settings
 pydantic[email]
 python-dotenv
 
+# Auth
+passlib[bcrypt]
+bcrypt==4.2.1
+
 # Object storage (S3-compatible — works with MinIO locally and Supabase Storage in prod)
 boto3
