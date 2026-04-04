@@ -16,6 +16,7 @@ python-dotenv
 # Auth
 passlib[bcrypt]
 bcrypt==4.2.1
+pyjwt
 
 # Object storage (S3-compatible — works with MinIO locally and Supabase Storage in prod)
 boto3
