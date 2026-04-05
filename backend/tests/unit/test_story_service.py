@@ -9,12 +9,13 @@ from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
 from app.db.enums import MediaType, StoryStatus, StoryVisibility
-from app.models.story import MediaUploadRequest, StoryCreateRequest
+from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdateRequest
 from app.services.story_service import (
     create_story_with_location,
     get_story_detail_by_id,
     list_available_stories,
     search_available_stories_by_place,
+    update_story_with_location_and_dates,
     upload_media_for_story,
 )
 
@@ -315,3 +316,88 @@ class TestCreateStoryWithLocationService:
         assert exc_info.value.status_code == 422
         assert "place_name is required" in exc_info.value.detail
         db.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+class TestUpdateStoryWithLocationAndDatesService:
+    async def test_update_story_success(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
+
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=1920,
+            date_end=1923,
+        )
+        current_user = SimpleNamespace(id=story.user_id, username="authoruser")
+
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        result = await update_story_with_location_and_dates(db, story_id, current_user, payload)
+
+        assert result.id == story_id
+        assert result.title == "Updated Story"
+        assert result.content == "Updated content"
+        assert result.summary == "Updated summary"
+        assert result.place_name == "Ankara"
+        assert result.latitude == 39.9334
+        assert result.longitude == 32.8597
+        assert result.date_start == 1920
+        assert result.date_end == 1923
+        assert result.date_label == "1920 - 1923"
+        assert result.media_files == []
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once_with(story)
+
+    async def test_update_story_not_found(self):
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=1920,
+            date_end=1923,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser")
+
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_story_with_location_and_dates(db, uuid.uuid4(), current_user, payload)
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+        db.commit.assert_not_awaited()
+
+    async def test_update_story_rejects_blank_place_name(self):
+        story = _make_story(id=uuid.uuid4(), user_id=uuid.uuid4())
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="   ",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=1920,
+            date_end=1923,
+        )
+        current_user = SimpleNamespace(id=story.user_id, username="authoruser")
+
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_story_with_location_and_dates(db, story.id, current_user, payload)
+
+        assert exc_info.value.status_code == 422
+        assert "place_name is required" in exc_info.value.detail
+        db.commit.assert_not_awaited()

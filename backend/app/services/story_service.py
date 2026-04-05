@@ -14,6 +14,7 @@ from app.models.story import (
     MediaFileResponse,
     StoryDetailResponse,
     StoryCreateRequest,
+    StoryUpdateRequest,
     MediaUploadRequest,
     MediaUploadResponse,
     StoryListResponse,
@@ -166,6 +167,45 @@ async def create_story_with_location(
     )
 
     db.add(story)
+    await db.commit()
+    await db.refresh(story)
+
+    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
+    return StoryDetailResponse(**story_response.model_dump(), media_files=[])
+
+
+async def update_story_with_location_and_dates(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+    payload: StoryUpdateRequest,
+) -> StoryDetailResponse:
+    story_result = await db.execute(
+        select(Story).where(Story.id == story_id, Story.user_id == current_user.id)
+    )
+    story = story_result.scalar_one_or_none()
+    if story is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    place_name = payload.place_name.strip() if payload.place_name else None
+    if not place_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="place_name is required for story location binding",
+        )
+
+    story.title = payload.title
+    story.summary = payload.summary
+    story.content = payload.content
+    story.place_name = place_name
+    story.latitude = payload.latitude
+    story.longitude = payload.longitude
+    story.date_start = payload.date_start
+    story.date_end = payload.date_end
+
     await db.commit()
     await db.refresh(story)
 

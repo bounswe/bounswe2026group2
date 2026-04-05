@@ -13,12 +13,14 @@ from app.models.story import (
     StoryCreateRequest,
     StoryDetailResponse,
     StoryListResponse,
+    StoryUpdateRequest,
 )
 from app.services.story_service import (
     create_story_with_location,
     get_story_detail_by_id,
     list_available_stories,
     search_available_stories_by_place,
+    update_story_with_location_and_dates,
     upload_media_for_story,
 )
 
@@ -40,6 +42,24 @@ async def create_story(
     db: AsyncSession = Depends(get_db),
 ):
     return await create_story_with_location(db, current_user, payload)
+
+
+@router.put(
+    "/{story_id}",
+    response_model=StoryDetailResponse,
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+        422: {"description": "Validation error for story/location input"},
+    },
+)
+async def update_story(
+    story_id: uuid.UUID,
+    payload: StoryUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await update_story_with_location_and_dates(db, story_id, current_user, payload)
 
 
 @router.get("", response_model=StoryListResponse)
