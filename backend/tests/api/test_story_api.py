@@ -253,3 +253,76 @@ class TestStoryDetailAPI:
         assert resp.status_code == 404
         data = resp.json()
         assert data["detail"] == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStoryCreateAPI:
+    async def _create_user_and_token(self, client):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": "createuser",
+                "email": "create@example.com",
+                "password": "CreatePass1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": "create@example.com",
+                "password": "CreatePass1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_create_story_with_location_success(self, client):
+        token = await self._create_user_and_token(client)
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Created Story",
+                "content": "Created content",
+                "summary": "Created summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "date_start": 1453,
+                "date_end": 1453,
+            },
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["title"] == "Created Story"
+        assert data["content"] == "Created content"
+        assert data["summary"] == "Created summary"
+        assert data["author"] == "createuser"
+        assert data["place_name"] == "Istanbul"
+        assert data["latitude"] == 41.0082
+        assert data["longitude"] == 28.9784
+        assert data["date_label"] == "1453 - 1453"
+        assert data["status"] == "draft"
+        assert data["visibility"] == "private"
+        assert data["media_files"] == []
+        assert "id" in data
+        assert "created_at" in data
+
+    async def test_create_story_with_blank_place_name_returns_422(self, client):
+        token = await self._create_user_and_token(client)
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Created Story",
+                "content": "Created content",
+                "place_name": "   ",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "place_name is required" in resp.json()["detail"]
