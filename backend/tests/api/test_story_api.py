@@ -326,3 +326,154 @@ class TestStoryCreateAPI:
 
         assert resp.status_code == 422
         assert "place_name is required" in resp.json()["detail"]
+
+    async def test_create_story_with_single_start_date_returns_single_date_label(self, client):
+        token = await self._create_user_and_token(client)
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Created Story",
+                "content": "Created content",
+                "summary": "Created summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "date_start": 1453,
+            },
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["date_start"] == 1453
+        assert data["date_end"] is None
+        assert data["date_label"] == "1453"
+
+
+@pytest.mark.asyncio
+class TestStoryUpdateAPI:
+    async def _create_user_and_token(self, client):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": "updateuser",
+                "email": "update@example.com",
+                "password": "UpdatePass1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": "update@example.com",
+                "password": "UpdatePass1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_update_story_success(self, client):
+        token = await self._create_user_and_token(client)
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Original Story",
+                "content": "Original content",
+                "summary": "Original summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "date_start": 1400,
+                "date_end": 1453,
+            },
+        )
+        assert create_resp.status_code == 201
+        story_id = create_resp.json()["id"]
+
+        update_resp = await client.put(
+            f"/stories/{story_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Updated Story",
+                "content": "Updated content",
+                "summary": "Updated summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+                "date_start": 1920,
+                "date_end": 1923,
+            },
+        )
+
+        assert update_resp.status_code == 200
+        data = update_resp.json()
+        assert data["id"] == story_id
+        assert data["title"] == "Updated Story"
+        assert data["content"] == "Updated content"
+        assert data["summary"] == "Updated summary"
+        assert data["place_name"] == "Ankara"
+        assert data["latitude"] == 39.9334
+        assert data["longitude"] == 32.8597
+        assert data["date_start"] == 1920
+        assert data["date_end"] == 1923
+        assert data["date_label"] == "1920 - 1923"
+
+    async def test_update_story_invalid_date_range_returns_422(self, client):
+        token = await self._create_user_and_token(client)
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Original Story",
+                "content": "Original content",
+                "summary": "Original summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "date_start": 1400,
+                "date_end": 1453,
+            },
+        )
+        assert create_resp.status_code == 201
+        story_id = create_resp.json()["id"]
+
+        update_resp = await client.put(
+            f"/stories/{story_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Updated Story",
+                "content": "Updated content",
+                "summary": "Updated summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+                "date_start": 1923,
+                "date_end": 1920,
+            },
+        )
+
+        assert update_resp.status_code == 422
+        assert "date_end must be greater than or equal to date_start" in str(update_resp.json())
+
+    async def test_update_story_not_found_returns_404(self, client):
+        token = await self._create_user_and_token(client)
+
+        update_resp = await client.put(
+            f"/stories/{uuid.uuid4()}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Updated Story",
+                "content": "Updated content",
+                "summary": "Updated summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+                "date_start": 1920,
+                "date_end": 1923,
+            },
+        )
+
+        assert update_resp.status_code == 404
+        assert update_resp.json()["detail"] == "Story not found"
