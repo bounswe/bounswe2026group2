@@ -6,7 +6,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.db.enums import StoryStatus, StoryVisibility
-from app.services.story_service import list_available_stories
+from app.services.story_service import (
+    list_available_stories,
+    search_available_stories_by_place,
+)
 
 
 def _make_story(**overrides):
@@ -83,3 +86,35 @@ class TestListAvailableStoriesService:
         assert "stories.status" in sql
         assert "stories.visibility" in sql
         assert "ORDER BY stories.created_at DESC" in sql
+
+
+@pytest.mark.asyncio
+class TestSearchAvailableStoriesByPlaceService:
+    async def test_returns_matching_stories_and_total(self):
+        story = _make_story(place_name="Istanbul, Fatih")
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "storyauthor")]
+
+        result = await search_available_stories_by_place(db, "ist")
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+
+        item = result.stories[0]
+        assert item.id == story.id
+        assert item.title == "Story Title"
+        assert item.place_name == "Istanbul, Fatih"
+        assert item.author == "storyauthor"
+
+        db.execute.assert_awaited_once()
+
+    async def test_returns_empty_response_when_no_match(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await search_available_stories_by_place(db, "ankara")
+
+        assert result.total == 0
+        assert result.stories == []
+        db.execute.assert_awaited_once()

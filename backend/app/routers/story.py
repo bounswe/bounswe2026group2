@@ -3,7 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.models.story import StoryListResponse
-from app.services.story_service import list_available_stories
+from app.services.story_service import (
+    list_available_stories,
+    search_available_stories_by_place,
+)
 
 router = APIRouter(prefix="/stories", tags=["stories"])
 
@@ -18,5 +21,4 @@ async def search_stories(
     place_name: str = Query(min_length=1, max_length=255),
     db: AsyncSession = Depends(get_db),
 ):
-    # Endpoint contract step: search logic will be wired in the service step.
-    return await list_available_stories(db)
+    return await search_available_stories_by_place(db, place_name)
