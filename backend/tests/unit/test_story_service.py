@@ -1,14 +1,19 @@
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
+from starlette.datastructures import Headers, UploadFile
 
-from app.db.enums import StoryStatus, StoryVisibility
+from app.db.enums import MediaType, StoryStatus, StoryVisibility
+from app.models.story import MediaUploadRequest
 from app.services.story_service import (
     list_available_stories,
     search_available_stories_by_place,
+    upload_media_for_story,
 )
 
 
@@ -29,6 +34,14 @@ def _make_story(**overrides):
     }
     base.update(overrides)
     return SimpleNamespace(**base)
+
+
+def _make_upload_file(filename: str, content: bytes, content_type: str) -> UploadFile:
+    return UploadFile(
+        file=BytesIO(content),
+        filename=filename,
+        headers=Headers({"content-type": content_type}),
+    )
 
 
 @pytest.mark.asyncio
@@ -118,3 +131,76 @@ class TestSearchAvailableStoriesByPlaceService:
         assert result.total == 0
         assert result.stories == []
         db.execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+class TestUploadMediaForStoryService:
+    async def test_upload_successful(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(
+            media_type=MediaType.IMAGE,
+            alt_text="an image",
+            caption="caption",
+            sort_order=2,
+        )
+        file = _make_upload_file("photo.png", b"fake-image-bytes", "image/png")
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.story_id == story_id
+        assert result.media.original_filename == "photo.png"
+        assert result.media.mime_type == "image/png"
+        assert result.media.media_type == MediaType.IMAGE
+        assert result.media.alt_text == "an image"
+        assert result.media.caption == "caption"
+        assert result.media.sort_order == 2
+        assert result.media.file_size_bytes == len(b"fake-image-bytes")
+        assert result.media.storage_key.startswith(f"stories/{story_id}/media/")
+        assert result.media.storage_key.endswith(".png")
+
+        mock_upload.assert_called_once()
+        assert mock_upload.call_args.kwargs["content_type"] == "image/png"
+        db.add.assert_called_once()
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once()
+
+    async def test_upload_rejects_unsupported_mime_type(self):
+        payload = MediaUploadRequest(media_type=MediaType.IMAGE)
+        file = _make_upload_file("clip.mp4", b"video-bytes", "video/mp4")
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, uuid.uuid4(), file, payload)
+
+        assert exc_info.value.status_code == 422
+        mock_upload.assert_not_called()
+        db.execute.assert_not_awaited()
+
+    async def test_upload_rejects_empty_file(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.IMAGE)
+        file = _make_upload_file("empty.png", b"", "image/png")
+
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, story_id, file, payload)
+
+        assert exc_info.value.status_code == 400
+        mock_upload.assert_not_called()
