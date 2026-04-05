@@ -10,10 +10,12 @@ from app.db.user import User
 from app.models.story import (
     MediaUploadRequest,
     MediaUploadResponse,
+    StoryCreateRequest,
     StoryDetailResponse,
     StoryListResponse,
 )
 from app.services.story_service import (
+    create_story_with_location,
     get_story_detail_by_id,
     list_available_stories,
     search_available_stories_by_place,
@@ -21,6 +23,23 @@ from app.services.story_service import (
 )
 
 router = APIRouter(prefix="/stories", tags=["stories"])
+
+
+@router.post(
+    "",
+    response_model=StoryDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        422: {"description": "Validation error for story/location input"},
+    },
+)
+async def create_story(
+    payload: StoryCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await create_story_with_location(db, current_user, payload)
 
 
 @router.get("", response_model=StoryListResponse)

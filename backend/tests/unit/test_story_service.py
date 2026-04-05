@@ -9,8 +9,9 @@ from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
 from app.db.enums import MediaType, StoryStatus, StoryVisibility
-from app.models.story import MediaUploadRequest
+from app.models.story import MediaUploadRequest, StoryCreateRequest
 from app.services.story_service import (
+    create_story_with_location,
     get_story_detail_by_id,
     list_available_stories,
     search_available_stories_by_place,
@@ -256,3 +257,61 @@ class TestGetStoryDetailByIdService:
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestCreateStoryWithLocationService:
+    async def test_create_story_with_valid_location(self):
+        payload = StoryCreateRequest(
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=1453,
+            date_end=1453,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser")
+
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        async def _refresh_side_effect(story_obj):
+            story_obj.id = uuid.uuid4()
+            story_obj.created_at = datetime.now(timezone.utc)
+            story_obj.status = StoryStatus.DRAFT
+            story_obj.visibility = StoryVisibility.PRIVATE
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        result = await create_story_with_location(db, current_user, payload)
+
+        assert result.title == "New Story"
+        assert result.author == "authoruser"
+        assert result.place_name == "Istanbul"
+        assert result.latitude == 41.0082
+        assert result.longitude == 28.9784
+        assert result.media_files == []
+        db.add.assert_called_once()
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once()
+
+    async def test_create_story_rejects_missing_place_name(self):
+        payload = StoryCreateRequest(
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="   ",
+            latitude=41.0082,
+            longitude=28.9784,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser")
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_story_with_location(db, current_user, payload)
+
+        assert exc_info.value.status_code == 422
+        assert "place_name is required" in exc_info.value.detail
+        db.add.assert_not_called()

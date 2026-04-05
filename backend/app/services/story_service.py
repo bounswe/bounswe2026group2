@@ -13,6 +13,7 @@ from app.db.user import User
 from app.models.story import (
     MediaFileResponse,
     StoryDetailResponse,
+    StoryCreateRequest,
     MediaUploadRequest,
     MediaUploadResponse,
     StoryListResponse,
@@ -138,6 +139,38 @@ async def get_story_detail_by_id(
 
     story, author_username = row
     return _map_story_detail(story, author_username)
+
+
+async def create_story_with_location(
+    db: AsyncSession,
+    current_user: User,
+    payload: StoryCreateRequest,
+) -> StoryDetailResponse:
+    place_name = payload.place_name.strip() if payload.place_name else None
+    if not place_name:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="place_name is required for story location binding",
+        )
+
+    story = Story(
+        user_id=current_user.id,
+        title=payload.title,
+        summary=payload.summary,
+        content=payload.content,
+        place_name=place_name,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        date_start=payload.date_start,
+        date_end=payload.date_end,
+    )
+
+    db.add(story)
+    await db.commit()
+    await db.refresh(story)
+
+    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
+    return StoryDetailResponse(**story_response.model_dump(), media_files=[])
 
 
 async def upload_media_for_story(
