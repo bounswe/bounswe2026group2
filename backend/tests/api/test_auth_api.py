@@ -1,17 +1,20 @@
 import pytest
 
+from tests.factories.user_factory import make_login_payload, make_user_payload
+
 
 @pytest.mark.asyncio
 class TestRegistrationAPI:
     """API test for registration endpoint. Covers #130."""
 
     async def test_register_success(self, client):
-        resp = await client.post("/auth/register", json={
-            "username": "apiuser",
-            "email": "api@example.com",
-            "password": "ApiPass1!",
-            "display_name": "API User",
-        })
+        payload = make_user_payload(
+            username="apiuser",
+            email="api@example.com",
+            password="ApiPass1!",
+            display_name="API User",
+        )
+        resp = await client.post("/auth/register", json=payload)
         assert resp.status_code == 201
         data = resp.json()
         assert data["username"] == "apiuser"
@@ -24,32 +27,48 @@ class TestRegistrationAPI:
         assert "password_hash" not in data
 
     async def test_register_duplicate_email(self, client):
-        await client.post("/auth/register", json={
-            "username": "first",
-            "email": "same@example.com",
-            "password": "ApiPass1!",
-        })
-        resp = await client.post("/auth/register", json={
-            "username": "second",
-            "email": "same@example.com",
-            "password": "ApiPass1!",
-        })
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="first",
+                email="same@example.com",
+                password="ApiPass1!",
+                display_name=None,
+            ),
+        )
+        resp = await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="second",
+                email="same@example.com",
+                password="ApiPass1!",
+                display_name=None,
+            ),
+        )
         assert resp.status_code == 409
 
     async def test_register_weak_password(self, client):
-        resp = await client.post("/auth/register", json={
-            "username": "weakuser",
-            "email": "weak@example.com",
-            "password": "nodigits",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="weakuser",
+                email="weak@example.com",
+                password="nodigits",
+                display_name=None,
+            ),
+        )
         assert resp.status_code == 422
 
     async def test_register_invalid_email(self, client):
-        resp = await client.post("/auth/register", json={
-            "username": "bademail",
-            "email": "not-valid",
-            "password": "ApiPass1!",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="bademail",
+                email="not-valid",
+                password="ApiPass1!",
+                display_name=None,
+            ),
+        )
         assert resp.status_code == 422
 
     async def test_register_missing_fields(self, client):
@@ -81,37 +100,45 @@ class TestLoginAPI:
 
     async def test_login_success(self, client):
         # Register first
-        await client.post("/auth/register", json={
-            "username": "loginuser",
-            "email": "login@example.com",
-            "password": "LoginPass1!",
-        })
-        resp = await client.post("/auth/login", json={
-            "email": "login@example.com",
-            "password": "LoginPass1!",
-        })
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="loginuser",
+                email="login@example.com",
+                password="LoginPass1!",
+                display_name=None,
+            ),
+        )
+        resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="login@example.com", password="LoginPass1!"),
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "access_token" in data
         assert data["token_type"] == "bearer"
 
     async def test_login_wrong_password(self, client):
-        await client.post("/auth/register", json={
-            "username": "wrongpw",
-            "email": "wrongpw@example.com",
-            "password": "CorrectPass1!",
-        })
-        resp = await client.post("/auth/login", json={
-            "email": "wrongpw@example.com",
-            "password": "WrongPass1!",
-        })
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="wrongpw",
+                email="wrongpw@example.com",
+                password="CorrectPass1!",
+                display_name=None,
+            ),
+        )
+        resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="wrongpw@example.com", password="WrongPass1!"),
+        )
         assert resp.status_code == 401
 
     async def test_login_nonexistent_email(self, client):
-        resp = await client.post("/auth/login", json={
-            "email": "ghost@example.com",
-            "password": "AnyPass1!",
-        })
+        resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="ghost@example.com", password="AnyPass1!"),
+        )
         assert resp.status_code == 401
 
     async def test_login_missing_fields(self, client):
@@ -133,15 +160,19 @@ class TestTokenVerificationAPI:
     """API test for token verification middleware. Covers #132."""
 
     async def test_me_with_valid_token(self, client):
-        await client.post("/auth/register", json={
-            "username": "meuser",
-            "email": "me@example.com",
-            "password": "MePass1!",
-        })
-        login_resp = await client.post("/auth/login", json={
-            "email": "me@example.com",
-            "password": "MePass1!",
-        })
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="meuser",
+                email="me@example.com",
+                password="MePass1!",
+                display_name=None,
+            ),
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="me@example.com", password="MePass1!"),
+        )
         token = login_resp.json()["access_token"]
 
         resp = await client.get(
