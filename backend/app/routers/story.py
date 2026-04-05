@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -10,6 +10,7 @@ from app.db.user import User
 from app.models.story import (
     MediaUploadRequest,
     MediaUploadResponse,
+    StoryCreateRequest,
     StoryDetailResponse,
     StoryListResponse,
 )
@@ -21,6 +22,27 @@ from app.services.story_service import (
 )
 
 router = APIRouter(prefix="/stories", tags=["stories"])
+
+
+@router.post(
+    "",
+    response_model=StoryDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        422: {"description": "Validation error for story/location input"},
+    },
+)
+async def create_story(
+    payload: StoryCreateRequest,
+    _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Contract step only: creation logic will be implemented in service step.
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Story creation is not implemented yet",
+    )
 
 
 @router.get("", response_model=StoryListResponse)
