@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.enums import StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
@@ -11,6 +12,7 @@ from app.db.story import Story
 from app.db.user import User
 from app.models.story import (
     MediaFileResponse,
+    StoryDetailResponse,
     MediaUploadRequest,
     MediaUploadResponse,
     StoryListResponse,
@@ -39,6 +41,12 @@ def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
         for story, author_username in rows
     ]
     return StoryListResponse(stories=stories, total=len(stories))
+
+
+def _map_story_detail(story: Story, author_username: str) -> StoryDetailResponse:
+    story_response = StoryResponse.from_orm_with_author(story, author_username)
+    media_files = [MediaFileResponse.model_validate(media) for media in story.media_files]
+    return StoryDetailResponse(**story_response.model_dump(), media_files=media_files)
 
 
 def _validate_media_upload(file: UploadFile, payload: MediaUploadRequest) -> None:
@@ -106,6 +114,30 @@ async def search_available_stories_by_place(
     rows = result.all()
 
     return _map_story_rows(rows)
+
+
+async def get_story_detail_by_id(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+) -> StoryDetailResponse:
+    stmt = (
+        select(Story, User.username)
+        .join(User, Story.user_id == User.id)
+        .where(Story.id == story_id)
+        .options(selectinload(Story.media_files))
+    )
+
+    result = await db.execute(stmt)
+    row = result.one_or_none()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    story, author_username = row
+    return _map_story_detail(story, author_username)
 
 
 async def upload_media_for_story(

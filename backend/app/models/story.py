@@ -103,3 +103,7 @@ class MediaFileResponse(BaseModel):
 
 class MediaUploadResponse(BaseModel):
     media: MediaFileResponse
+
+
+class StoryDetailResponse(StoryResponse):
+    media_files: list[MediaFileResponse] = Field(default_factory=list)

@@ -7,8 +7,14 @@ from app.core.deps import get_current_user
 from app.db.enums import MediaType
 from app.db.session import get_db
 from app.db.user import User
-from app.models.story import MediaUploadRequest, MediaUploadResponse, StoryListResponse
+from app.models.story import (
+    MediaUploadRequest,
+    MediaUploadResponse,
+    StoryDetailResponse,
+    StoryListResponse,
+)
 from app.services.story_service import (
+    get_story_detail_by_id,
     list_available_stories,
     search_available_stories_by_place,
     upload_media_for_story,
@@ -28,6 +34,18 @@ async def search_stories(
     db: AsyncSession = Depends(get_db),
 ):
     return await search_available_stories_by_place(db, place_name)
+
+
+@router.get(
+    "/{story_id}",
+    response_model=StoryDetailResponse,
+    responses={404: {"description": "Story not found"}},
+)
+async def get_story_by_id(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_story_detail_by_id(db, story_id)
 
 
 @router.post(

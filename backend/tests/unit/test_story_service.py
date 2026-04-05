@@ -11,6 +11,7 @@ from starlette.datastructures import Headers, UploadFile
 from app.db.enums import MediaType, StoryStatus, StoryVisibility
 from app.models.story import MediaUploadRequest
 from app.services.story_service import (
+    get_story_detail_by_id,
     list_available_stories,
     search_available_stories_by_place,
     upload_media_for_story,
@@ -42,6 +43,25 @@ def _make_upload_file(filename: str, content: bytes, content_type: str) -> Uploa
         filename=filename,
         headers=Headers({"content-type": content_type}),
     )
+
+
+def _make_media_file(**overrides):
+    base = {
+        "id": uuid.uuid4(),
+        "story_id": uuid.uuid4(),
+        "bucket_name": "images",
+        "storage_key": "stories/key.png",
+        "original_filename": "key.png",
+        "mime_type": "image/png",
+        "media_type": MediaType.IMAGE,
+        "file_size_bytes": 1234,
+        "sort_order": 0,
+        "alt_text": None,
+        "caption": None,
+        "created_at": datetime.now(timezone.utc),
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
 
 
 @pytest.mark.asyncio
@@ -204,3 +224,35 @@ class TestUploadMediaForStoryService:
 
         assert exc_info.value.status_code == 400
         mock_upload.assert_not_called()
+
+
+@pytest.mark.asyncio
+class TestGetStoryDetailByIdService:
+    async def test_returns_story_detail_with_media_files(self):
+        story_id = uuid.uuid4()
+        media_1 = _make_media_file(story_id=story_id, original_filename="photo1.png")
+        media_2 = _make_media_file(story_id=story_id, original_filename="photo2.png")
+        story = _make_story(id=story_id, media_files=[media_1, media_2])
+
+        db = AsyncMock()
+        db.execute.return_value.one_or_none = lambda: (story, "storyauthor")
+
+        result = await get_story_detail_by_id(db, story_id)
+
+        assert result.id == story_id
+        assert result.author == "storyauthor"
+        assert result.title == "Story Title"
+        assert len(result.media_files) == 2
+        assert result.media_files[0].original_filename == "photo1.png"
+        assert result.media_files[1].original_filename == "photo2.png"
+        db.execute.assert_awaited_once()
+
+    async def test_raises_404_when_story_not_found(self):
+        db = AsyncMock()
+        db.execute.return_value.one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_story_detail_by_id(db, uuid.uuid4())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"

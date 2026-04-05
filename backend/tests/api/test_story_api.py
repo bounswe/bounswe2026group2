@@ -1,6 +1,8 @@
 import pytest
+import uuid
 
-from app.db.enums import StoryStatus, StoryVisibility
+from app.db.enums import MediaType, StoryStatus, StoryVisibility
+from app.db.media_file import MediaFile
 from app.db.story import Story
 from app.db.user import User
 from app.services.auth_service import hash_password
@@ -178,3 +180,76 @@ class TestStoryMediaUploadAPI:
 
         assert resp.status_code == 422
         assert "Unsupported mime type" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+class TestStoryDetailAPI:
+    async def test_get_story_detail_success(self, client, db_session):
+        user = User(
+            username="detailauthor",
+            email="detailauthor@example.com",
+            password_hash=hash_password("DetailPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Detail Story",
+            summary="Detail summary",
+            content="Detail content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=1923,
+            date_end=1923,
+        )
+        db_session.add(story)
+        await db_session.flush()
+
+        media = MediaFile(
+            story_id=story.id,
+            bucket_name="images",
+            storage_key="stories/test/photo.png",
+            original_filename="photo.png",
+            mime_type="image/png",
+            media_type=MediaType.IMAGE,
+            file_size_bytes=777,
+            sort_order=0,
+            alt_text="test alt",
+            caption="test caption",
+        )
+        db_session.add(media)
+        await db_session.commit()
+
+        resp = await client.get(f"/stories/{story.id}")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == str(story.id)
+        assert data["title"] == "Detail Story"
+        assert data["summary"] == "Detail summary"
+        assert data["content"] == "Detail content"
+        assert data["author"] == "detailauthor"
+        assert data["place_name"] == "Ankara"
+        assert data["date_label"] == "1923 - 1923"
+        assert data["status"] == "published"
+        assert data["visibility"] == "public"
+        assert "created_at" in data
+
+        assert len(data["media_files"]) == 1
+        media_item = data["media_files"][0]
+        assert media_item["story_id"] == str(story.id)
+        assert media_item["original_filename"] == "photo.png"
+        assert media_item["mime_type"] == "image/png"
+        assert media_item["media_type"] == "image"
+        assert media_item["file_size_bytes"] == 777
+
+    async def test_get_story_detail_not_found(self, client):
+        resp = await client.get(f"/stories/{uuid.uuid4()}")
+
+        assert resp.status_code == 404
+        data = resp.json()
+        assert data["detail"] == "Story not found"
