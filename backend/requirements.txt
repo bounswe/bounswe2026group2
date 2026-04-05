@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 pytest
+pytest-asyncio==0.25.3
 httpx
 
 # Database
