@@ -13,8 +13,18 @@ class StoryCreateRequest(BaseModel):
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
-    date_start: int | None = Field(default=None, ge=1, le=9999)
-    date_end: int | None = Field(default=None, ge=1, le=9999)
+    date_start: int | None = Field(
+        default=None,
+        ge=1,
+        le=9999,
+        description="Optional historical start year (1..9999)",
+    )
+    date_end: int | None = Field(
+        default=None,
+        ge=1,
+        le=9999,
+        description="Optional historical end year (1..9999); must be >= date_start when both are provided",
+    )
 
     @model_validator(mode="after")
     def check_date_range(self) -> "StoryCreateRequest":
@@ -31,8 +41,18 @@ class StoryUpdateRequest(BaseModel):
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
-    date_start: int | None = Field(default=None, ge=1, le=9999)
-    date_end: int | None = Field(default=None, ge=1, le=9999)
+    date_start: int | None = Field(
+        default=None,
+        ge=1,
+        le=9999,
+        description="Optional historical start year (1..9999)",
+    )
+    date_end: int | None = Field(
+        default=None,
+        ge=1,
+        le=9999,
+        description="Optional historical end year (1..9999); must be >= date_start when both are provided",
+    )
 
     @model_validator(mode="after")
     def check_date_range(self) -> "StoryUpdateRequest":
