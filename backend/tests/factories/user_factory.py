@@ -9,13 +9,31 @@ DEFAULT_PASSWORD = "ValidPass1!"
 DEFAULT_DISPLAY_NAME = "Test User"
 
 
+def _with_suffix(base_value: str, suffix: int | str | None) -> str:
+    if suffix is None:
+        return base_value
+    return f"{base_value}{suffix}"
+
+
+def _email_with_suffix(base_email: str, suffix: int | str | None) -> str:
+    if suffix is None:
+        return base_email
+    local, at, domain = base_email.partition("@")
+    if at:
+        return f"{local}+{suffix}@{domain}"
+    return f"{base_email}{suffix}"
+
+
 def make_user_payload(
     *,
     username: str = DEFAULT_USERNAME,
     email: str = DEFAULT_EMAIL,
     password: str = DEFAULT_PASSWORD,
     display_name: str | None = DEFAULT_DISPLAY_NAME,
+    suffix: int | str | None = None,
 ) -> dict:
+    username = _with_suffix(username, suffix)
+    email = _email_with_suffix(email, suffix)
     payload = {
         "username": username,
         "email": email,
@@ -30,7 +48,9 @@ def make_login_payload(
     *,
     email: str = DEFAULT_EMAIL,
     password: str = DEFAULT_PASSWORD,
+    suffix: int | str | None = None,
 ) -> dict:
+    email = _email_with_suffix(email, suffix)
     return {
         "email": email,
         "password": password,
@@ -47,7 +67,10 @@ def make_user_entity(
     bio: str | None = None,
     is_active: bool = True,
     password_hash: str | None = None,
+    suffix: int | str | None = None,
 ) -> User:
+    username = _with_suffix(username, suffix)
+    email = _email_with_suffix(email, suffix)
     return User(
         username=username,
         email=email,
