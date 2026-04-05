@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -147,7 +147,14 @@ class TestUploadMediaForStoryService:
         file = _make_upload_file("photo.png", b"fake-image-bytes", "image/png")
 
         db = AsyncMock()
+        db.add = MagicMock()
         db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
 
         with patch("app.services.story_service.upload_bytes") as mock_upload:
             result = await upload_media_for_story(db, story_id, file, payload)
@@ -165,6 +172,7 @@ class TestUploadMediaForStoryService:
 
         mock_upload.assert_called_once()
         assert mock_upload.call_args.kwargs["content_type"] == "image/png"
+        db.add.assert_called_once()
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once()
 
