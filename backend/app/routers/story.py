@@ -1,13 +1,18 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.db.enums import MediaType
 from app.db.session import get_db
 from app.db.user import User
-from app.models.story import MediaUploadRequest, MediaUploadResponse, StoryListResponse
+from app.models.story import (
+    MediaUploadRequest,
+    MediaUploadResponse,
+    StoryDetailResponse,
+    StoryListResponse,
+)
 from app.services.story_service import (
     list_available_stories,
     search_available_stories_by_place,
@@ -28,6 +33,22 @@ async def search_stories(
     db: AsyncSession = Depends(get_db),
 ):
     return await search_available_stories_by_place(db, place_name)
+
+
+@router.get(
+    "/{story_id}",
+    response_model=StoryDetailResponse,
+    responses={404: {"description": "Story not found"}},
+)
+async def get_story_by_id(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    # Contract step only: retrieval logic will be implemented in service step.
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Story detail retrieval is not implemented yet",
+    )
 
 
 @router.post(
