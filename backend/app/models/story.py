@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.db.enums import StoryStatus, StoryVisibility
+from app.db.enums import MediaType, StoryStatus, StoryVisibility
 
 
 class StoryCreateRequest(BaseModel):
@@ -75,3 +75,31 @@ class StoryResponse(BaseModel):
 class StoryListResponse(BaseModel):
     stories: list[StoryResponse]
     total: int
+
+
+class MediaUploadRequest(BaseModel):
+    media_type: MediaType
+    alt_text: str | None = Field(default=None, max_length=500)
+    caption: str | None = Field(default=None, max_length=500)
+    sort_order: int = Field(default=0, ge=0)
+
+
+class MediaFileResponse(BaseModel):
+    id: uuid.UUID
+    story_id: uuid.UUID
+    bucket_name: str
+    storage_key: str
+    original_filename: str
+    mime_type: str
+    media_type: MediaType
+    file_size_bytes: int
+    sort_order: int
+    alt_text: str | None
+    caption: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MediaUploadResponse(BaseModel):
+    media: MediaFileResponse
