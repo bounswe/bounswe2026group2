@@ -34,7 +34,7 @@ class TestListAvailableStoriesService:
         story = _make_story()
 
         db = AsyncMock()
-        db.execute.return_value.all.return_value = [(story, "storyauthor")]
+        db.execute.return_value.all = lambda: [(story, "storyauthor")]
 
         result = await list_available_stories(db)
 
@@ -61,7 +61,7 @@ class TestListAvailableStoriesService:
 
     async def test_returns_empty_response_when_no_rows(self):
         db = AsyncMock()
-        db.execute.return_value.all.return_value = []
+        db.execute.return_value.all = lambda: []
 
         result = await list_available_stories(db)
 
@@ -71,7 +71,7 @@ class TestListAvailableStoriesService:
 
     async def test_query_contains_expected_filters_and_sorting(self):
         db = AsyncMock()
-        db.execute.return_value.all.return_value = []
+        db.execute.return_value.all = lambda: []
 
         await list_available_stories(db)
 
