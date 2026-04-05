@@ -198,10 +198,14 @@
   </section>
 </main>
 
+<!-- Auth -->
+<script src="config.js"></script>
+<script src="auth.js"></script>
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+  if (!requireAuth()) throw new Error("redirect");
   // ─── Map Init ───
   var createMap = L.map("create-map", {
     center: [41.015, 28.979],
