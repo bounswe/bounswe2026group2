@@ -5,6 +5,7 @@ from sqlalchemy import text
 
 from app.db.session import engine
 from app.routers.auth import router as auth_router
+from app.routers.story import router as story_router
 from app.services.storage import check_connection
 
 
@@ -22,6 +23,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(story_router)
 
 
 @app.get("/")
