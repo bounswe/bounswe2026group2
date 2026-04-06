@@ -303,8 +303,8 @@ class TestStoryCreateAPI:
         assert data["latitude"] == 41.0082
         assert data["longitude"] == 28.9784
         assert data["date_label"] == "1453 - 1453"
-        assert data["status"] == "draft"
-        assert data["visibility"] == "private"
+        assert data["status"] == "published"
+        assert data["visibility"] == "public"
         assert data["media_files"] == []
         assert "id" in data
         assert "created_at" in data

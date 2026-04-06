@@ -281,8 +281,8 @@ class TestCreateStoryWithLocationService:
         async def _refresh_side_effect(story_obj):
             story_obj.id = uuid.uuid4()
             story_obj.created_at = datetime.now(timezone.utc)
-            story_obj.status = StoryStatus.DRAFT
-            story_obj.visibility = StoryVisibility.PRIVATE
+            story_obj.status = StoryStatus.PUBLISHED
+            story_obj.visibility = StoryVisibility.PUBLIC
 
         db.refresh.side_effect = _refresh_side_effect
 
@@ -293,6 +293,8 @@ class TestCreateStoryWithLocationService:
         assert result.place_name == "Istanbul"
         assert result.latitude == 41.0082
         assert result.longitude == 28.9784
+        assert result.status == StoryStatus.PUBLISHED
+        assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
         db.add.assert_called_once()
         db.commit.assert_awaited_once()
