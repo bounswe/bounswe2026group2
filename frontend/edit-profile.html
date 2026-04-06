@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local History Map - Edit Profile</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#fef9f0",
+            surface: "#ffffff",
+            primary: "#775a19",
+            "primary-light": "#c5a059",
+            secondary: "#506169",
+            tertiary: "#35618f",
+            border: "#e7e2d9",
+            textmain: "#1d1c16",
+            textmuted: "#5f584c"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"],
+            headline: ["Noto Serif", "serif"]
+          },
+          boxShadow: {
+            soft: "0 20px 50px rgba(0,0,0,0.08)"
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    .material-symbols-outlined {
+        font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    }
+  </style>
+</head>
+<body class="bg-background text-textmain font-body min-h-screen">
+  
+  <!-- Top Navigation Bar -->
+  <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
+    <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
+        <div class="flex items-center gap-8">
+            <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
+            <nav class="hidden md:flex items-center gap-6">
+                <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="map.html">Map</a>
+                <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="story-detail.html">Archive</a>
+                <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="story-create.html">Create Story</a>
+                <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="index.html">Login</a>
+            </nav>
+        </div>
+        <div class="flex items-center gap-3 sm:gap-4">
+            <a href="profile.html" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary bg-primary/10 text-primary shadow-sm transition hover:bg-primary/20" aria-label="Open profile">
+                <span class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
+            </a>
+        </div>
+    </div>
+  </header>
+
+  <main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14 max-w-3xl mx-auto">
+    <header class="mb-10 text-center">
+      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Settings</p>
+      <h1 class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">Edit Your Profile</h1>
+      <p class="mt-3 text-base leading-7 text-textmuted">
+        Update your personal information and how you appear to the community.
+      </p>
+    </header>
+
+    <form id="edit-profile-form" class="rounded-3xl border border-border bg-surface p-8 shadow-soft">
+      <div class="space-y-8">
+        
+        <!-- Avatar Upload -->
+        <div class="flex flex-col md:flex-row items-center gap-6">
+          <div class="w-24 h-24 md:w-32 md:h-32 bg-primary/20 rounded-full flex items-center justify-center border-4 border-white shadow-sm shrink-0 relative group cursor-pointer overflow-hidden" onclick="document.getElementById('avatar-upload').click()">
+            <span class="material-symbols-outlined text-5xl md:text-6xl text-primary" style="font-variation-settings: 'FILL' 1;">person</span>
+            <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span class="material-symbols-outlined text-white text-3xl">photo_camera</span>
+            </div>
+            <input type="file" id="avatar-upload" class="hidden" accept="image/*" />
+          </div>
+          <div class="text-center md:text-left">
+             <h3 class="font-semibold text-textmain">Profile Picture</h3>
+             <p class="text-sm text-textmuted mt-1">Upload a new avatar or logo.</p>
+             <button type="button" class="mt-3 px-4 py-2 rounded-xl text-sm font-semibold border border-border bg-white text-textmain hover:bg-stone-50 transition" onclick="document.getElementById('avatar-upload').click()">
+                Change Picture
+             </button>
+          </div>
+        </div>
+
+        <hr class="border-border/50" />
+
+        <!-- Form Fields -->
+        <div class="grid gap-6">
+          <div>
+            <label for="fullName" class="mb-2 block text-sm font-semibold text-textmain">Display Name</label>
+            <input id="fullName" type="text" value="Mehmet Arif" placeholder="Enter your full name" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+          </div>
+          
+          <div>
+            <label for="bio" class="mb-2 block text-sm font-semibold text-textmain">Bio</label>
+            <textarea id="bio" rows="4" placeholder="Tell the community a bit about yourself" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm leading-6 focus:border-primary focus:ring-primary">Historian and native of Galata. Passionate about preserving the auditory and visual memories of old Istanbul.</textarea>
+          </div>
+
+          <div class="grid gap-6 md:grid-cols-2">
+            <div>
+              <label for="location" class="mb-2 block text-sm font-semibold text-textmain">Location</label>
+              <input id="location" type="text" value="Istanbul, Turkey" placeholder="e.g. Istanbul, Turkey" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+            </div>
+            <div>
+              <label for="email" class="mb-2 block text-sm font-semibold text-textmain">Email Address</label>
+              <input id="email" type="email" value="mehmet.arif@example.com" placeholder="your@email.com" class="w-full rounded-xl border-border bg-stone-50 px-4 py-3 text-sm text-textmuted focus:border-border focus:ring-0 cursor-not-allowed" readonly />
+              <p class="text-xs text-textmuted mt-2">Email address cannot be changed.</p>
+            </div>
+          </div>
+        </div>
+
+        <hr class="border-border/50" />
+
+        <!-- Change Password -->
+        <div class="grid gap-6">
+          <h3 class="font-headline text-xl font-bold text-textmain">Change Password</h3>
+          <div>
+            <label for="currentPassword" class="mb-2 block text-sm font-semibold text-textmain">Current Password</label>
+            <input id="currentPassword" type="password" placeholder="Enter current password" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+          </div>
+          <div class="grid gap-6 md:grid-cols-2">
+            <div>
+              <label for="newPassword" class="mb-2 block text-sm font-semibold text-textmain">New Password</label>
+              <input id="newPassword" type="password" placeholder="Enter new password" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+            </div>
+            <div>
+              <label for="confirmPassword" class="mb-2 block text-sm font-semibold text-textmain">Confirm New Password</label>
+              <input id="confirmPassword" type="password" placeholder="Confirm new password" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit & Cancel -->
+        <div class="flex items-center gap-4 justify-end pt-4">
+          <a href="profile.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+            Cancel
+          </a>
+          <button type="submit" class="rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+            Save Changes
+          </button>
+        </div>
+        
+      </div>
+    </form>
+  </main>
+
+  <script>
+      document.getElementById('edit-profile-form').addEventListener('submit', function(e) {
+          e.preventDefault();
+          // In a real app, send API request here.
+          // For now, redirect to profile page:
+          window.location.assign('profile.html');
+      });
+  </script>
+</body>
+</html>
