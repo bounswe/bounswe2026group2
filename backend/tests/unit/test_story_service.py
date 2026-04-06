@@ -247,6 +247,8 @@ class TestGetStoryDetailByIdService:
         assert len(result.media_files) == 2
         assert result.media_files[0].original_filename == "photo1.png"
         assert result.media_files[1].original_filename == "photo2.png"
+        assert result.media_files[0].media_url.endswith("/images/stories/key.png")
+        assert result.media_files[1].media_url.endswith("/images/stories/key.png")
         db.execute.assert_awaited_once()
 
     async def test_raises_404_when_story_not_found(self):

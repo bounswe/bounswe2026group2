@@ -1,5 +1,6 @@
 import boto3
 from botocore.config import Config
+from urllib.parse import quote
 
 from app.core.config import settings
 from app.db.enums import MediaType
@@ -50,3 +51,10 @@ def upload_bytes(
 
 def delete_object(*, bucket_name: str, storage_key: str) -> None:
     storage_client.delete_object(Bucket=bucket_name, Key=storage_key)
+
+
+def build_public_object_url(*, bucket_name: str, storage_key: str) -> str:
+    base_url = settings.STORAGE_PUBLIC_URL.rstrip("/")
+    encoded_bucket = quote(bucket_name, safe="")
+    encoded_key = quote(storage_key.lstrip("/"), safe="/")
+    return f"{base_url}/{encoded_bucket}/{encoded_key}"

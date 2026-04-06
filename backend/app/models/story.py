@@ -127,6 +127,7 @@ class MediaFileResponse(BaseModel):
     story_id: uuid.UUID
     bucket_name: str
     storage_key: str
+    media_url: str
     original_filename: str
     mime_type: str
     media_type: MediaType

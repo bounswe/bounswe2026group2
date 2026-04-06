@@ -12,15 +12,20 @@ from app.db.story import Story
 from app.db.user import User
 from app.models.story import (
     MediaFileResponse,
-    StoryDetailResponse,
-    StoryCreateRequest,
-    StoryUpdateRequest,
     MediaUploadRequest,
     MediaUploadResponse,
+    StoryCreateRequest,
+    StoryDetailResponse,
     StoryListResponse,
     StoryResponse,
+    StoryUpdateRequest,
 )
-from app.services.storage import delete_object, get_bucket_for_media_type, upload_bytes
+from app.services.storage import (
+    build_public_object_url,
+    delete_object,
+    get_bucket_for_media_type,
+    upload_bytes,
+)
 
 MAX_MEDIA_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
@@ -45,9 +50,30 @@ def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     return StoryListResponse(stories=stories, total=len(stories))
 
 
+def _map_media_file(media: MediaFile) -> MediaFileResponse:
+    return MediaFileResponse(
+        id=media.id,
+        story_id=media.story_id,
+        bucket_name=media.bucket_name,
+        storage_key=media.storage_key,
+        media_url=build_public_object_url(
+            bucket_name=media.bucket_name,
+            storage_key=media.storage_key,
+        ),
+        original_filename=media.original_filename,
+        mime_type=media.mime_type,
+        media_type=media.media_type,
+        file_size_bytes=media.file_size_bytes,
+        sort_order=media.sort_order,
+        alt_text=media.alt_text,
+        caption=media.caption,
+        created_at=media.created_at,
+    )
+
+
 def _map_story_detail(story: Story, author_username: str) -> StoryDetailResponse:
     story_response = StoryResponse.from_orm_with_author(story, author_username)
-    media_files = [MediaFileResponse.model_validate(media) for media in story.media_files]
+    media_files = [_map_media_file(media) for media in story.media_files]
     return StoryDetailResponse(**story_response.model_dump(), media_files=media_files)
 
 
@@ -287,4 +313,4 @@ async def upload_media_for_story(
             detail="Failed to persist media metadata",
         )
 
-    return MediaUploadResponse(media=MediaFileResponse.model_validate(media))
+    return MediaUploadResponse(media=_map_media_file(media))
