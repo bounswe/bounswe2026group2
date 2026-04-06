@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     # Set to "true" in .env to write every SQL query to logs/sql.log
     LOG_SQL: bool = False
 
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    # Comma-separated list of allowed origins
+    CORS_ORIGINS: str = "http://localhost:3000"
+
     # ── JWT ───────────────────────────────────────────────────────────────────
     JWT_SECRET_KEY: str = "your-secret-key"  # Change this in production!
     JWT_ALGORITHM: str = "HS256"

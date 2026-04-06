@@ -6,26 +6,70 @@ function redirectToRegister() {
     window.location.assign("register.html");
 }
 
-function handleLogin(event) {
-    event.preventDefault();
-    redirectToMap();
+function showLoginError(msg) {
+    var el = document.getElementById("login-error");
+    if (el) {
+        el.textContent = msg;
+        el.classList.remove("hidden");
+    }
 }
 
-function handleDemoClick() {
-    redirectToMap();
+function hideLoginError() {
+    var el = document.getElementById("login-error");
+    if (el) {
+        el.classList.add("hidden");
+    }
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+    hideLoginError();
+
+    var email = document.getElementById("email").value.trim();
+    var password = document.getElementById("password").value;
+
+    if (!email || !password) {
+        showLoginError("Please enter your email and password.");
+        return;
+    }
+
+    var submitBtn = event.target.querySelector('button[type="submit"]');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Signing in...";
+    }
+
+    try {
+        var res = await fetch(API_BASE + "/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email, password: password })
+        });
+
+        if (!res.ok) {
+            var data = await res.json().catch(function () { return {}; });
+            throw new Error(data.detail || "Invalid email or password.");
+        }
+
+        var result = await res.json();
+        localStorage.setItem("auth_token", result.access_token);
+        redirectToMap();
+    } catch (err) {
+        showLoginError(err.message);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Sign In";
+        }
+    }
 }
 
 function setupLoginForm() {
-    const form = document.getElementById("login-form");
-    const demoButton = document.getElementById("demo-button");
-    const registerButton = document.getElementById("register-button");
+    var form = document.getElementById("login-form");
+    var registerButton = document.getElementById("register-button");
 
     if (form) {
         form.addEventListener("submit", handleLogin);
-    }
-
-    if (demoButton) {
-        demoButton.addEventListener("click", handleDemoClick);
     }
 
     if (registerButton) {
@@ -39,10 +83,9 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        redirectToMap,
-        redirectToRegister,
-        handleLogin,
-        handleDemoClick,
-        setupLoginForm
+        redirectToMap: redirectToMap,
+        redirectToRegister: redirectToRegister,
+        handleLogin: handleLogin,
+        setupLoginForm: setupLoginForm
     };
 }

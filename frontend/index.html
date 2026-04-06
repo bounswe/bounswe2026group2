@@ -123,6 +123,8 @@
             <label for="remember" class="text-sm text-textmuted">Remember me</label>
           </div>
 
+          <div id="login-error" class="hidden rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700"></div>
+
           <button
                   type="submit"
                   class="w-full rounded-xl bg-primary px-4 py-3 text-white font-semibold hover:opacity-95 transition"
@@ -130,13 +132,12 @@
             Sign In
           </button>
 
-          <button
-                  id="demo-button"
-                  type="button"
-                  class="w-full rounded-xl border border-border bg-white px-4 py-3 text-textmain font-semibold hover:bg-gray-50 transition"
+          <a
+                  href="map.html"
+                  class="block w-full rounded-xl border border-border bg-white px-4 py-3 text-textmain font-semibold hover:bg-gray-50 transition text-center"
           >
-            Continue to Demo
-          </button>
+            Browse Map
+          </a>
         </form>
 
         <div class="relative my-6">
@@ -171,6 +172,8 @@
   </div>
 </div>
 
+<script src="config.js"></script>
+<script src="auth.js"></script>
 <script src="login.js"></script>
 </body>
 </html>
