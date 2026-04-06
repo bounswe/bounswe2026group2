@@ -16,6 +16,131 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script>
+        let profileButton;
+        let profileButtonIcon;
+        let profileButtonInitials;
+        let profileMenu;
+        let profileMenuState;
+        let profileMenuActions;
+        let profileMenuUser;
+        let profileMenuName;
+        let profileMenuEmail;
+        let currentUser = null;
+
+        function getProfileLabel(user) {
+            if (!user) return "";
+            return (user.display_name || user.username || user.email || "").trim();
+        }
+
+        function getProfileInitials(user) {
+            var label = getProfileLabel(user);
+            if (!label) return "";
+
+            return label
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map(function (part) {
+                    return part.charAt(0).toUpperCase();
+                })
+                .join("");
+        }
+
+        function setProfileButton(user) {
+            var initials = getProfileInitials(user);
+
+            if (initials) {
+                profileButtonIcon.classList.add("hidden");
+                profileButtonInitials.textContent = initials;
+                profileButtonInitials.classList.remove("hidden");
+                profileButtonInitials.classList.add("inline-flex");
+                profileButton.setAttribute("aria-label", "Open account menu for " + getProfileLabel(user));
+                return;
+            }
+
+            profileButtonIcon.classList.remove("hidden");
+            profileButtonInitials.textContent = "";
+            profileButtonInitials.classList.add("hidden");
+            profileButtonInitials.classList.remove("inline-flex");
+            profileButton.setAttribute("aria-label", "Open account menu");
+        }
+
+        function closeProfileMenu() {
+            profileMenu.hidden = true;
+            profileButton.setAttribute("aria-expanded", "false");
+        }
+
+        function openProfileMenu() {
+            profileMenu.hidden = false;
+            profileButton.setAttribute("aria-expanded", "true");
+        }
+
+        function toggleProfileMenu() {
+            if (profileMenu.hidden) {
+                openProfileMenu();
+                return;
+            }
+
+            closeProfileMenu();
+        }
+
+        function renderProfileMenu() {
+            profileMenuActions.innerHTML = "";
+
+            if (!currentUser) {
+                profileMenuState.textContent = "Sign in to create stories and manage your account.";
+                profileMenuUser.classList.add("hidden");
+
+                var signInLink = document.createElement("a");
+                signInLink.href = "index.html";
+                signInLink.className = "flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95";
+                signInLink.textContent = "Sign In";
+                signInLink.setAttribute("role", "menuitem");
+                profileMenuActions.appendChild(signInLink);
+                setProfileButton(null);
+                return;
+            }
+
+            profileMenuState.textContent = "Signed in";
+            profileMenuUser.classList.remove("hidden");
+            profileMenuName.textContent = getProfileLabel(currentUser);
+            profileMenuEmail.textContent = currentUser.email || "";
+
+            var signOutButton = document.createElement("button");
+            signOutButton.type = "button";
+            signOutButton.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-textmain transition hover:bg-background";
+            signOutButton.textContent = "Sign Out";
+            signOutButton.setAttribute("role", "menuitem");
+            signOutButton.addEventListener("click", function () {
+                logout();
+            });
+            profileMenuActions.appendChild(signOutButton);
+            setProfileButton(currentUser);
+        }
+
+        async function loadCurrentUser() {
+            currentUser = null;
+            renderProfileMenu();
+
+            if (!isLoggedIn()) {
+                return;
+            }
+
+            try {
+                var response = await authFetch(API_BASE + "/auth/me");
+                if (!response.ok) {
+                    localStorage.removeItem(AUTH_TOKEN_KEY);
+                    renderProfileMenu();
+                    return;
+                }
+
+                currentUser = await response.json();
+                renderProfileMenu();
+            } catch (err) {
+                profileMenuState.textContent = "Unable to load account details right now.";
+                setProfileButton(null);
+            }
+        }
         tailwind.config = {
             theme: {
                 extend: {
@@ -131,6 +256,10 @@
             background: #c5a059;
             border-radius: 4px;
         }
+
+        #profile-menu[hidden] {
+            display: none;
+        }
     </style>
 </head>
 
@@ -139,17 +268,8 @@
     <!-- Top Navigation Bar -->
     <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
         <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
-            <div class="flex items-center gap-8">
+            <div class="flex items-center">
                 <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
-                <nav class="hidden md:flex items-center gap-6">
-                    <a class="text-primary font-bold border-b-2 border-primary pb-1" href="map.html">Map</a>
-                    <a class="text-textmain font-medium hover:text-tertiary transition-colors"
-                        href="story-detail.html">Archive</a>
-                    <a class="text-textmain font-medium hover:text-tertiary transition-colors"
-                        href="story-create.html">Create Story</a>
-                    <a class="text-textmain font-medium hover:text-tertiary transition-colors"
-                        href="index.html">Login</a>
-                </nav>
             </div>
             <div class="flex items-center gap-3 sm:gap-4">
                 <!-- Search -->
@@ -163,11 +283,30 @@
                         class="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-xl shadow-soft overflow-hidden hidden z-50">
                     </div>
                 </div>
-                <button id="btn-profile" type="button"
-                    class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white text-textmain shadow-sm transition hover:bg-stone-50"
-                    aria-label="Open profile">
-                    <span class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
-                </button>
+                <div class="relative">
+                    <button id="btn-profile" type="button"
+                        class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
+                        aria-label="Open account menu"
+                        aria-haspopup="menu"
+                        aria-expanded="false">
+                        <span id="profile-button-icon" class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
+                        <span id="profile-button-initials"
+                            class="hidden h-7 min-w-7 items-center justify-center rounded-full bg-primary text-xs font-bold uppercase text-white"></span>
+                    </button>
+                    <div id="profile-menu" hidden
+                        class="absolute right-0 top-[calc(100%+0.75rem)] w-72 rounded-2xl border border-border bg-white p-2 shadow-soft"
+                        role="menu"
+                        aria-labelledby="btn-profile">
+                        <div id="profile-menu-state" class="px-4 py-3 text-sm text-textmuted">
+                            Checking account status...
+                        </div>
+                        <div id="profile-menu-actions" class="space-y-1"></div>
+                        <div id="profile-menu-user" class="hidden border-t border-border/70 px-4 py-3">
+                            <p id="profile-menu-name" class="text-sm font-semibold text-textmain"></p>
+                            <p id="profile-menu-email" class="mt-1 text-xs text-textmuted break-all"></p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -212,7 +351,7 @@
 
         <!-- Discovery Sidebar -->
         <aside id="sidebar"
-            class="relative z-[1000] m-4 mt-5 glass-panel rounded-2xl p-5 shadow-sm border border-border/20 md:absolute md:top-24 md:right-4 md:m-0 md:mt-0 md:w-72 md:max-h-[calc(100vh-200px)] md:overflow-y-auto">
+            class="relative z-[1000] m-4 mt-5 glass-panel rounded-2xl p-5 shadow-sm border border-border/20 md:absolute md:top-48 md:right-4 md:m-0 md:mt-0 md:w-72 md:max-h-[calc(100vh-296px)] md:overflow-y-auto">
             <div class="flex items-center justify-between mb-5">
                 <h2 class="font-headline font-bold text-lg">Recent Stories</h2>
                 <button id="btn-close-sidebar" class="hidden text-textmuted hover:text-textmain transition-colors md:inline-flex">
@@ -225,10 +364,21 @@
         </aside>
     </main>
 
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
+        profileButton = document.getElementById("btn-profile");
+        profileButtonIcon = document.getElementById("profile-button-icon");
+        profileButtonInitials = document.getElementById("profile-button-initials");
+        profileMenu = document.getElementById("profile-menu");
+        profileMenuState = document.getElementById("profile-menu-state");
+        profileMenuActions = document.getElementById("profile-menu-actions");
+        profileMenuUser = document.getElementById("profile-menu-user");
+        profileMenuName = document.getElementById("profile-menu-name");
+        profileMenuEmail = document.getElementById("profile-menu-email");
         // ─── Mock story data (will be replaced by API calls) ───
         const MOCK_STORIES = [
             {
@@ -541,12 +691,27 @@
             if (!document.getElementById("search-container").contains(e.target)) {
                 searchResults.classList.add("hidden");
             }
+
+            if (!profileMenu.hidden && !profileMenu.contains(e.target) && !profileButton.contains(e.target)) {
+                closeProfileMenu();
+            }
+        });
+
+        profileButton.addEventListener("click", function () {
+            toggleProfileMenu();
+        });
+
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape") {
+                closeProfileMenu();
+            }
         });
 
         // ─── Initialize ───
         // In production, this would be: fetch("/api/stories").then(r => r.json()).then(loadStories)
         loadStories(MOCK_STORIES);
         populateSidebar(MOCK_STORIES);
+        loadCurrentUser();
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
     </script>
