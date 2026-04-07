@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local History Map - Story Creation</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#fef9f0",
+            surface: "#ffffff",
+            primary: "#775a19",
+            "primary-light": "#c5a059",
+            secondary: "#506169",
+            tertiary: "#35618f",
+            border: "#e7e2d9",
+            textmain: "#1d1c16",
+            textmuted: "#5f584c"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"],
+            headline: ["Noto Serif", "serif"]
+          },
+          boxShadow: {
+            soft: "0 20px 50px rgba(0,0,0,0.08)"
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    #location-search-container {
+      position: relative;
+      z-index: 1000;
+    }
+    #create-map {
+      position: relative;
+      z-index: 0;
+    }
+    .leaflet-container { font-family: "Inter", sans-serif; }
+    .leaflet-control-zoom a {
+      background: rgba(254,249,240,0.9) !important;
+      backdrop-filter: blur(12px);
+      color: #775a19 !important;
+      border: 1px solid #e7e2d9 !important;
+      font-weight: 600;
+    }
+    .leaflet-control-zoom a:hover { background: #ffffff !important; }
+    .leaflet-control-attribution {
+      background: rgba(254,249,240,0.75) !important;
+      font-size: 10px;
+    }
+    #location-search-results {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #location-search-results::-webkit-scrollbar { width: 4px; }
+    #location-search-results::-webkit-scrollbar-thumb { background: #c5a059; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-background text-textmain font-body min-h-screen">
+<main class="w-full px-4 py-10 lg:px-8 xl:px-10 2xl:px-14">
+  <header class="mb-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <a href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+        <span aria-hidden="true">&larr;</span>
+        Back to map
+      </a>
+      <h1 class="mt-5 font-headline text-4xl font-extrabold leading-tight text-textmain">Share a piece of local history</h1>
+      <p class="mt-4 max-w-4xl text-base leading-7 text-textmuted">
+        Add a memory, attach media, choose a location, and place your story on the map for others to discover.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <a href="story-detail.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+        Preview Story Detail
+      </a>
+    </div>
+  </header>
+
+  <section class="grid gap-8 lg:grid-cols-[minmax(0,2.25fr)_17rem] xl:grid-cols-[minmax(0,2.7fr)_16rem] 2xl:grid-cols-[minmax(0,3fr)_16rem]">
+    <form id="story-form" class="rounded-3xl border border-border bg-surface p-8 shadow-soft">
+      <div class="space-y-6">
+        <div>
+          <label for="title" class="mb-2 block text-sm font-semibold text-textmain">Title</label>
+          <input id="title" type="text" placeholder="Give your story a title" required class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+        </div>
+
+        <div>
+          <label for="story" class="mb-2 block text-sm font-semibold text-textmain">Your Story</label>
+          <textarea id="story" rows="7" placeholder="Write what happened here, who was involved, and why this place matters." required class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm leading-6 focus:border-primary focus:ring-primary"></textarea>
+        </div>
+
+        <!-- Map Placement Section -->
+        <section>
+          <div>
+            <h2 class="font-headline text-3xl font-bold text-textmain">Choose where the story belongs</h2>
+            <p class="mt-3 max-w-3xl text-sm leading-7 text-textmuted">
+              Search for an address or click directly on the map to pin the story's location.
+            </p>
+          </div>
+
+          <!-- Location Search -->
+          <div class="mt-4 relative" id="location-search-container">
+            <input
+                    id="location-search"
+                    type="text"
+                    placeholder="Search for an address (e.g. Boğaziçi Üniversitesi)"
+                    autocomplete="off"
+                    class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
+            />
+            <div id="location-search-results" class="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-xl shadow-soft overflow-hidden hidden z-50"></div>
+          </div>
+
+          <!-- Map -->
+          <div class="mt-4 -mx-8 h-[360px] overflow-hidden border-y border-border/50 sm:mx-0 sm:h-[400px] sm:rounded-[1.75rem] sm:border">
+            <div id="create-map" style="height: 100%; width: 100%;"></div>
+          </div>
+
+          <!-- Selected Location Display -->
+          <div id="selected-location" class="mt-3 hidden">
+            <div class="flex items-center gap-2 rounded-xl bg-[rgba(53,97,143,0.08)] px-4 py-3 text-sm">
+              <span class="text-tertiary font-semibold">📍 Pinned:</span>
+              <span id="selected-location-text" class="text-textmain"></span>
+              <button type="button" id="clear-location" class="ml-auto text-xs text-red-500 hover:underline">Clear</button>
+            </div>
+          </div>
+
+          <!-- Hidden fields for coordinates -->
+          <input type="hidden" id="latitude" name="latitude" />
+          <input type="hidden" id="longitude" name="longitude" />
+        </section>
+
+        <div class="grid gap-6 md:grid-cols-2">
+          <div>
+            <label for="location" class="mb-2 block text-sm font-semibold text-textmain">Location Name</label>
+            <input id="location" type="text" placeholder="Kadikoy, Istanbul" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+          </div>
+          <div>
+            <label for="date-single" class="mb-2 block text-sm font-semibold text-textmain">Date</label>
+            <input id="date-single" type="text" inputmode="numeric" placeholder="mm/dd/yyyy" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+          </div>
+        </div>
+
+        <!-- Date Range Toggle -->
+        <div>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input id="date-range-toggle" type="checkbox" class="rounded border-border text-primary focus:ring-primary" />
+            <span class="text-sm text-textmuted">Specify a date range</span>
+          </label>
+          <div id="date-range-fields" class="mt-3 hidden grid gap-4 md:grid-cols-2">
+            <div>
+              <label for="date-start" class="mb-2 block text-sm font-semibold text-textmain">Start Date</label>
+              <input id="date-start" type="text" inputmode="numeric" placeholder="mm/dd/yyyy" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+            </div>
+            <div>
+              <label for="date-end" class="mb-2 block text-sm font-semibold text-textmain">End Date</label>
+              <input id="date-end" type="text" inputmode="numeric" placeholder="mm/dd/yyyy" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-textmain">Media Upload</label>
+          <div class="rounded-2xl border border-dashed border-primary-light bg-[rgba(197,160,89,0.08)] px-6 py-10 text-center">
+            <p class="text-base font-semibold text-primary">Drop photos, videos, or audio here</p>
+            <p class="mt-2 text-sm text-textmuted">Or click to browse files from your device</p>
+            <input type="file" id="media-files" multiple accept="image/*,video/*,audio/*" class="hidden" />
+            <button type="button" onclick="document.getElementById('media-files').click()" class="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+              Choose Files
+            </button>
+            <div id="file-list" class="mt-4 text-sm text-textmuted"></div>
+          </div>
+        </div>
+
+        <!-- Error / Success Messages -->
+        <div id="form-error" class="hidden rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700"></div>
+        <div id="form-success" class="hidden rounded-xl bg-green-50 border border-green-200 p-3 text-sm text-green-700"></div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <button type="button" id="btn-draft" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+            Save as Draft
+          </button>
+          <button type="submit" id="btn-publish" class="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+            Publish Story
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <aside class="rounded-3xl border border-border bg-[rgba(119,90,25,0.06)] p-6 lg:self-start">
+      <h2 class="font-headline text-xl font-bold text-textmain">Publishing Checklist</h2>
+      <ul id="checklist" class="mt-5 space-y-3 text-sm leading-6 text-textmuted">
+        <li id="check-title" class="rounded-2xl bg-white/80 p-4 transition-colors">Add a title that identifies the place or event.</li>
+        <li id="check-story" class="rounded-2xl bg-white/80 p-4 transition-colors">Explain what happened and why it matters.</li>
+        <li id="check-location" class="rounded-2xl bg-white/80 p-4 transition-colors">Pin the location on the map.</li>
+        <li id="check-date" class="rounded-2xl bg-white/80 p-4 transition-colors">Confirm the date or year.</li>
+      </ul>
+    </aside>
+  </section>
+</main>
+
+<!-- Auth -->
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  if (!requireAuth()) throw new Error("redirect");
+  // ─── Map Init ───
+  var createMap = L.map("create-map", {
+    center: [41.015, 28.979],
+    zoom: 12
+  });
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19
+  }).addTo(createMap);
+
+  var pinMarker = null;
+
+  function setPin(lat, lng, label) {
+    if (pinMarker) createMap.removeLayer(pinMarker);
+
+    pinMarker = L.marker([lat, lng], {
+      draggable: true
+    }).addTo(createMap);
+
+    pinMarker.on("dragend", function () {
+      var pos = pinMarker.getLatLng();
+      updateLocationFields(pos.lat, pos.lng, null);
+      reverseGeocode(pos.lat, pos.lng);
+    });
+
+    document.getElementById("latitude").value = lat.toFixed(6);
+    document.getElementById("longitude").value = lng.toFixed(6);
+
+    var display = label || (lat.toFixed(4) + ", " + lng.toFixed(4));
+    document.getElementById("selected-location-text").textContent = display;
+    document.getElementById("selected-location").classList.remove("hidden");
+
+    updateChecklist();
+  }
+
+  function updateLocationFields(lat, lng, name) {
+    document.getElementById("latitude").value = lat.toFixed(6);
+    document.getElementById("longitude").value = lng.toFixed(6);
+    if (name) {
+      document.getElementById("location").value = name;
+      document.getElementById("selected-location-text").textContent = name + " (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")";
+    } else {
+      document.getElementById("selected-location-text").textContent = lat.toFixed(4) + ", " + lng.toFixed(4);
+    }
+    document.getElementById("selected-location").classList.remove("hidden");
+    updateChecklist();
+  }
+
+  // Click on map to pin
+  createMap.on("click", function (e) {
+    setPin(e.latlng.lat, e.latlng.lng, null);
+    reverseGeocode(e.latlng.lat, e.latlng.lng);
+  });
+
+  // Clear location
+  document.getElementById("clear-location").addEventListener("click", function () {
+    if (pinMarker) createMap.removeLayer(pinMarker);
+    pinMarker = null;
+    document.getElementById("latitude").value = "";
+    document.getElementById("longitude").value = "";
+    document.getElementById("location").value = "";
+    document.getElementById("selected-location").classList.add("hidden");
+    updateChecklist();
+  });
+
+  // ─── Geocoding (Nominatim / OpenStreetMap) ───
+  var searchInput = document.getElementById("location-search");
+  var searchResults = document.getElementById("location-search-results");
+  var searchTimeout;
+
+  searchInput.addEventListener("input", function () {
+    clearTimeout(searchTimeout);
+    var query = searchInput.value.trim();
+    if (query.length < 3) {
+      searchResults.classList.add("hidden");
+      return;
+    }
+
+    searchTimeout = setTimeout(function () {
+      fetch("https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(query) + "&limit=5&addressdetails=1")
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                if (!data.length) {
+                  searchResults.innerHTML = '<div class="px-4 py-3 text-sm text-textmuted">No results found</div>';
+                  searchResults.classList.remove("hidden");
+                  return;
+                }
+
+                searchResults.innerHTML = "";
+                data.forEach(function (item) {
+                  var div = document.createElement("div");
+                  div.className = "px-4 py-3 hover:bg-background cursor-pointer border-b border-border/30 last:border-0 text-sm";
+                  div.textContent = item.display_name;
+                  div.addEventListener("click", function () {
+                    var lat = parseFloat(item.lat);
+                    var lon = parseFloat(item.lon);
+                    createMap.setView([lat, lon], 16);
+                    setPin(lat, lon, item.display_name.split(",").slice(0, 2).join(","));
+                    document.getElementById("location").value = item.display_name.split(",").slice(0, 2).join(",").trim();
+                    searchInput.value = item.display_name.split(",").slice(0, 3).join(",");
+                    searchResults.classList.add("hidden");
+                  });
+                  searchResults.appendChild(div);
+                });
+                searchResults.classList.remove("hidden");
+              })
+              .catch(function () {
+                searchResults.innerHTML = '<div class="px-4 py-3 text-sm text-textmuted">Search unavailable</div>';
+                searchResults.classList.remove("hidden");
+              });
+    }, 400);
+  });
+
+  // Close search dropdown on outside click
+  document.addEventListener("click", function (e) {
+    if (!document.getElementById("location-search-container").contains(e.target)) {
+      searchResults.classList.add("hidden");
+    }
+  });
+
+  // Reverse geocode when clicking on map
+  function reverseGeocode(lat, lng) {
+    fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lng + "&zoom=16")
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              if (data && data.display_name) {
+                var shortName = data.display_name.split(",").slice(0, 3).join(",").trim();
+                var locationName = data.display_name.split(",").slice(0, 2).join(",").trim();
+                document.getElementById("location").value = locationName;
+                document.getElementById("selected-location-text").textContent = shortName + " (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")";
+              }
+            })
+            .catch(function () { /* silent fail */ });
+  }
+
+  // ─── Date Range Toggle ───
+  function isValidDateInput(value) {
+    return /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
+  }
+
+  function getISODateFromDateInput(value) {
+    var parts = value.split("/");
+    return parts[2] + "-" + parts[0] + "-" + parts[1];
+  }
+
+  document.getElementById("date-range-toggle").addEventListener("change", function () {
+    document.getElementById("date-range-fields").classList.toggle("hidden", !this.checked);
+    document.getElementById("date-single").closest("div").classList.toggle("hidden", this.checked);
+    updateChecklist();
+  });
+
+  // ─── File Upload Display ───
+  document.getElementById("media-files").addEventListener("change", function () {
+    var fileList = document.getElementById("file-list");
+    if (this.files.length === 0) {
+      fileList.textContent = "";
+      return;
+    }
+    var names = [];
+    for (var i = 0; i < this.files.length; i++) {
+      names.push(this.files[i].name);
+    }
+    fileList.textContent = names.length + " file(s) selected: " + names.join(", ");
+  });
+
+  function getSelectedFiles() {
+    return Array.prototype.slice.call(document.getElementById("media-files").files || []);
+  }
+
+  function getMediaType(file) {
+    if (!file || !file.type) return null;
+    if (file.type.indexOf("image/") === 0) return "image";
+    if (file.type.indexOf("video/") === 0) return "video";
+    if (file.type.indexOf("audio/") === 0) return "audio";
+    if (
+      file.type === "application/pdf" ||
+      file.type === "text/plain" ||
+      file.type === "application/msword" ||
+      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      return "document";
+    }
+    return null;
+  }
+
+  async function readErrorMessage(response, fallbackMessage) {
+    try {
+      var data = await response.json();
+      if (data && typeof data.detail === "string") {
+        return data.detail;
+      }
+    } catch (err) {
+      // Ignore JSON parse errors and fall back to generic messaging.
+    }
+    return fallbackMessage;
+  }
+
+  function setSubmittingState(isSubmitting, publishLabel) {
+    var publishButton = document.getElementById("btn-publish");
+    var draftButton = document.getElementById("btn-draft");
+
+    publishButton.disabled = isSubmitting;
+    draftButton.disabled = isSubmitting;
+
+    publishButton.textContent = publishLabel || "Publish Story";
+    publishButton.classList.toggle("opacity-70", isSubmitting);
+    publishButton.classList.toggle("cursor-not-allowed", isSubmitting);
+    draftButton.classList.toggle("opacity-70", isSubmitting);
+    draftButton.classList.toggle("cursor-not-allowed", isSubmitting);
+  }
+
+  // ─── Checklist Updates ───
+  function updateChecklist() {
+    var titleOk = document.getElementById("title").value.trim().length > 0;
+    var storyOk = document.getElementById("story").value.trim().length > 0;
+    var locationOk = document.getElementById("latitude").value !== "";
+    var dateSingle = document.getElementById("date-single").value.trim();
+    var dateStart = document.getElementById("date-start").value.trim();
+    var dateEnd = document.getElementById("date-end").value.trim();
+    var usingDateRange = document.getElementById("date-range-toggle").checked;
+    var dateOk = usingDateRange
+      ? isValidDateInput(dateStart) && isValidDateInput(dateEnd)
+      : isValidDateInput(dateSingle);
+
+    setCheckState("check-title", titleOk);
+    setCheckState("check-story", storyOk);
+    setCheckState("check-location", locationOk);
+    setCheckState("check-date", dateOk);
+  }
+
+  function setCheckState(id, done) {
+    var el = document.getElementById(id);
+    if (done) {
+      el.style.background = "rgba(53,97,143,0.1)";
+      el.style.color = "#35618f";
+      el.style.fontWeight = "600";
+    } else {
+      el.style.background = "";
+      el.style.color = "";
+      el.style.fontWeight = "";
+    }
+  }
+
+  // Listen for changes to update checklist
+  ["title", "story", "date-single", "date-start", "date-end"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", updateChecklist);
+  });
+
+  document.getElementById("btn-draft").addEventListener("click", function () {
+    var errorEl = document.getElementById("form-error");
+    var successEl = document.getElementById("form-success");
+    successEl.classList.add("hidden");
+    errorEl.textContent = "Draft save is not available in the current API. Publishing now creates a public story directly.";
+    errorEl.classList.remove("hidden");
+  });
+
+  // ─── Form Submission ───
+  document.getElementById("story-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    var errorEl = document.getElementById("form-error");
+    var successEl = document.getElementById("form-success");
+    errorEl.classList.add("hidden");
+    successEl.classList.add("hidden");
+
+    var title = document.getElementById("title").value.trim();
+    var content = document.getElementById("story").value.trim();
+    var placeName = document.getElementById("location").value.trim();
+    var lat = document.getElementById("latitude").value;
+    var lng = document.getElementById("longitude").value;
+    var dateSingle = document.getElementById("date-single").value.trim();
+    var dateStart = document.getElementById("date-start").value.trim();
+    var usingDateRange = document.getElementById("date-range-toggle").checked;
+    var dateEnd = document.getElementById("date-end").value.trim();
+    var selectedFiles = getSelectedFiles();
+
+    if (!title || !content) {
+      errorEl.textContent = "Please fill in the title and story content.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    if (!lat || !lng) {
+      errorEl.textContent = "Please pin a location on the map.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    if (!placeName) {
+      errorEl.textContent = "Please provide a location name for the pinned place.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    if (!usingDateRange && !isValidDateInput(dateSingle)) {
+      errorEl.textContent = "Date must use mm/dd/yyyy format.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    if (usingDateRange && (!dateStart || !dateEnd)) {
+      errorEl.textContent = "Please provide both start and end dates.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    if (usingDateRange && !isValidDateInput(dateStart)) {
+      errorEl.textContent = "Start date must use mm/dd/yyyy format.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    if (usingDateRange && !isValidDateInput(dateEnd)) {
+      errorEl.textContent = "End date must use mm/dd/yyyy format.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    if (usingDateRange && getISODateFromDateInput(dateEnd) < getISODateFromDateInput(dateStart)) {
+      errorEl.textContent = "End date must be greater than or equal to the start date.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    for (var i = 0; i < selectedFiles.length; i++) {
+      if (!getMediaType(selectedFiles[i])) {
+        errorEl.textContent = "One or more selected files are not supported by the upload API.";
+        errorEl.classList.remove("hidden");
+        return;
+      }
+    }
+
+    var payload = {
+      title: title,
+      content: content,
+      summary: null,
+      latitude: parseFloat(lat),
+      longitude: parseFloat(lng),
+      place_name: placeName,
+      date_start: usingDateRange ? getISODateFromDateInput(dateStart) : getISODateFromDateInput(dateSingle),
+      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null
+    };
+
+    setSubmittingState(true, "Creating Story...");
+
+    try {
+      var createResponse = await authFetch(API_BASE + "/stories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!createResponse.ok) {
+        throw new Error(await readErrorMessage(createResponse, "Failed to create the story."));
+      }
+
+      var createdStory = await createResponse.json();
+      var failedUploads = [];
+
+      for (var fileIndex = 0; fileIndex < selectedFiles.length; fileIndex++) {
+        var file = selectedFiles[fileIndex];
+        var mediaType = getMediaType(file);
+        var formData = new FormData();
+
+        setSubmittingState(true, "Uploading " + (fileIndex + 1) + " / " + selectedFiles.length + "...");
+
+        formData.append("file", file);
+        formData.append("media_type", mediaType);
+        formData.append("sort_order", String(fileIndex));
+
+        var uploadResponse = await authFetch(API_BASE + "/stories/" + createdStory.id + "/media", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!uploadResponse.ok) {
+          failedUploads.push(file.name + ": " + await readErrorMessage(uploadResponse, "Upload failed"));
+        }
+      }
+
+      if (failedUploads.length > 0) {
+        successEl.textContent = "Story published, but some media uploads failed.";
+        successEl.classList.remove("hidden");
+        errorEl.textContent = failedUploads.join(" ");
+        errorEl.classList.remove("hidden");
+        return;
+      }
+
+      successEl.textContent = "Story published successfully! Redirecting to the map...";
+      successEl.classList.remove("hidden");
+
+      setTimeout(function () {
+        window.location.assign("map.html");
+      }, 1500);
+    } catch (error) {
+      errorEl.textContent = error && error.message ? error.message : "Failed to publish the story.";
+      errorEl.classList.remove("hidden");
+    } finally {
+      setSubmittingState(false, "Publish Story");
+    }
+  });
+
+  function syncCreateMapSize() {
+    window.requestAnimationFrame(function () {
+      createMap.invalidateSize();
+    });
+  }
+
+  // Fix Leaflet map rendering when container is initially hidden or laid out
+  setTimeout(syncCreateMapSize, 200);
+  window.addEventListener("resize", syncCreateMapSize);
+</script>
+</body>
+</html>

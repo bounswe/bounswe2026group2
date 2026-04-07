@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Search Stories - Local History Map</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: "#fef9f0",
+                        surface: "#ffffff",
+                        primary: "#775a19",
+                        "primary-light": "#c5a059",
+                        secondary: "#506169",
+                        tertiary: "#35618f",
+                        border: "#e7e2d9",
+                        textmain: "#1d1c16",
+                        textmuted: "#5f584c"
+                    },
+                    fontFamily: {
+                        body: ["Inter", "sans-serif"],
+                        headline: ["Noto Serif", "serif"]
+                    },
+                    boxShadow: {
+                        soft: "0 20px 50px rgba(0,0,0,0.08)"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-textmain font-body min-h-screen">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
+        <div class="flex items-center gap-4 w-full px-6 py-4 max-w-screen-xl mx-auto">
+            <a href="map.html" class="flex items-center gap-2 text-textmuted hover:text-textmain transition-colors shrink-0">
+                <span class="material-symbols-outlined text-xl">arrow_back</span>
+                <span class="text-sm font-semibold hidden sm:inline">Map</span>
+            </a>
+            <form id="search-form" class="flex-1 flex items-center gap-3">
+                <div class="relative flex-1 max-w-2xl">
+                    <span class="absolute left-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl">search</span>
+                    <input id="search-input" name="q" type="text" autocomplete="off"
+                        class="w-full pl-11 pr-4 py-3 bg-white border border-border rounded-xl text-sm focus:border-primary focus:ring-primary transition-all"
+                        placeholder="Search stories by place name..." />
+                </div>
+                <button type="submit"
+                    class="shrink-0 inline-flex items-center gap-2 bg-primary text-white px-5 py-3 rounded-xl text-sm font-semibold hover:opacity-95 transition-all">
+                    Search
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <!-- Content -->
+    <main class="max-w-screen-xl mx-auto px-6 py-8">
+
+        <!-- Status -->
+        <div id="status" class="mb-6">
+            <p class="text-textmuted text-sm">Enter a place name to search for stories.</p>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden flex flex-col items-center justify-center py-20">
+            <div class="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin"></div>
+            <p class="mt-4 text-sm text-textmuted">Searching stories...</p>
+        </div>
+
+        <!-- Results Grid -->
+        <div id="results" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"></div>
+
+        <!-- Empty State -->
+        <div id="empty" class="hidden flex flex-col items-center justify-center py-20">
+            <span class="material-symbols-outlined text-5xl text-textmuted/40">search_off</span>
+            <p class="mt-4 text-base font-semibold text-textmain">No stories found</p>
+            <p id="empty-detail" class="mt-1 text-sm text-textmuted">Try a different place name.</p>
+        </div>
+    </main>
+
+    <script src="config.js"></script>
+    <script>
+        var searchForm = document.getElementById("search-form");
+        var searchInput = document.getElementById("search-input");
+        var statusEl = document.getElementById("status");
+        var loadingEl = document.getElementById("loading");
+        var resultsEl = document.getElementById("results");
+        var emptyEl = document.getElementById("empty");
+        var emptyDetail = document.getElementById("empty-detail");
+
+        // Cache: storyId -> full detail (with media_files)
+        var storyCache = {};
+
+        // Read initial query from URL
+        var urlParams = new URLSearchParams(window.location.search);
+        var initialQuery = urlParams.get("q") || "";
+        if (initialQuery) {
+            searchInput.value = initialQuery;
+            performSearch(initialQuery);
+        }
+
+        searchForm.addEventListener("submit", function (e) {
+            e.preventDefault();
+            var query = searchInput.value.trim();
+            if (query.length < 1) return;
+
+            // Update URL without reload
+            var url = new URL(window.location);
+            url.searchParams.set("q", query);
+            window.history.replaceState({}, "", url);
+
+            performSearch(query);
+        });
+
+        async function performSearch(query) {
+            // Show loading
+            statusEl.classList.add("hidden");
+            emptyEl.classList.add("hidden");
+            resultsEl.innerHTML = "";
+            loadingEl.classList.remove("hidden");
+
+            try {
+                var response = await fetch(API_BASE + "/stories/search?place_name=" + encodeURIComponent(query));
+                if (!response.ok) throw new Error("Search request failed");
+                var data = await response.json();
+                var stories = data.stories || [];
+
+                loadingEl.classList.add("hidden");
+
+                if (stories.length === 0) {
+                    emptyEl.classList.remove("hidden");
+                    emptyDetail.textContent = 'No stories found for "' + query + '". Try a different place name.';
+                    return;
+                }
+
+                statusEl.classList.remove("hidden");
+                statusEl.innerHTML = '<p class="text-textmuted text-sm">Found <strong class="text-textmain">' + stories.length + '</strong> ' + (stories.length === 1 ? 'story' : 'stories') + ' for "<strong class="text-textmain">' + escapeHtml(query) + '</strong>"</p>';
+
+                // Render cards immediately with basic info
+                stories.forEach(function (story) {
+                    resultsEl.appendChild(createStoryCard(story, null));
+                });
+
+                // Fetch full details (with media) for each story in parallel
+                var detailPromises = stories.map(function (story) {
+                    return fetchStoryDetail(story.id);
+                });
+                var details = await Promise.allSettled(detailPromises);
+
+                // Update cards with media once details arrive
+                details.forEach(function (result, i) {
+                    if (result.status === "fulfilled" && result.value) {
+                        var detail = result.value;
+                        storyCache[detail.id] = detail;
+                        updateCardWithMedia(stories[i].id, detail);
+                    }
+                });
+
+            } catch (err) {
+                loadingEl.classList.add("hidden");
+                statusEl.classList.remove("hidden");
+                statusEl.innerHTML = '<p class="text-red-600 text-sm">Failed to search stories. Please try again.</p>';
+                console.error("Search error:", err);
+            }
+        }
+
+        async function fetchStoryDetail(storyId) {
+            // Return from cache if available
+            if (storyCache[storyId]) return storyCache[storyId];
+
+            var response = await fetch(API_BASE + "/stories/" + storyId);
+            if (!response.ok) return null;
+            var detail = await response.json();
+            storyCache[storyId] = detail;
+            return detail;
+        }
+
+        function createStoryCard(story, detail) {
+            var card = document.createElement("a");
+            card.href = "story-detail.html?id=" + story.id;
+            card.id = "card-" + story.id;
+            card.className = "group block overflow-hidden rounded-2xl border border-border bg-surface shadow-sm hover:shadow-soft transition-all";
+
+            var placeName = story.place_name || "";
+            var dateLabel = story.date_label || "";
+            var preview = (story.content || "").length > 150
+                ? story.content.substring(0, 150) + "..."
+                : (story.content || "");
+
+            card.innerHTML =
+                '<div id="media-' + story.id + '" class="h-44 bg-gradient-to-br from-[#e9dfcd] to-[#f7f3eb] flex items-center justify-center relative overflow-hidden">' +
+                    '<span class="material-symbols-outlined text-4xl text-primary/30">photo_library</span>' +
+                '</div>' +
+                '<div class="p-5">' +
+                    '<div class="flex items-center gap-2 mb-2">' +
+                        (dateLabel ? '<span class="text-[10px] font-bold text-tertiary tracking-widest uppercase">' + escapeHtml(dateLabel) + '</span>' : '') +
+                        (dateLabel && placeName ? '<span class="text-border">|</span>' : '') +
+                        (placeName ? '<span class="text-[11px] font-semibold text-primary truncate">' + escapeHtml(placeName) + '</span>' : '') +
+                    '</div>' +
+                    '<h3 class="font-headline font-bold text-base text-textmain leading-snug group-hover:text-primary transition-colors">' + escapeHtml(story.title) + '</h3>' +
+                    (story.author ? '<p class="mt-1 text-xs text-textmuted">by ' + escapeHtml(story.author) + '</p>' : '') +
+                    '<p class="mt-2.5 text-sm text-textmuted leading-relaxed line-clamp-3">' + escapeHtml(preview) + '</p>' +
+                    '<div class="mt-4 flex items-center gap-1 text-xs font-bold text-primary">' +
+                        'Read Story' +
+                        '<span class="material-symbols-outlined text-sm group-hover:translate-x-0.5 transition-transform">arrow_forward</span>' +
+                    '</div>' +
+                '</div>';
+
+            return card;
+        }
+
+        function updateCardWithMedia(storyId, detail) {
+            var mediaContainer = document.getElementById("media-" + storyId);
+            if (!mediaContainer) return;
+            if (!detail.media_files || detail.media_files.length === 0) return;
+
+            var images = detail.media_files.filter(function (m) { return m.media_type === "image"; });
+            if (images.length === 0) return;
+
+            mediaContainer.innerHTML =
+                '<img src="' + escapeHtml(images[0].media_url) + '" alt="' + escapeHtml(detail.title) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />' +
+                (images.length > 1 ? '<div class="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">+' + (images.length - 1) + '</div>' : '');
+        }
+
+        function escapeHtml(str) {
+            var div = document.createElement("div");
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

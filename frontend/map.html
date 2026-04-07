@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local History Map - Istanbul Chronicles</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script>
+        let profileButton;
+        let profileButtonIcon;
+        let profileButtonInitials;
+        let profileMenu;
+        let profileMenuState;
+        let profileMenuActions;
+        let profileMenuUser;
+        let profileMenuName;
+        let profileMenuEmail;
+        let currentUser = null;
+
+        function getProfileLabel(user) {
+            if (!user) return "";
+            return (user.display_name || user.username || user.email || "").trim();
+        }
+
+        function getProfileInitials(user) {
+            var label = getProfileLabel(user);
+            if (!label) return "";
+
+            return label
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map(function (part) {
+                    return part.charAt(0).toUpperCase();
+                })
+                .join("");
+        }
+
+        function setProfileButton(user) {
+            var initials = getProfileInitials(user);
+
+            if (initials) {
+                profileButtonIcon.classList.add("hidden");
+                profileButtonInitials.textContent = initials;
+                profileButtonInitials.classList.remove("hidden");
+                profileButtonInitials.classList.add("inline-flex");
+                profileButton.setAttribute("aria-label", "Open account menu for " + getProfileLabel(user));
+                return;
+            }
+
+            profileButtonIcon.classList.remove("hidden");
+            profileButtonInitials.textContent = "";
+            profileButtonInitials.classList.add("hidden");
+            profileButtonInitials.classList.remove("inline-flex");
+            profileButton.setAttribute("aria-label", "Open account menu");
+        }
+
+        function closeProfileMenu() {
+            profileMenu.hidden = true;
+            profileButton.setAttribute("aria-expanded", "false");
+        }
+
+        function openProfileMenu() {
+            profileMenu.hidden = false;
+            profileButton.setAttribute("aria-expanded", "true");
+        }
+
+        function toggleProfileMenu() {
+            if (profileMenu.hidden) {
+                openProfileMenu();
+                return;
+            }
+
+            closeProfileMenu();
+        }
+
+        function renderProfileMenu() {
+            profileMenuActions.innerHTML = "";
+
+            if (!currentUser) {
+                profileMenuState.textContent = "Sign in to create stories and manage your account.";
+                profileMenuUser.classList.add("hidden");
+
+                var signInLink = document.createElement("a");
+                signInLink.href = "index.html";
+                signInLink.className = "flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95";
+                signInLink.textContent = "Sign In";
+                signInLink.setAttribute("role", "menuitem");
+                profileMenuActions.appendChild(signInLink);
+                setProfileButton(null);
+                return;
+            }
+
+            profileMenuState.textContent = "Signed in";
+            profileMenuUser.classList.remove("hidden");
+            profileMenuName.textContent = getProfileLabel(currentUser);
+            profileMenuEmail.textContent = currentUser.email || "";
+
+            var profileLink = document.createElement("a");
+            profileLink.href = "profile.html";
+            profileLink.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-primary transition hover:bg-stone-50";
+            profileLink.textContent = "View Profile";
+            profileLink.setAttribute("role", "menuitem");
+            profileMenuActions.appendChild(profileLink);
+
+            var signOutButton = document.createElement("button");
+            signOutButton.type = "button";
+            signOutButton.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50";
+            signOutButton.textContent = "Sign Out";
+            signOutButton.setAttribute("role", "menuitem");
+            signOutButton.addEventListener("click", function () {
+                logout();
+            });
+            profileMenuActions.appendChild(signOutButton);
+            setProfileButton(currentUser);
+        }
+
+        async function loadCurrentUser() {
+            currentUser = null;
+            renderProfileMenu();
+
+            if (!isLoggedIn()) {
+                return;
+            }
+
+            try {
+                var response = await authFetch(API_BASE + "/auth/me");
+                if (!response.ok) {
+                    localStorage.removeItem(AUTH_TOKEN_KEY);
+                    renderProfileMenu();
+                    return;
+                }
+
+                currentUser = await response.json();
+                renderProfileMenu();
+            } catch (err) {
+                profileMenuState.textContent = "Unable to load account details right now.";
+                setProfileButton(null);
+            }
+        }
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: "#fef9f0",
+                        surface: "#ffffff",
+                        primary: "#775a19",
+                        "primary-light": "#c5a059",
+                        secondary: "#506169",
+                        tertiary: "#35618f",
+                        border: "#e7e2d9",
+                        textmain: "#1d1c16",
+                        textmuted: "#5f584c"
+                    },
+                    fontFamily: {
+                        body: ["Inter", "sans-serif"],
+                        headline: ["Noto Serif", "serif"]
+                    },
+                    boxShadow: {
+                        soft: "0 20px 50px rgba(0,0,0,0.08)"
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+        }
+
+        /* Override Leaflet defaults to match project style */
+        .leaflet-container {
+            font-family: "Inter", sans-serif;
+        }
+
+        .leaflet-control-zoom a {
+            background: rgba(254, 249, 240, 0.9) !important;
+            backdrop-filter: blur(12px);
+            color: #775a19 !important;
+            border: 1px solid #e7e2d9 !important;
+            font-weight: 600;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background: #ffffff !important;
+        }
+
+        .leaflet-control-attribution {
+            background: rgba(254, 249, 240, 0.75) !important;
+            font-size: 10px;
+        }
+
+        /* Custom marker style */
+        .story-marker {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 3px solid #ffffff;
+            background: #775a19;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 16px;
+        }
+
+        .story-marker:hover {
+            transform: scale(1.15);
+        }
+
+        .story-marker.active {
+            border-color: #35618f;
+            box-shadow: 0 0 0 4px rgba(53, 97, 143, 0.2), 0 4px 12px rgba(0, 0, 0, 0.2);
+            transform: scale(1.1);
+        }
+
+        /* Story popup card */
+        .leaflet-popup-content-wrapper {
+            border-radius: 16px !important;
+            padding: 0 !important;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.12) !important;
+            overflow: hidden;
+        }
+
+        .leaflet-popup-content {
+            margin: 0 !important;
+            width: 300px !important;
+        }
+
+        .leaflet-popup-tip {
+            box-shadow: none !important;
+        }
+
+        .glass-panel {
+            background: rgba(254, 249, 240, 0.9);
+            backdrop-filter: blur(12px);
+        }
+
+        /* Search results dropdown */
+        #search-results {
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        #search-results::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #search-results::-webkit-scrollbar-thumb {
+            background: #c5a059;
+            border-radius: 4px;
+        }
+
+        #profile-menu[hidden] {
+            display: none;
+        }
+    </style>
+</head>
+
+<body class="bg-background text-textmain font-body md:overflow-hidden">
+
+    <!-- Top Navigation Bar -->
+    <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
+        <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
+            <div class="flex items-center">
+                <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
+            </div>
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search -->
+                <form id="search-form" class="relative hidden sm:flex items-center gap-2" action="search.html" method="get">
+                    <div class="relative">
+                        <span
+                            class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl">search</span>
+                        <input id="search-input" name="q"
+                            class="pl-10 pr-4 py-2 bg-white border border-border rounded-xl w-72 text-sm focus:border-primary focus:ring-primary transition-all"
+                            placeholder="Search stories by location..." type="text" autocomplete="off" />
+                    </div>
+                </form>
+                <div class="relative">
+                    <button id="btn-profile" type="button"
+                        class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
+                        aria-label="Open account menu" aria-haspopup="menu" aria-expanded="false">
+                        <span id="profile-button-icon"
+                            class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
+                        <span id="profile-button-initials"
+                            class="hidden h-7 min-w-7 items-center justify-center rounded-full bg-primary text-xs font-bold uppercase text-white"></span>
+                    </button>
+                    <div id="profile-menu" hidden
+                        class="absolute right-0 top-[calc(100%+0.75rem)] w-72 rounded-2xl border border-border bg-white p-2 shadow-soft"
+                        role="menu" aria-labelledby="btn-profile">
+                        <div id="profile-menu-state" class="px-4 py-3 text-sm text-textmuted">
+                            Checking account status...
+                        </div>
+                        <div id="profile-menu-actions" class="space-y-1"></div>
+                        <div id="profile-menu-user" class="hidden border-t border-border/70 px-4 py-3">
+                            <p id="profile-menu-name" class="text-sm font-semibold text-textmain"></p>
+                            <p id="profile-menu-email" class="mt-1 text-xs text-textmuted break-all"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Map Container -->
+    <main class="relative w-full pt-[68px] md:h-screen">
+        <div class="relative h-[58vh] min-h-[360px] md:h-[calc(100vh-68px)]">
+            <div id="map" class="absolute inset-0 md:top-0"></div>
+
+            <!-- Map Layer Toggle -->
+            <div class="absolute left-4 top-20 z-[1000] flex flex-col gap-2 md:top-40">
+                <button id="btn-layers"
+                    class="glass-panel w-11 h-11 flex items-center justify-center rounded-xl text-primary shadow-sm hover:bg-white transition-colors border border-border/30"
+                    title="Toggle map layers">
+                    <span class="material-symbols-outlined text-xl">layers</span>
+                </button>
+                <button id="btn-locate"
+                    class="glass-panel w-11 h-11 flex items-center justify-center rounded-xl text-tertiary shadow-sm hover:bg-white transition-colors border border-border/30"
+                    title="Go to my location">
+                    <span class="material-symbols-outlined text-xl">my_location</span>
+                </button>
+            </div>
+
+            <!-- Story Count Badge -->
+            <div class="absolute bottom-6 left-4 z-[1000] md:bottom-8 md:left-8">
+                <div
+                    class="glass-panel px-4 py-2.5 rounded-full border border-border/30 text-xs font-medium text-textmuted flex items-center gap-2 shadow-sm">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="story-count">Loading stories...</span>
+                </div>
+            </div>
+
+            <!-- Floating Action Button -->
+            <div class="absolute bottom-6 right-4 z-[1000] md:bottom-8 md:right-8">
+                <a href="story-create.html"
+                    class="flex items-center gap-3 bg-primary text-white px-4 py-3 rounded-xl text-sm font-semibold shadow-xl hover:scale-105 active:scale-95 transition-all border border-primary-light/20 md:px-6 md:py-4 md:text-base">
+                    <span class="material-symbols-outlined"
+                        style="font-variation-settings: 'FILL' 1;">edit_square</span>
+                    Share a Story
+                </a>
+            </div>
+        </div>
+
+        <!-- Discovery Sidebar -->
+        <aside id="sidebar"
+            class="relative z-[1000] m-4 mt-5 glass-panel rounded-2xl p-5 shadow-sm border border-border/20 md:absolute md:top-48 md:right-4 md:m-0 md:mt-0 md:w-72 md:max-h-[calc(100vh-296px)] md:overflow-y-auto">
+            <div class="flex items-center justify-between mb-5">
+                <h2 class="font-headline font-bold text-lg">Recent Stories</h2>
+                <button id="btn-close-sidebar"
+                    class="hidden text-textmuted hover:text-textmain transition-colors md:inline-flex">
+                    <span class="material-symbols-outlined text-xl">close</span>
+                </button>
+            </div>
+            <div id="sidebar-stories" class="space-y-3 pb-1">
+                <!-- Populated by JS -->
+            </div>
+        </aside>
+    </main>
+
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        profileButton = document.getElementById("btn-profile");
+        profileButtonIcon = document.getElementById("profile-button-icon");
+        profileButtonInitials = document.getElementById("profile-button-initials");
+        profileMenu = document.getElementById("profile-menu");
+        profileMenuState = document.getElementById("profile-menu-state");
+        profileMenuActions = document.getElementById("profile-menu-actions");
+        profileMenuUser = document.getElementById("profile-menu-user");
+        profileMenuName = document.getElementById("profile-menu-name");
+        profileMenuEmail = document.getElementById("profile-menu-email");
+        // ─── Story fetching ───
+        var cachedStories = [];
+        var fetchTimeout = null;
+
+        async function fetchStoriesInBounds() {
+            var bounds = map.getBounds();
+            var params = new URLSearchParams({
+                min_lat: bounds.getSouthWest().lat,
+                max_lat: bounds.getNorthEast().lat,
+                min_lng: bounds.getSouthWest().lng,
+                max_lng: bounds.getNorthEast().lng
+            });
+
+            try {
+                var response = await fetch(API_BASE + "/stories?" + params.toString());
+                if (!response.ok) throw new Error("Failed to fetch stories");
+                var data = await response.json();
+                cachedStories = data.stories || [];
+                loadStories(cachedStories);
+                populateSidebar(cachedStories);
+            } catch (err) {
+                console.error("Error fetching stories:", err);
+                document.getElementById("story-count").textContent = "Failed to load stories";
+            }
+        }
+
+        // ─── Initialize Map ───
+        const map = L.map("map", {
+            center: [41.015, 28.979],
+            zoom: 13,
+            zoomControl: false
+        });
+
+        function syncMapSize() {
+            window.requestAnimationFrame(function () {
+                map.invalidateSize();
+            });
+        }
+
+        // Tile layers
+        const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        });
+
+        const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+            attribution: '&copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+            maxZoom: 17
+        });
+
+        // Default layer
+        osmLayer.addTo(map);
+        let currentLayer = "osm";
+
+        // Zoom controls (Leaflet default position overridden by CSS, but we add custom)
+        L.control.zoom({ position: "topleft" }).addTo(map);
+
+        // ─── Layer Toggle ───
+        document.getElementById("btn-layers").addEventListener("click", function () {
+            if (currentLayer === "osm") {
+                map.removeLayer(osmLayer);
+                topoLayer.addTo(map);
+                currentLayer = "topo";
+            } else {
+                map.removeLayer(topoLayer);
+                osmLayer.addTo(map);
+                currentLayer = "osm";
+            }
+        });
+
+        // ─── Geolocation ───
+        document.getElementById("btn-locate").addEventListener("click", function () {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition(
+                function (pos) {
+                    map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+                },
+                function () {
+                    alert("Unable to access your location.");
+                }
+            );
+        });
+
+        // ─── Create Markers ───
+        function createMarkerIcon() {
+            return L.divIcon({
+                className: "",
+                html: '<div class="story-marker"><span class="material-symbols-outlined" style="font-size:18px;">auto_stories</span></div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20],
+                popupAnchor: [0, -24]
+            });
+        }
+
+        function createPopupContent(story) {
+            var preview = (story.content || "").length > 200
+                ? story.content.substring(0, 200) + "..."
+                : (story.content || "");
+            var placeName = story.place_name || "";
+            var dateLabel = story.date_label || "";
+
+            return '<div style="width:300px;">' +
+                '<div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">' +
+                '<span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>' +
+                (dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '') +
+                '</div>' +
+                '<div style="padding:16px;">' +
+                '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">' + story.title + '</h3>' +
+                '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+                (placeName ? '<span style="font-size:11px;color:#35618f;font-weight:600;">' + placeName + '</span>' : '<span></span>') +
+                '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read Story →</a>' +
+                '</div></div></div>';
+        }
+
+        const markers = [];
+
+        function loadStories(stories) {
+            // Clear existing markers
+            markers.forEach(function (m) { map.removeLayer(m); });
+            markers.length = 0;
+
+            stories.forEach(function (story) {
+                const marker = L.marker([story.latitude, story.longitude], {
+                    icon: createMarkerIcon()
+                });
+
+                marker.bindPopup(createPopupContent(story), {
+                    maxWidth: 300,
+                    minWidth: 300,
+                    closeButton: true
+                });
+
+                marker.on("click", function () {
+                    // Highlight active marker
+                    document.querySelectorAll(".story-marker").forEach(function (el) {
+                        el.classList.remove("active");
+                    });
+                    var el = marker.getElement();
+                    if (el) {
+                        var markerDiv = el.querySelector(".story-marker");
+                        if (markerDiv) markerDiv.classList.add("active");
+                    }
+                });
+
+                marker.addTo(map);
+                markers.push(marker);
+            });
+
+            // Update count
+            document.getElementById("story-count").textContent = stories.length + " stories on the map";
+        }
+
+        // ─── Sidebar ───
+        function populateSidebar(stories) {
+            var container = document.getElementById("sidebar-stories");
+            container.innerHTML = "";
+
+            stories.forEach(function (story) {
+                var preview = (story.content || "").length > 200
+                    ? story.content.substring(0, 200) + "..."
+                    : (story.content || "");
+                var placeName = story.place_name || "";
+                var dateLabel = story.date_label || "";
+
+                var div = document.createElement("div");
+                div.className = "rounded-xl bg-white/80 p-3.5 border border-border/50 cursor-pointer hover:bg-white transition-colors";
+                div.innerHTML =
+                    (dateLabel ? '<div class="text-[10px] font-bold text-tertiary tracking-widest uppercase mb-1">' + dateLabel + '</div>' : '') +
+                    '<h4 class="font-semibold text-sm text-textmain leading-snug mb-1">' + story.title + '</h4>' +
+                    '<p class="text-xs text-textmuted line-clamp-2 leading-relaxed">' + preview + '</p>' +
+                    '<div class="mt-2 flex items-center justify-between">' +
+                    '<span class="text-[10px] text-textmuted">' + placeName + '</span>' +
+                    '<a href="story-detail.html?id=' + story.id + '" class="text-[11px] font-bold text-primary hover:underline">View →</a>' +
+                    '</div>';
+
+                div.addEventListener("click", function (e) {
+                    if (e.target.tagName === "A") return;
+                    map.setView([story.latitude, story.longitude], 16);
+                    // Open the corresponding marker popup
+                    markers.forEach(function (m) {
+                        if (m.getLatLng().lat === story.latitude && m.getLatLng().lng === story.longitude) {
+                            m.openPopup();
+                        }
+                    });
+                });
+
+                container.appendChild(div);
+            });
+        }
+
+        // Close sidebar
+        document.getElementById("btn-close-sidebar").addEventListener("click", function () {
+            document.getElementById("sidebar").classList.add("hidden");
+            syncMapSize();
+        });
+
+        // Close profile menu when clicking outside
+        document.addEventListener("click", function (e) {
+            if (!profileMenu.hidden && !profileMenu.contains(e.target) && !profileButton.contains(e.target)) {
+                closeProfileMenu();
+            }
+        });
+
+        profileButton.addEventListener("click", function () {
+            toggleProfileMenu();
+        });
+
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Escape") {
+                closeProfileMenu();
+            }
+        });
+
+        // ─── Initialize ───
+        map.on("moveend", function () {
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
+        });
+        fetchStoriesInBounds();
+
+        loadCurrentUser();
+        syncMapSize();
+        window.addEventListener("resize", syncMapSize);
+    </script>
+</body>
+
+</html>

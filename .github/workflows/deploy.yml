@@ -19,11 +19,118 @@ jobs:
           fi
 
       - name: Trigger Render Deploy
+        id: trigger
         run: |
-          curl -X POST "https://api.render.com/v1/services/${{ steps.set-service.outputs.SERVICE_ID }}/deploys" \
+          RESPONSE=$(curl -s -X POST "https://api.render.com/v1/services/${{ steps.set-service.outputs.SERVICE_ID }}/deploys" \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{}'
+            -d '{}')
+
+          echo "Response: $RESPONSE"
+
+          DEPLOY_ID=$(echo "$RESPONSE" | jq -r '.id')
+          DEPLOY_STATUS=$(echo "$RESPONSE" | jq -r '.status')
+
+          if [[ "$DEPLOY_ID" == "null" || -z "$DEPLOY_ID" ]]; then
+            echo "::error::Failed to trigger deploy. Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "DEPLOY_ID=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          echo "Deploy triggered: $DEPLOY_ID (status: $DEPLOY_STATUS)"
+
+      - name: Poll Deploy Status
+        id: poll
+        run: |
+          SERVICE_ID="${{ steps.set-service.outputs.SERVICE_ID }}"
+          DEPLOY_ID="${{ steps.trigger.outputs.DEPLOY_ID }}"
+          API_KEY="${{ secrets.RENDER_API_KEY }}"
+          MAX_ATTEMPTS=60   # 10 minutes max (60 * 10s)
+          ATTEMPT=0
+
+          while [[ $ATTEMPT -lt $MAX_ATTEMPTS ]]; do
+            RESPONSE=$(curl -s "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}" \
+              -H "Authorization: Bearer ${API_KEY}")
+
+            STATUS=$(echo "$RESPONSE" | jq -r '.status')
+            UPDATED_AT=$(echo "$RESPONSE" | jq -r '.updatedAt')
+            FINISHED_AT=$(echo "$RESPONSE" | jq -r '.finishedAt')
+            COMMIT_MSG=$(echo "$RESPONSE" | jq -r '.commit.message // empty')
+
+            echo "[$(date -u +%H:%M:%S)] Status: $STATUS (attempt $((ATTEMPT+1))/$MAX_ATTEMPTS)"
+
+            case "$STATUS" in
+              live)
+                echo "FINAL_STATUS=success" >> $GITHUB_OUTPUT
+                echo "DEPLOY_STATUS=$STATUS" >> $GITHUB_OUTPUT
+                echo "FINISHED_AT=$FINISHED_AT" >> $GITHUB_OUTPUT
+                {
+                  echo "COMMIT_MSG<<ENDOFMSG"
+                  echo "$COMMIT_MSG"
+                  echo "ENDOFMSG"
+                } >> $GITHUB_OUTPUT
+                echo "::notice::Deploy succeeded!"
+                exit 0
+                ;;
+              build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                echo "FINAL_STATUS=failure" >> $GITHUB_OUTPUT
+                echo "DEPLOY_STATUS=$STATUS" >> $GITHUB_OUTPUT
+                echo "FINISHED_AT=$FINISHED_AT" >> $GITHUB_OUTPUT
+                {
+                  echo "COMMIT_MSG<<ENDOFMSG"
+                  echo "$COMMIT_MSG"
+                  echo "ENDOFMSG"
+                } >> $GITHUB_OUTPUT
+                echo "::error::Deploy failed with status: $STATUS"
+                exit 1
+                ;;
+              created|build_in_progress|update_in_progress|pre_deploy_in_progress)
+                # Still in progress, keep polling
+                ;;
+              *)
+                echo "::warning::Unknown status: $STATUS"
+                ;;
+            esac
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 10
+          done
+
+          echo "FINAL_STATUS=timeout" >> $GITHUB_OUTPUT
+          echo "DEPLOY_STATUS=timeout" >> $GITHUB_OUTPUT
+          echo "::error::Deploy timed out after $((MAX_ATTEMPTS * 10)) seconds"
+          exit 1
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          DEPLOY_ID="${{ steps.trigger.outputs.DEPLOY_ID }}"
+          STATUS="${{ steps.poll.outputs.DEPLOY_STATUS }}"
+          FINISHED="${{ steps.poll.outputs.FINISHED_AT }}"
+          COMMIT="${{ steps.poll.outputs.COMMIT_MSG }}"
+          SERVICE_ID="${{ steps.set-service.outputs.SERVICE_ID }}"
+          BRANCH="${{ github.ref_name }}"
+
+          if [[ "$STATUS" == "live" ]]; then
+            STATUS_ICON="✅"
+          elif [[ "$STATUS" == "timeout" ]]; then
+            STATUS_ICON="⏱️"
+          else
+            STATUS_ICON="❌"
+          fi
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## ${STATUS_ICON} Backend Deployment — \`${BRANCH}\`
+
+          | Field | Value |
+          |-------|-------|
+          | **Status** | \`${STATUS}\` |
+          | **Deploy ID** | \`${DEPLOY_ID}\` |
+          | **Branch** | \`${BRANCH}\` |
+          | **Finished At** | ${FINISHED:-N/A} |
+          | **Commit** | ${COMMIT:-N/A} |
+          | **Dashboard** | [View on Render](https://dashboard.render.com/web/${SERVICE_ID}/deploys/${DEPLOY_ID}) |
+          EOF
 
   deploy-frontend:
     name: Deploy Frontend to Render
@@ -32,4 +139,123 @@ jobs:
     steps:
       - name: Set Render Service ID
         id: set-service
-        run: echo 'PLACEHOLDER'  # Frontend deployment will be implemented here
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "SERVICE_ID=${{ secrets.FRONTEND_SERVICE_ID }}" >> $GITHUB_OUTPUT
+          else
+            echo "SERVICE_ID=${{ secrets.FRONTEND_SERVICE_ID_DEV }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger Render Deploy
+        id: trigger
+        run: |
+          RESPONSE=$(curl -s -X POST "https://api.render.com/v1/services/${{ steps.set-service.outputs.SERVICE_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          echo "Response: $RESPONSE"
+
+          DEPLOY_ID=$(echo "$RESPONSE" | jq -r '.id')
+          DEPLOY_STATUS=$(echo "$RESPONSE" | jq -r '.status')
+
+          if [[ "$DEPLOY_ID" == "null" || -z "$DEPLOY_ID" ]]; then
+            echo "::error::Failed to trigger deploy. Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "DEPLOY_ID=$DEPLOY_ID" >> $GITHUB_OUTPUT
+          echo "Deploy triggered: $DEPLOY_ID (status: $DEPLOY_STATUS)"
+
+      - name: Poll Deploy Status
+        id: poll
+        run: |
+          SERVICE_ID="${{ steps.set-service.outputs.SERVICE_ID }}"
+          DEPLOY_ID="${{ steps.trigger.outputs.DEPLOY_ID }}"
+          API_KEY="${{ secrets.RENDER_API_KEY }}"
+          MAX_ATTEMPTS=60   # 10 minutes max (60 * 10s)
+          ATTEMPT=0
+
+          while [[ $ATTEMPT -lt $MAX_ATTEMPTS ]]; do
+            RESPONSE=$(curl -s "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${DEPLOY_ID}" \
+              -H "Authorization: Bearer ${API_KEY}")
+
+            STATUS=$(echo "$RESPONSE" | jq -r '.status')
+            UPDATED_AT=$(echo "$RESPONSE" | jq -r '.updatedAt')
+            FINISHED_AT=$(echo "$RESPONSE" | jq -r '.finishedAt')
+            COMMIT_MSG=$(echo "$RESPONSE" | jq -r '.commit.message // empty')
+
+            echo "[$(date -u +%H:%M:%S)] Status: $STATUS (attempt $((ATTEMPT+1))/$MAX_ATTEMPTS)"
+
+            case "$STATUS" in
+              live)
+                echo "FINAL_STATUS=success" >> $GITHUB_OUTPUT
+                echo "DEPLOY_STATUS=$STATUS" >> $GITHUB_OUTPUT
+                echo "FINISHED_AT=$FINISHED_AT" >> $GITHUB_OUTPUT
+                {
+                  echo "COMMIT_MSG<<ENDOFMSG"
+                  echo "$COMMIT_MSG"
+                  echo "ENDOFMSG"
+                } >> $GITHUB_OUTPUT
+                echo "::notice::Deploy succeeded!"
+                exit 0
+                ;;
+              build_failed|update_failed|pre_deploy_failed|canceled|deactivated)
+                echo "FINAL_STATUS=failure" >> $GITHUB_OUTPUT
+                echo "DEPLOY_STATUS=$STATUS" >> $GITHUB_OUTPUT
+                echo "FINISHED_AT=$FINISHED_AT" >> $GITHUB_OUTPUT
+                {
+                  echo "COMMIT_MSG<<ENDOFMSG"
+                  echo "$COMMIT_MSG"
+                  echo "ENDOFMSG"
+                } >> $GITHUB_OUTPUT
+                echo "::error::Deploy failed with status: $STATUS"
+                exit 1
+                ;;
+              created|build_in_progress|update_in_progress|pre_deploy_in_progress)
+                # Still in progress, keep polling
+                ;;
+              *)
+                echo "::warning::Unknown status: $STATUS"
+                ;;
+            esac
+
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 10
+          done
+
+          echo "FINAL_STATUS=timeout" >> $GITHUB_OUTPUT
+          echo "DEPLOY_STATUS=timeout" >> $GITHUB_OUTPUT
+          echo "::error::Deploy timed out after $((MAX_ATTEMPTS * 10)) seconds"
+          exit 1
+
+      - name: Write Job Summary
+        if: always()
+        run: |
+          DEPLOY_ID="${{ steps.trigger.outputs.DEPLOY_ID }}"
+          STATUS="${{ steps.poll.outputs.DEPLOY_STATUS }}"
+          FINISHED="${{ steps.poll.outputs.FINISHED_AT }}"
+          COMMIT="${{ steps.poll.outputs.COMMIT_MSG }}"
+          SERVICE_ID="${{ steps.set-service.outputs.SERVICE_ID }}"
+          BRANCH="${{ github.ref_name }}"
+
+          if [[ "$STATUS" == "live" ]]; then
+            STATUS_ICON="✅"
+          elif [[ "$STATUS" == "timeout" ]]; then
+            STATUS_ICON="⏱️"
+          else
+            STATUS_ICON="❌"
+          fi
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## ${STATUS_ICON} Frontend Deployment — \`${BRANCH}\`
+
+          | Field | Value |
+          |-------|-------|
+          | **Status** | \`${STATUS}\` |
+          | **Deploy ID** | \`${DEPLOY_ID}\` |
+          | **Branch** | \`${BRANCH}\` |
+          | **Finished At** | ${FINISHED:-N/A} |
+          | **Commit** | ${COMMIT:-N/A} |
+          | **Dashboard** | [View on Render](https://dashboard.render.com/web/${SERVICE_ID}/deploys/${DEPLOY_ID}) |
+          EOF

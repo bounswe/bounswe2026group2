@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local History Map - Story Detail</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#fef9f0",
+            surface: "#ffffff",
+            primary: "#775a19",
+            "primary-light": "#c5a059",
+            secondary: "#506169",
+            tertiary: "#35618f",
+            border: "#e7e2d9",
+            textmain: "#1d1c16",
+            textmuted: "#5f584c"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"],
+            headline: ["Noto Serif", "serif"]
+          },
+          boxShadow: {
+            soft: "0 20px 50px rgba(0,0,0,0.08)"
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    .leaflet-container { font-family: "Inter", sans-serif; }
+    .leaflet-control-attribution {
+      background: rgba(254,249,240,0.75) !important;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body class="bg-background text-textmain font-body min-h-screen">
+<main class="max-w-6xl mx-auto px-6 py-10 lg:px-10">
+  <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Story Detail</p>
+      <h1 id="story-title" class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">Loading Story...</h1>
+      <p id="story-summary" class="mt-4 max-w-3xl text-base leading-7 text-textmuted italic">
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+        Login Page
+      </a>
+      <a href="map.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+        Map Page
+      </a>
+      <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+        Open Story Creation
+      </a>
+    </div>
+  </header>
+
+  <section class="grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
+    <article class="overflow-hidden rounded-3xl border border-border bg-surface shadow-soft">
+      <div id="story-cover" class="h-72 bg-[url('https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=1600&q=80')] bg-cover bg-center"></div>
+
+      <div class="p-8">
+        <div class="flex flex-wrap items-center gap-3 text-sm text-textmuted">
+          <span id="story-location" class="rounded-full bg-[rgba(119,90,25,0.1)] px-3 py-1 font-semibold text-primary">Map Reference</span>
+          <span id="story-date">Date Unknown</span>
+          <span id="story-author">by Author</span>
+        </div>
+
+        <div id="story-content" class="mt-6 space-y-5 text-base leading-8 text-textmain whitespace-pre-wrap">
+          <!-- Content injected via JS -->
+        </div>
+
+        <div id="story-media" class="mt-8 grid gap-4 grid-cols-1 md:grid-cols-2">
+          <!-- Media injected via JS -->
+        </div>
+
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="map.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Back to Map</a>
+          <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Create Another Story</a>
+          <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
+        </div>
+      </div>
+    </article>
+
+    <aside class="space-y-6">
+      <section class="rounded-3xl border border-border bg-surface p-6">
+        <h2 class="font-headline text-2xl font-bold text-textmain">Location</h2>
+        <div class="mt-4 rounded-2xl overflow-hidden border border-border/50" style="height: 224px;">
+          <div id="detail-map" style="height: 100%; width: 100%;"></div>
+        </div>
+        <p class="mt-3 text-sm text-textmuted">Kadikoy, Istanbul — <a href="map.html" class="text-primary font-semibold hover:underline">View on full map →</a></p>
+      </section>
+
+      <section class="rounded-3xl border border-border bg-surface p-6">
+        <h2 class="font-headline text-2xl font-bold text-textmain">Comments</h2>
+        <div class="mt-5 space-y-4">
+          <div class="rounded-2xl bg-[rgba(119,90,25,0.06)] p-4">
+            <p class="text-sm font-semibold text-textmain">ayse_k</p>
+            <p class="mt-2 text-sm leading-6 text-textmuted">My grandmother used to describe the same streets and the cats near the pier. This brought that image back immediately.</p>
+          </div>
+          <div class="rounded-2xl bg-[rgba(53,97,143,0.06)] p-4">
+            <p class="text-sm font-semibold text-textmain">can_photo</p>
+            <p class="mt-2 text-sm leading-6 text-textmuted">I photographed the old fountain last year. The inscription is fading, but it is still visible if you visit in the morning light.</p>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </section>
+</main>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="config.js"></script>
+<script>
+  // Initialize mini-map with arbitrary center initially
+  var detailMap = L.map("detail-map", {
+    center: [41.015, 28.979],
+    zoom: 15,
+    zoomControl: false,
+    dragging: true,
+    scrollWheelZoom: false
+  });
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+    maxZoom: 19
+  }).addTo(detailMap);
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const storyId = urlParams.get('id');
+  
+  if (!storyId) {
+    document.getElementById('story-title').textContent = "Story not found";
+    document.getElementById('story-summary').textContent = "No ID provided in the URL.";
+  } else {
+    fetch(API_BASE + "/stories/" + storyId)
+      .then(res => res.json())
+      .then(story => {
+          document.getElementById('story-title').textContent = story.title || "Untitled";
+          document.getElementById('story-summary').textContent = story.summary || "";
+          document.getElementById('story-author').innerHTML = 'by ' + (story.author || "Unknown");
+          document.getElementById('story-date').textContent = story.date_label || "No Date";
+          document.getElementById('story-location').textContent = story.place_name || "Istanbul";
+          document.getElementById('story-content').textContent = story.content || "No content available.";
+          
+          if (story.latitude && story.longitude) {
+            detailMap.setView([story.latitude, story.longitude], 15);
+            L.marker([story.latitude, story.longitude])
+              .addTo(detailMap)
+              .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
+              .openPopup();
+          } else {
+             document.getElementById('detail-map').parentElement.style.display = 'none';
+          }
+          
+          if (story.media_files && story.media_files.length > 0) {
+             const images = story.media_files.filter(m => m.media_type === "image");
+             if (images.length > 0) {
+                 document.getElementById('story-cover').style.backgroundImage = "url('" + images[0].media_url + "')";
+             }
+             
+             let mediaHtml = "";
+             story.media_files.forEach(m => {
+                 if (m.media_type === "image") {
+                     mediaHtml += '<img src="' + m.media_url + '" class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;">';
+                 } else if (m.media_type === "video") {
+                     mediaHtml += '<video src="' + m.media_url + '" controls class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;"></video>';
+                 } else if (m.media_type === "audio") {
+                     mediaHtml += '<div class="p-4 bg-background border border-border rounded-xl w-full flex flex-col gap-2"><span class="text-sm font-semibold material-symbols-outlined text-primary">audio</span><audio src="' + m.media_url + '" controls class="w-full"></audio></div>';
+                 }
+             });
+             document.getElementById('story-media').innerHTML = mediaHtml;
+          }
+      })
+      .catch(err => {
+         console.error("Error loading story details:", err);
+         document.getElementById('story-title').textContent = "Failed to load story";
+         document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";
+      });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local History Map - Profile</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap"
+    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#fef9f0",
+            surface: "#ffffff",
+            primary: "#775a19",
+            "primary-light": "#c5a059",
+            secondary: "#506169",
+            tertiary: "#35618f",
+            border: "#e7e2d9",
+            textmain: "#1d1c16",
+            textmuted: "#5f584c"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"],
+            headline: ["Noto Serif", "serif"]
+          },
+          boxShadow: {
+            soft: "0 20px 50px rgba(0,0,0,0.08)"
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    }
+  </style>
+</head>
+
+<body class="bg-background text-textmain font-body min-h-screen">
+
+  <!-- Top Navigation Bar -->
+  <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
+    <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
+      <div class="flex items-center gap-8">
+        <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
+        <nav class="hidden md:flex items-center gap-6">
+          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="map.html">Map</a>
+          <a class="text-textmain font-medium hover:text-tertiary transition-colors"
+            href="story-detail.html">Archive</a>
+          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="story-create.html">Create
+            Story</a>
+          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="index.html">Login</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-3 sm:gap-4">
+        <a href="profile.html"
+          class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary bg-primary/10 text-primary shadow-sm transition hover:bg-primary/20"
+          aria-label="Open profile">
+          <span class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14 max-w-7xl mx-auto">
+    <!-- Profile Header Section -->
+    <header
+      class="mb-12 flex flex-col gap-6 md:flex-row md:items-center bg-surface p-8 rounded-3xl border border-border shadow-soft">
+      <div
+        class="w-24 h-24 md:w-32 md:h-32 bg-primary/20 rounded-full flex items-center justify-center border-4 border-white shadow-sm shrink-0">
+        <span class="material-symbols-outlined text-5xl md:text-6xl text-primary"
+          style="font-variation-settings: 'FILL' 1;">person</span>
+      </div>
+      <div class="flex-1">
+        <h1 id="profile-name" class="font-headline text-3xl md:text-4xl font-extrabold leading-tight text-textmain">
+          Loading...</h1>
+        <p class="mt-2 text-textmuted text-base">Historian and native of Galata. Passionate about preserving the
+          auditory and visual memories of old Istanbul.</p>
+        <div class="mt-4 flex flex-wrap gap-4 text-sm font-medium text-textmuted">
+          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">location_on</span>
+            Istanbul, Turkey</span>
+          <span id="profile-joined" class="flex items-center gap-1"><span
+              class="material-symbols-outlined text-[18px]">calendar_month</span> Joined...</span>
+        </div>
+      </div>
+      <div class="flex gap-3 md:flex-col lg:flex-row">
+        <a href="edit-profile.html"
+          class="px-5 py-2.5 rounded-xl border border-border bg-white text-sm font-semibold text-textmain transition hover:bg-stone-50 shadow-sm flex items-center gap-2">
+          <span class="material-symbols-outlined text-[18px]">edit</span> Edit Profile
+        </a>
+      </div>
+    </header>
+
+    <!-- Content Sections -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- Left Column: User Stats & Info -->
+      <aside class="space-y-6">
+        <!-- Stats Card -->
+        <div class="bg-surface rounded-2xl p-6 border border-border shadow-sm">
+          <h2 class="font-headline text-lg font-bold mb-4">Activity</h2>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="text-center p-4 bg-background rounded-xl border border-border/50">
+              <div id="stat-stories" class="text-2xl font-bold text-primary">0</div>
+              <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Stories</div>
+            </div>
+            <div class="text-center p-4 bg-background rounded-xl border border-border/50">
+              <div class="text-2xl font-bold text-tertiary">0</div>
+              <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Comments</div>
+            </div>
+            <div class="text-center p-4 bg-background rounded-xl border border-border/50">
+              <div class="text-2xl font-bold text-emerald-600">0</div>
+              <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Likes</div>
+            </div>
+            <div class="text-center p-4 bg-background rounded-xl border border-border/50">
+              <div class="text-2xl font-bold text-orange-600">0</div>
+              <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Saved</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Badges Card -->
+        <div class="bg-surface rounded-2xl p-6 border border-border shadow-sm">
+          <h2 class="font-headline text-lg font-bold mb-4">Badges</h2>
+          <div class="flex flex-wrap gap-3">
+            <p class="text-sm text-textmuted italic">No badges earned yet.</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right Column: User's Stories -->
+      <section class="lg:col-span-2">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="font-headline text-2xl font-bold text-textmain">My Published Stories</h2>
+          <a href="story-create.html"
+            class="text-sm font-semibold text-primary hover:text-primary-light transition-colors flex items-center gap-1">
+            <span class="material-symbols-outlined text-[18px]">add</span> New Story
+          </a>
+        </div>
+
+        <div id="profile-stories-container" class="space-y-4">
+          <div class="text-center p-8">
+            <p class="text-textmuted italic">Loading your stories...</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="profile.js"></script>
+</body>
+
+</html>
