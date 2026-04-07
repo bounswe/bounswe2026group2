@@ -118,6 +118,19 @@ class StoryBoundsFilter(BaseModel):
         return self
 
 
+class StoryDateRangeFilter(BaseModel):
+    query_start: int | date | None = Field(default=None)
+    query_end: int | date | None = Field(default=None)
+    query_precision: DatePrecision | None = Field(default=None)
+
+    def normalize_query_range(self) -> tuple[date | None, date | None, DatePrecision | None]:
+        return StoryDateInput(
+            date_start=self.query_start,
+            date_end=self.query_end,
+            date_precision=self.query_precision,
+        ).normalize_date_range()
+
+
 class StoryResponse(BaseModel):
     id: uuid.UUID
     title: str
