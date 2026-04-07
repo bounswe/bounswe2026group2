@@ -81,7 +81,10 @@ async def list_stories(
             max_lng=max_lng,
         )
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors())
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors(include_context=False, include_url=False),
+        )
 
     return await list_available_stories(
         db,
