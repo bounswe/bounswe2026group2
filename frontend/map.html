@@ -386,97 +386,31 @@
         profileMenuUser = document.getElementById("profile-menu-user");
         profileMenuName = document.getElementById("profile-menu-name");
         profileMenuEmail = document.getElementById("profile-menu-email");
-        // ─── Mock story data (will be replaced by API calls) ───
-        const MOCK_STORIES = [
-            {
-                id: "1",
-                title: "My Father's First Shop in Galata",
-                summary: "The smell of fresh timber and roasted coffee always brings me back to that narrow cobblestone alley...",
-                author: "mehmet_arif",
-                date_label: "1970s Era",
-                latitude: 41.0256,
-                longitude: 28.9744,
-                location_name: "Galata, Istanbul",
-                thumbnail: null
-            },
-            {
-                id: "2",
-                title: "The Old Fisherman's Quarter of Kadikoy",
-                summary: "In the narrow streets behind the market, a row of wooden houses once stood where fishermen repaired their nets.",
-                author: "ayse_k",
-                date_label: "1965 - 1985",
-                latitude: 40.9903,
-                longitude: 29.0230,
-                location_name: "Kadikoy, Istanbul",
-                thumbnail: null
-            },
-            {
-                id: "3",
-                title: "Bosphorus Ferry Memories",
-                summary: "Every morning my grandmother took the ferry from Üsküdar to Eminönü, carrying fresh bread and stories.",
-                author: "can_photo",
-                date_label: "1950s - 1960s",
-                latitude: 41.0232,
-                longitude: 29.0154,
-                location_name: "Üsküdar, Istanbul",
-                thumbnail: null
-            },
-            {
-                id: "4",
-                title: "The Grand Bazaar Before Tourism",
-                summary: "My uncle ran a copper workshop in the inner passages. The sound of hammering echoed through every corridor.",
-                author: "deniz_y",
-                date_label: "1980s",
-                latitude: 41.0106,
-                longitude: 28.9680,
-                location_name: "Grand Bazaar, Istanbul",
-                thumbnail: null
-            },
-            {
-                id: "5",
-                title: "Boğaziçi Campus in the 90s",
-                summary: "The library was our second home during finals. We pulled all-nighters fueled by tea from the canteen.",
-                author: "ali_c",
-                date_label: "1994 - 1998",
-                latitude: 41.0839,
-                longitude: 29.0510,
-                location_name: "Boğaziçi University, Istanbul",
-                thumbnail: null
-            },
-            {
-                id: "6",
-                title: "Sultanahmet's Hidden Gardens",
-                summary: "Behind the Blue Mosque there was a tea garden where locals gathered every Friday after prayers.",
-                author: "fatma_h",
-                date_label: "1960s - 1970s",
-                latitude: 41.0054,
-                longitude: 28.9768,
-                location_name: "Sultanahmet, Istanbul",
-                thumbnail: null
-            },
-            {
-                id: "7",
-                title: "The Tram Line on İstiklal Avenue",
-                summary: "Before the nostalgic tram returned, İstiklal was a vibrant pedestrian boulevard with street musicians and bookshops.",
-                author: "ozan_m",
-                date_label: "1990s",
-                latitude: 41.0340,
-                longitude: 28.9784,
-                location_name: "İstiklal Avenue, Istanbul",
-                thumbnail: null
-            },
-            {
-                id: "8",
-                title: "Haydarpaşa Train Station Arrivals",
-                summary: "Families from Anatolia arrived here with suitcases and dreams. The station felt like the gateway to a new world.",
-                author: "yusuf_b",
-                date_label: "1950s - 1970s",
-                latitude: 40.9977,
-                longitude: 29.0183,
-                location_name: "Haydarpaşa, Istanbul",
-                thumbnail: null
+        // ─── Story fetching ───
+        var cachedStories = [];
+        var fetchTimeout = null;
+
+        async function fetchStoriesInBounds() {
+            var bounds = map.getBounds();
+            var params = new URLSearchParams({
+                min_lat: bounds.getSouthWest().lat,
+                max_lat: bounds.getNorthEast().lat,
+                min_lng: bounds.getSouthWest().lng,
+                max_lng: bounds.getNorthEast().lng
+            });
+
+            try {
+                var response = await fetch(API_BASE + "/stories?" + params.toString());
+                if (!response.ok) throw new Error("Failed to fetch stories");
+                var data = await response.json();
+                cachedStories = data.stories || [];
+                loadStories(cachedStories);
+                populateSidebar(cachedStories);
+            } catch (err) {
+                console.error("Error fetching stories:", err);
+                document.getElementById("story-count").textContent = "Failed to load stories";
             }
-        ];
+        }
 
         // ─── Initialize Map ───
         const map = L.map("map", {
@@ -547,22 +481,24 @@
         }
 
         function createPopupContent(story) {
-            return `
-      <div style="width:300px;">
-        <div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">
-          <span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>
-          <div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">${story.date_label}</div>
-        </div>
-        <div style="padding:16px;">
-          <h3 style="font-family:'Noto Serif',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">${story.title}</h3>
-          <p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"${story.summary}"</p>
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:11px;color:#35618f;font-weight:600;">${story.location_name}</span>
-            <a href="story-detail.html?id=${story.id}" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read Story →</a>
-          </div>
-        </div>
-      </div>
-    `;
+            var preview = (story.content || "").length > 200
+                ? story.content.substring(0, 200) + "..."
+                : (story.content || "");
+            var placeName = story.place_name || "";
+            var dateLabel = story.date_label || "";
+
+            return '<div style="width:300px;">' +
+                '<div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">' +
+                '<span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>' +
+                (dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '') +
+                '</div>' +
+                '<div style="padding:16px;">' +
+                '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">' + story.title + '</h3>' +
+                '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+                (placeName ? '<span style="font-size:11px;color:#35618f;font-weight:600;">' + placeName + '</span>' : '<span></span>') +
+                '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read Story →</a>' +
+                '</div></div></div>';
         }
 
         const markers = [];
@@ -609,14 +545,20 @@
             container.innerHTML = "";
 
             stories.forEach(function (story) {
+                var preview = (story.content || "").length > 200
+                    ? story.content.substring(0, 200) + "..."
+                    : (story.content || "");
+                var placeName = story.place_name || "";
+                var dateLabel = story.date_label || "";
+
                 var div = document.createElement("div");
                 div.className = "rounded-xl bg-white/80 p-3.5 border border-border/50 cursor-pointer hover:bg-white transition-colors";
                 div.innerHTML =
-                    '<div class="text-[10px] font-bold text-tertiary tracking-widest uppercase mb-1">' + story.date_label + '</div>' +
+                    (dateLabel ? '<div class="text-[10px] font-bold text-tertiary tracking-widest uppercase mb-1">' + dateLabel + '</div>' : '') +
                     '<h4 class="font-semibold text-sm text-textmain leading-snug mb-1">' + story.title + '</h4>' +
-                    '<p class="text-xs text-textmuted line-clamp-2 leading-relaxed">' + story.summary + '</p>' +
+                    '<p class="text-xs text-textmuted line-clamp-2 leading-relaxed">' + preview + '</p>' +
                     '<div class="mt-2 flex items-center justify-between">' +
-                    '<span class="text-[10px] text-textmuted">' + story.location_name + '</span>' +
+                    '<span class="text-[10px] text-textmuted">' + placeName + '</span>' +
                     '<a href="story-detail.html?id=' + story.id + '" class="text-[11px] font-bold text-primary hover:underline">View →</a>' +
                     '</div>';
 
@@ -657,11 +599,12 @@
             }
 
             searchTimeout = setTimeout(function () {
-                var filtered = MOCK_STORIES.filter(function (s) {
-                    return s.title.toLowerCase().includes(query) ||
-                        s.location_name.toLowerCase().includes(query) ||
-                        s.summary.toLowerCase().includes(query) ||
-                        s.author.toLowerCase().includes(query);
+                var stories = cachedStories || [];
+                var filtered = stories.filter(function (s) {
+                    return (s.title || "").toLowerCase().includes(query) ||
+                        (s.place_name || "").toLowerCase().includes(query) ||
+                        (s.content || "").toLowerCase().includes(query) ||
+                        (s.author || "").toLowerCase().includes(query);
                 });
 
                 if (filtered.length === 0) {
@@ -674,9 +617,12 @@
                 filtered.forEach(function (story) {
                     var item = document.createElement("div");
                     item.className = "px-4 py-3 hover:bg-background cursor-pointer border-b border-border/30 last:border-0";
+                    var placeName = story.place_name || "";
+                    var dateLabel = story.date_label || "";
+                    var subtitle = [placeName, dateLabel].filter(Boolean).join(" · ");
                     item.innerHTML =
                         '<div class="font-semibold text-sm text-textmain">' + story.title + '</div>' +
-                        '<div class="text-xs text-textmuted mt-0.5">' + story.location_name + ' · ' + story.date_label + '</div>';
+                        (subtitle ? '<div class="text-xs text-textmuted mt-0.5">' + subtitle + '</div>' : '');
                     item.addEventListener("click", function () {
                         map.setView([story.latitude, story.longitude], 16);
                         markers.forEach(function (m) {
@@ -715,9 +661,11 @@
         });
 
         // ─── Initialize ───
-        // In production, this would be: fetch("/api/stories").then(r => r.json()).then(loadStories)
-        loadStories(MOCK_STORIES);
-        populateSidebar(MOCK_STORIES);
+        map.on("moveend", function () {
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
+        });
+        fetchStoriesInBounds();
         loadCurrentUser();
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
