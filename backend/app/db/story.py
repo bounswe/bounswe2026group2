@@ -1,12 +1,13 @@
 import uuid
+from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Enum, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import CheckConstraint, Date, Enum, Float, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.enums import StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
 from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
@@ -50,8 +51,12 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     place_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
-    date_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    date_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    date_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    date_precision: Mapped[DatePrecision | None] = mapped_column(
+        Enum(DatePrecision, name="date_precision", native_enum=False),
+        nullable=True,
+    )
 
     user: Mapped["User"] = relationship(back_populates="stories")
     media_files: Mapped[list["MediaFile"]] = relationship(
