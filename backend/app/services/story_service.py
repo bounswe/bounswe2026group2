@@ -331,4 +331,4 @@ async def upload_media_for_story(
             detail="Failed to persist media metadata",
         )
 
-    return MediaUploadResponse(media=MediaFileResponse.model_validate(media))
+    return MediaUploadResponse(media=_map_media_file(media))
