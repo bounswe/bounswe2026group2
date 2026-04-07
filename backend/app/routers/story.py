@@ -13,6 +13,7 @@ from app.models.story import (
     MediaUploadRequest,
     MediaUploadResponse,
     StoryBoundsFilter,
+    StoryDateRangeFilter,
     StoryCreateRequest,
     StoryDetailResponse,
     StoryListResponse,
@@ -71,6 +72,9 @@ async def list_stories(
     max_lat: float | None = Query(default=None),
     min_lng: float | None = Query(default=None),
     max_lng: float | None = Query(default=None),
+    query_start: int | str | None = Query(default=None),
+    query_end: int | str | None = Query(default=None),
+    query_precision: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -80,6 +84,12 @@ async def list_stories(
             min_lng=min_lng,
             max_lng=max_lng,
         )
+        date_filter = StoryDateRangeFilter(
+            query_start=query_start,
+            query_end=query_end,
+            query_precision=query_precision,
+        )
+        normalized_query_start, normalized_query_end, _ = date_filter.normalize_query_range()
     except ValidationError as exc:
         raise HTTPException(
             status_code=422,
@@ -92,15 +102,38 @@ async def list_stories(
         max_lat=bounds.max_lat,
         min_lng=bounds.min_lng,
         max_lng=bounds.max_lng,
+        query_start=normalized_query_start,
+        query_end=normalized_query_end,
     )
 
 
 @router.get("/search", response_model=StoryListResponse)
 async def search_stories(
     place_name: str = Query(min_length=1, max_length=255),
+    query_start: int | str | None = Query(default=None),
+    query_end: int | str | None = Query(default=None),
+    query_precision: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    return await search_available_stories_by_place(db, place_name)
+    try:
+        date_filter = StoryDateRangeFilter(
+            query_start=query_start,
+            query_end=query_end,
+            query_precision=query_precision,
+        )
+        normalized_query_start, normalized_query_end, _ = date_filter.normalize_query_range()
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors(include_context=False, include_url=False),
+        )
+
+    return await search_available_stories_by_place(
+        db,
+        place_name,
+        query_start=normalized_query_start,
+        query_end=normalized_query_end,
+    )
 
 
 @router.get(

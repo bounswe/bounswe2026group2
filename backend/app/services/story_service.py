@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
@@ -112,6 +113,8 @@ async def list_available_stories(
     max_lat: float | None = None,
     min_lng: float | None = None,
     max_lng: float | None = None,
+    query_start: date | None = None,
+    query_end: date | None = None,
 ) -> StoryListResponse:
     stmt = (
         select(Story, User.username)
@@ -133,6 +136,14 @@ async def list_available_stories(
             Story.longitude <= max_lng,
         )
 
+    if query_start is not None and query_end is not None:
+        stmt = stmt.where(
+            Story.date_start.is_not(None),
+            Story.date_end.is_not(None),
+            Story.date_start <= query_end,
+            Story.date_end >= query_start,
+        )
+
     result = await db.execute(stmt)
     rows = result.all()
 
@@ -142,6 +153,8 @@ async def list_available_stories(
 async def search_available_stories_by_place(
     db: AsyncSession,
     place_name: str,
+    query_start: date | None = None,
+    query_end: date | None = None,
 ) -> StoryListResponse:
     stmt = (
         select(Story, User.username)
@@ -153,6 +166,14 @@ async def search_available_stories_by_place(
         )
         .order_by(Story.created_at.desc())
     )
+
+    if query_start is not None and query_end is not None:
+        stmt = stmt.where(
+            Story.date_start.is_not(None),
+            Story.date_end.is_not(None),
+            Story.date_start <= query_end,
+            Story.date_end >= query_start,
+        )
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -196,6 +217,10 @@ async def create_story_with_location(
             detail="place_name is required for story location binding",
         )
 
+    normalized_date_start, normalized_date_end, normalized_date_precision = (
+        payload.normalize_date_range()
+    )
+
     story = Story(
         user_id=current_user.id,
         title=payload.title,
@@ -206,8 +231,9 @@ async def create_story_with_location(
         place_name=place_name,
         latitude=payload.latitude,
         longitude=payload.longitude,
-        date_start=payload.date_start,
-        date_end=payload.date_end,
+        date_start=normalized_date_start,
+        date_end=normalized_date_end,
+        date_precision=normalized_date_precision,
     )
 
     db.add(story)
@@ -241,14 +267,19 @@ async def update_story_with_location_and_dates(
             detail="place_name is required for story location binding",
         )
 
+    normalized_date_start, normalized_date_end, normalized_date_precision = (
+        payload.normalize_date_range()
+    )
+
     story.title = payload.title
     story.summary = payload.summary
     story.content = payload.content
     story.place_name = place_name
     story.latitude = payload.latitude
     story.longitude = payload.longitude
-    story.date_start = payload.date_start
-    story.date_end = payload.date_end
+    story.date_start = normalized_date_start
+    story.date_end = normalized_date_end
+    story.date_precision = normalized_date_precision
 
     await db.commit()
     await db.refresh(story)
