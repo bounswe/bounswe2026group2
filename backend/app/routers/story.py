@@ -1,6 +1,8 @@
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -71,12 +73,16 @@ async def list_stories(
     max_lng: float | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    bounds = StoryBoundsFilter(
-        min_lat=min_lat,
-        max_lat=max_lat,
-        min_lng=min_lng,
-        max_lng=max_lng,
-    )
+    try:
+        bounds = StoryBoundsFilter(
+            min_lat=min_lat,
+            max_lat=max_lat,
+            min_lng=min_lng,
+            max_lng=max_lng,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+
     return await list_available_stories(
         db,
         min_lat=bounds.min_lat,

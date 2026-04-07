@@ -74,6 +74,73 @@ class TestStoryListingAPI:
         data = resp.json()
         assert data == {"stories": [], "total": 0}
 
+    async def test_list_stories_with_bounds_filters_results(self, client, db_session):
+        user = User(
+            username="mapauthor",
+            email="mapauthor@example.com",
+            password_hash=hash_password("StoryPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        in_bounds_story = Story(
+            user_id=user.id,
+            title="In Bounds",
+            summary="Visible in viewport",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.00,
+            longitude=29.00,
+        )
+        out_bounds_story = Story(
+            user_id=user.id,
+            title="Out Bounds",
+            summary="Outside viewport",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            latitude=39.93,
+            longitude=32.85,
+        )
+        null_coord_story = Story(
+            user_id=user.id,
+            title="Null Coord",
+            summary="No location",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Unknown",
+            latitude=None,
+            longitude=None,
+        )
+        db_session.add_all([in_bounds_story, out_bounds_story, null_coord_story])
+        await db_session.commit()
+
+        resp = await client.get(
+            "/stories?min_lat=40.9&max_lat=41.1&min_lng=28.9&max_lng=29.1"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert len(data["stories"]) == 1
+        assert data["stories"][0]["title"] == "In Bounds"
+
+    async def test_list_stories_with_incomplete_bounds_returns_422(self, client):
+        resp = await client.get("/stories?min_lat=40.9&max_lat=41.1")
+
+        assert resp.status_code == 422
+
+    async def test_list_stories_with_invalid_bounds_order_returns_422(self, client):
+        resp = await client.get(
+            "/stories?min_lat=41.1&max_lat=40.9&min_lng=28.9&max_lng=29.1"
+        )
+
+        assert resp.status_code == 422
+
 
 @pytest.mark.asyncio
 class TestStoryMediaUploadAPI:
