@@ -661,14 +661,7 @@
         });
 
         // ─── Initialize ───
-        fetch(API_BASE + "/stories")
-            .then(res => res.json())
-            .then(data => {
-                var realStories = data.stories || [];
-                loadStories(realStories);
-                populateSidebar(realStories);
-            })
-            .catch(err => console.error("Error loading stories:", err));
+        fetchStoriesInBounds();
 
         loadCurrentUser();
         syncMapSize();
