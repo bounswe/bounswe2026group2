@@ -661,6 +661,10 @@
         });
 
         // ─── Initialize ───
+        map.on("moveend", function () {
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
+        });
         fetchStoriesInBounds();
 
         loadCurrentUser();
