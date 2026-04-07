@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,7 +8,9 @@
     <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap"
+        rel="stylesheet">
     <script>
         tailwind.config = {
             theme: {
@@ -37,265 +40,253 @@
     <style>
         body {
             background:
-                    linear-gradient(rgba(254, 249, 240, 0.88), rgba(254, 249, 240, 0.88)),
-                    url("https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1600&q=80");
+                linear-gradient(rgba(254, 249, 240, 0.88), rgba(254, 249, 240, 0.88)),
+                url("https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1600&q=80");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
         }
     </style>
 </head>
+
 <body class="font-body text-textmain min-h-screen">
-<div class="min-h-screen flex items-center justify-center px-6 py-10">
-    <div class="w-full max-w-6xl grid lg:grid-cols-2 bg-white/70 backdrop-blur-md rounded-3xl overflow-hidden shadow-soft border border-white/50">
+    <div class="min-h-screen flex items-center justify-center px-6 py-10">
+        <div
+            class="w-full max-w-6xl grid lg:grid-cols-2 bg-white/70 backdrop-blur-md rounded-3xl overflow-hidden shadow-soft border border-white/50">
 
-        <!-- Left panel -->
-        <section class="hidden lg:flex flex-col justify-between p-12 bg-[rgba(119,90,25,0.08)]">
-            <div>
-                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 text-primary text-sm font-semibold border border-border">
-                    <span>Local History Map</span>
+            <!-- Left panel -->
+            <section class="hidden lg:flex flex-col justify-between p-12 bg-[rgba(119,90,25,0.08)]">
+                <div>
+                    <div
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 text-primary text-sm font-semibold border border-border">
+                        <span>Local History Map</span>
+                    </div>
+
+                    <h1 class="mt-8 font-headline text-5xl leading-tight font-extrabold text-textmain">
+                        Join and share the stories behind every street.
+                    </h1>
+
+                    <p class="mt-6 text-lg leading-8 text-textmuted max-w-xl">
+                        Create an account to contribute your own memories, bookmark favorite stories, and become part of
+                        a community preserving local history.
+                    </p>
                 </div>
 
-                <h1 class="mt-8 font-headline text-5xl leading-tight font-extrabold text-textmain">
-                    Join and share the stories behind every street.
-                </h1>
-
-                <p class="mt-6 text-lg leading-8 text-textmuted max-w-xl">
-                    Create an account to contribute your own memories, bookmark favorite stories, and become part of a community preserving local history.
-                </p>
-            </div>
-
-            <div class="grid sm:grid-cols-3 gap-4 mt-10">
-                <div class="bg-white/80 rounded-2xl p-4 border border-border">
-                    <p class="text-2xl font-bold text-primary">500+</p>
-                    <p class="mt-1 text-sm text-textmuted">Stories shared by locals</p>
+                <div class="grid sm:grid-cols-3 gap-4 mt-10">
+                    <div class="bg-white/80 rounded-2xl p-4 border border-border">
+                        <p class="text-2xl font-bold text-primary">500+</p>
+                        <p class="mt-1 text-sm text-textmuted">Stories shared by locals</p>
+                    </div>
+                    <div class="bg-white/80 rounded-2xl p-4 border border-border">
+                        <p class="text-2xl font-bold text-primary">120+</p>
+                        <p class="mt-1 text-sm text-textmuted">Neighborhoods covered</p>
+                    </div>
+                    <div class="bg-white/80 rounded-2xl p-4 border border-border">
+                        <p class="text-2xl font-bold text-primary">Free</p>
+                        <p class="mt-1 text-sm text-textmuted">Always open to everyone</p>
+                    </div>
                 </div>
-                <div class="bg-white/80 rounded-2xl p-4 border border-border">
-                    <p class="text-2xl font-bold text-primary">120+</p>
-                    <p class="mt-1 text-sm text-textmuted">Neighborhoods covered</p>
-                </div>
-                <div class="bg-white/80 rounded-2xl p-4 border border-border">
-                    <p class="text-2xl font-bold text-primary">Free</p>
-                    <p class="mt-1 text-sm text-textmuted">Always open to everyone</p>
-                </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- Right panel - Registration form -->
-        <section class="flex items-center justify-center p-8 sm:p-12 bg-white/75">
-            <div class="w-full max-w-md">
-                <div class="lg:hidden mb-8 text-center">
-                    <h1 class="font-headline text-3xl font-extrabold text-textmain">Local History Map</h1>
-                    <p class="mt-2 text-sm text-textmuted">Create an account to start exploring.</p>
-                </div>
+            <!-- Right panel - Registration form -->
+            <section class="flex items-center justify-center p-8 sm:p-12 bg-white/75">
+                <div class="w-full max-w-md">
+                    <div class="lg:hidden mb-8 text-center">
+                        <h1 class="font-headline text-3xl font-extrabold text-textmain">Local History Map</h1>
+                        <p class="mt-2 text-sm text-textmuted">Create an account to start exploring.</p>
+                    </div>
 
-                <div class="mb-8">
-                    <h2 class="text-3xl font-bold text-textmain">Create your account</h2>
-                    <p class="mt-2 text-textmuted">Start preserving and discovering local stories.</p>
-                </div>
+                    <div class="mb-8">
+                        <h2 class="text-3xl font-bold text-textmain">Create your account</h2>
+                        <p class="mt-2 text-textmuted">Start preserving and discovering local stories.</p>
+                    </div>
 
-                <!-- Error message area -->
-                <div id="error-message" class="hidden mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm"></div>
+                    <!-- Error message area -->
+                    <div id="error-message"
+                        class="hidden mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm"></div>
 
-                <!-- Success message area -->
-                <div id="success-message" class="hidden mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm"></div>
+                    <!-- Success message area -->
+                    <div id="success-message"
+                        class="hidden mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">
+                    </div>
 
-                <form id="register-form" class="space-y-5">
-                    <div>
-                        <label for="username" class="block text-sm font-semibold mb-2 text-textmain">Username</label>
-                        <input
-                                id="username"
-                                type="text"
-                                placeholder="Choose a username"
-                                minlength="3"
+                    <form id="register-form" class="space-y-5">
+                        <div>
+                            <label for="username"
+                                class="block text-sm font-semibold mb-2 text-textmain">Username</label>
+                            <input id="username" type="text" placeholder="Choose a username" minlength="3"
                                 maxlength="50"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
-                                required
-                        />
-                    </div>
+                                required />
+                        </div>
 
-                    <div>
-                        <label for="email" class="block text-sm font-semibold mb-2 text-textmain">Email</label>
-                        <input
-                                id="email"
-                                type="email"
-                                placeholder="you@example.com"
+                        <div>
+                            <label for="email" class="block text-sm font-semibold mb-2 text-textmain">Email</label>
+                            <input id="email" type="email" placeholder="you@example.com"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
-                                required
-                        />
-                    </div>
+                                required />
+                        </div>
 
-                    <div>
-                        <label for="display-name" class="block text-sm font-semibold mb-2 text-textmain">
-                            Display Name
-                            <span class="font-normal text-textmuted">(optional)</span>
-                        </label>
-                        <input
-                                id="display-name"
-                                type="text"
-                                placeholder="How you'd like to appear"
-                                maxlength="100"
+                        <div>
+                            <label for="display-name" class="block text-sm font-semibold mb-2 text-textmain">
+                                Display Name
+                                <span class="font-normal text-textmuted">(optional)</span>
+                            </label>
+                            <input id="display-name" type="text" placeholder="How you'd like to appear" maxlength="100"
+                                class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+                        </div>
+
+                        <div>
+                            <label for="password"
+                                class="block text-sm font-semibold mb-2 text-textmain">Password</label>
+                            <input id="password" type="password" placeholder="At least 8 characters" minlength="8"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
-                        />
-                    </div>
+                                required />
+                        </div>
 
-                    <div>
-                        <label for="password" class="block text-sm font-semibold mb-2 text-textmain">Password</label>
-                        <input
-                                id="password"
-                                type="password"
-                                placeholder="At least 8 characters"
+                        <div>
+                            <label for="confirm-password" class="block text-sm font-semibold mb-2 text-textmain">Confirm
+                                Password</label>
+                            <input id="confirm-password" type="password" placeholder="Re-enter your password"
                                 minlength="8"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
-                                required
-                        />
-                    </div>
+                                required />
+                        </div>
 
-                    <div>
-                        <label for="confirm-password" class="block text-sm font-semibold mb-2 text-textmain">Confirm Password</label>
-                        <input
-                                id="confirm-password"
-                                type="password"
-                                placeholder="Re-enter your password"
-                                minlength="8"
-                                class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
-                                required
-                        />
-                    </div>
+                        <div class="flex items-start gap-3">
+                            <input id="terms" type="checkbox"
+                                class="mt-0.5 rounded border-border text-primary focus:ring-primary" required />
+                            <label for="terms" class="text-sm text-textmuted">
+                                I agree to the <a href="#" class="text-tertiary hover:underline">Terms of Service</a>
+                                and
+                                <a href="#" class="text-tertiary hover:underline">Privacy Policy</a>.
+                            </label>
+                        </div>
 
-                    <div class="flex items-start gap-3">
-                        <input id="terms" type="checkbox" class="mt-0.5 rounded border-border text-primary focus:ring-primary" required />
-                        <label for="terms" class="text-sm text-textmuted">
-                            I agree to the <a href="#" class="text-tertiary hover:underline">Terms of Service</a> and
-                            <a href="#" class="text-tertiary hover:underline">Privacy Policy</a>.
-                        </label>
+                        <button type="submit" id="submit-button"
+                            class="w-full rounded-xl bg-primary px-4 py-3 text-white font-semibold hover:opacity-95 transition">
+                            Create Account
+                        </button>
+                    </form>
+
+                    <div class="relative my-6">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-border"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="bg-white px-4 text-textmuted">or</span>
+                        </div>
                     </div>
 
                     <button
-                            type="submit"
-                            id="submit-button"
-                            class="w-full rounded-xl bg-primary px-4 py-3 text-white font-semibold hover:opacity-95 transition"
-                    >
-                        Create Account
+                        class="w-full inline-flex items-center justify-center rounded-xl border border-border bg-white px-4 py-3 text-sm font-medium hover:bg-gray-50 transition">
+                        Sign up with Google
                     </button>
-                </form>
 
-                <div class="relative my-6">
-                    <div class="absolute inset-0 flex items-center">
-                        <div class="w-full border-t border-border"></div>
-                    </div>
-                    <div class="relative flex justify-center text-sm">
-                        <span class="bg-white px-4 text-textmuted">or</span>
-                    </div>
+                    <p class="mt-6 text-sm text-textmuted text-center">
+                        Already have an account?
+                        <a href="index.html" class="font-semibold text-primary hover:underline">Sign in</a>
+                    </p>
                 </div>
-
-                <button class="w-full inline-flex items-center justify-center rounded-xl border border-border bg-white px-4 py-3 text-sm font-medium hover:bg-gray-50 transition">
-                    Sign up with Google
-                </button>
-
-                <p class="mt-6 text-sm text-textmuted text-center">
-                    Already have an account?
-                    <a href="index.html" class="font-semibold text-primary hover:underline">Sign in</a>
-                </p>
-            </div>
-        </section>
+            </section>
+        </div>
     </div>
-</div>
 
-<script src="config.js"></script>
-<script>
-    function showError(message) {
-        const errorEl = document.getElementById("error-message");
-        const successEl = document.getElementById("success-message");
-        successEl.classList.add("hidden");
-        errorEl.textContent = message;
-        errorEl.classList.remove("hidden");
-    }
-
-    function showSuccess(message) {
-        const errorEl = document.getElementById("error-message");
-        const successEl = document.getElementById("success-message");
-        errorEl.classList.add("hidden");
-        successEl.textContent = message;
-        successEl.classList.remove("hidden");
-    }
-
-    function validateForm() {
-        const password = document.getElementById("password").value;
-        const confirmPassword = document.getElementById("confirm-password").value;
-
-        if (password !== confirmPassword) {
-            showError("Passwords do not match.");
-            return false;
+    <script src="config.js"></script>
+    <script>
+        function showError(message) {
+            const errorEl = document.getElementById("error-message");
+            const successEl = document.getElementById("success-message");
+            successEl.classList.add("hidden");
+            errorEl.textContent = message;
+            errorEl.classList.remove("hidden");
         }
 
-        if (password.length < 8) {
-            showError("Password must be at least 8 characters long.");
-            return false;
+        function showSuccess(message) {
+            const errorEl = document.getElementById("error-message");
+            const successEl = document.getElementById("success-message");
+            errorEl.classList.add("hidden");
+            successEl.textContent = message;
+            successEl.classList.remove("hidden");
         }
 
-        var errors = [];
-        if (!/[A-Z]/.test(password)) errors.push("one uppercase letter");
-        if (!/[a-z]/.test(password)) errors.push("one lowercase letter");
-        if (!/[0-9]/.test(password)) errors.push("one digit");
-        if (!/[!@#$%^&*()\-_=+\[\]{}|;:',.<>?/`~]/.test(password)) errors.push("one special character");
-        if (errors.length > 0) {
-            showError("Password must contain at least: " + errors.join(", ") + ".");
-            return false;
-        }
+        function validateForm() {
+            const password = document.getElementById("password").value;
+            const confirmPassword = document.getElementById("confirm-password").value;
 
-        return true;
-    }
-
-    async function handleRegister(event) {
-        event.preventDefault();
-
-        if (!validateForm()) return;
-
-        const username = document.getElementById("username").value.trim();
-        const email = document.getElementById("email").value.trim();
-        const password = document.getElementById("password").value;
-        const displayName = document.getElementById("display-name").value.trim();
-
-        const submitButton = document.getElementById("submit-button");
-        submitButton.disabled = true;
-        submitButton.textContent = "Creating account…";
-
-        try {
-            const response = await fetch(API_BASE + "/auth/register", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    username,
-                    email,
-                    password,
-                    display_name: displayName || null,
-                }),
-            });
-
-            if (response.ok) {
-                showSuccess("Account created successfully! Redirecting to login…");
-                setTimeout(() => {
-                    window.location.assign("index.html");
-                }, 1500);
-            } else {
-                const data = await response.json();
-                showError(data.detail || "Registration failed. Please try again.");
+            if (password !== confirmPassword) {
+                showError("Passwords do not match.");
+                return false;
             }
-        } catch (err) {
-            showError("Unable to connect to the server. Please try again later.");
-        } finally {
-            submitButton.disabled = false;
-            submitButton.textContent = "Create Account";
-        }
-    }
 
-    document.addEventListener("DOMContentLoaded", function () {
-        const form = document.getElementById("register-form");
-        if (form) {
-            form.addEventListener("submit", handleRegister);
+            if (password.length < 8) {
+                showError("Password must be at least 8 characters long.");
+                return false;
+            }
+
+            var errors = [];
+            if (!/[A-Z]/.test(password)) errors.push("one uppercase letter");
+            if (!/[a-z]/.test(password)) errors.push("one lowercase letter");
+            if (!/[0-9]/.test(password)) errors.push("one digit");
+            if (!/[!@#$%^&*()\-_=+\[\]{}|;:',.<>?/`~]/.test(password)) errors.push("one special character");
+            if (errors.length > 0) {
+                showError("Password must contain at least: " + errors.join(", ") + ".");
+                return false;
+            }
+
+            return true;
         }
-    });
-</script>
+
+        async function handleRegister(event) {
+            event.preventDefault();
+
+            if (!validateForm()) return;
+
+            const username = document.getElementById("username").value.trim();
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            const displayName = document.getElementById("display-name").value.trim();
+
+            const submitButton = document.getElementById("submit-button");
+            submitButton.disabled = true;
+            submitButton.textContent = "Creating account…";
+
+            try {
+                const response = await fetch(API_BASE + "/auth/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username,
+                        email,
+                        password,
+                        display_name: displayName || null,
+                    }),
+                });
+
+                if (response.ok) {
+                    showSuccess("Account created successfully! Redirecting to login…");
+                    setTimeout(() => {
+                        window.location.assign("index.html");
+                    }, 1500);
+                } else {
+                    const data = await response.json();
+                    showError(data.detail || "Registration failed. Please try again.");
+                }
+            } catch (err) {
+                showError("Unable to connect to the server. Please try again later.");
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = "Create Account";
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            const form = document.getElementById("register-form");
+            if (form) {
+                form.addEventListener("submit", handleRegister);
+            }
+        });
+    </script>
 </body>
+
 </html>
