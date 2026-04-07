@@ -49,9 +49,8 @@
   <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
     <div>
       <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Story Detail</p>
-      <h1 class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">The Old Fisherman's Quarter of Kadikoy</h1>
-      <p class="mt-4 max-w-3xl text-base leading-7 text-textmuted">
-        A remembered shoreline community, carried through family memory, neighborhood ritual, and the changing urban texture of Istanbul.
+      <h1 id="story-title" class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">Loading Story...</h1>
+      <p id="story-summary" class="mt-4 max-w-3xl text-base leading-7 text-textmuted italic">
       </p>
     </div>
     <div class="flex flex-wrap gap-3">
@@ -69,31 +68,21 @@
 
   <section class="grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
     <article class="overflow-hidden rounded-3xl border border-border bg-surface shadow-soft">
-      <div class="h-72 bg-[url('https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=1600&q=80')] bg-cover bg-center"></div>
+      <div id="story-cover" class="h-72 bg-[url('https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=1600&q=80')] bg-cover bg-center"></div>
 
       <div class="p-8">
         <div class="flex flex-wrap items-center gap-3 text-sm text-textmuted">
-          <span class="rounded-full bg-[rgba(119,90,25,0.1)] px-3 py-1 font-semibold text-primary">Kadikoy, Istanbul</span>
-          <span>1965 - 1985</span>
-          <span>by mehmet_arif</span>
+          <span id="story-location" class="rounded-full bg-[rgba(119,90,25,0.1)] px-3 py-1 font-semibold text-primary">Map Reference</span>
+          <span id="story-date">Date Unknown</span>
+          <span id="story-author">by Author</span>
         </div>
 
-        <div class="mt-6 space-y-5 text-base leading-8 text-textmain">
-          <p>
-            In the narrow streets behind the market, a row of wooden houses once stood where fishermen repaired their nets in the evening. My grandfather was one of them.
-          </p>
-          <p>
-            Before dawn he walked to the pier carrying a worn leather bag, with the smell of salt and diesel filling the air. The neighborhood cats followed his routine as if they had memorized the tides.
-          </p>
-          <p>
-            By the 1980s, most of those houses had been replaced with concrete apartments. Still, one stone fountain survives in the back streets, and for those who know where to look, it is enough to recover the shape of the older quarter.
-          </p>
+        <div id="story-content" class="mt-6 space-y-5 text-base leading-8 text-textmain whitespace-pre-wrap">
+          <!-- Content injected via JS -->
         </div>
 
-        <div class="mt-8 grid gap-4 md:grid-cols-3">
-          <div class="rounded-2xl bg-[linear-gradient(135deg,#e9dfcd,#f7f3eb)] p-4 text-center text-sm text-textmuted">Photo Archive</div>
-          <div class="rounded-2xl bg-[linear-gradient(135deg,#e9dfcd,#f7f3eb)] p-4 text-center text-sm text-textmuted">Audio Memory</div>
-          <div class="rounded-2xl bg-[linear-gradient(135deg,#e9dfcd,#f7f3eb)] p-4 text-center text-sm text-textmuted">Street View Reference</div>
+        <div id="story-media" class="mt-8 grid gap-4 grid-cols-1 md:grid-cols-2">
+          <!-- Media injected via JS -->
         </div>
 
         <div class="mt-8 flex flex-wrap gap-3">
@@ -133,15 +122,11 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+<script src="config.js"></script>
 <script>
-  // Mock story coordinates (in production: parsed from API response or page data)
-  var storyLat = 40.9903;
-  var storyLng = 29.0230;
-  var storyTitle = "The Old Fisherman's Quarter of Kadikoy";
-
-  // Initialize mini-map
+  // Initialize mini-map with arbitrary center initially
   var detailMap = L.map("detail-map", {
-    center: [storyLat, storyLng],
+    center: [41.015, 28.979],
     zoom: 15,
     zoomControl: false,
     dragging: true,
@@ -153,11 +138,58 @@
     maxZoom: 19
   }).addTo(detailMap);
 
-  // Story marker
-  L.marker([storyLat, storyLng])
-          .addTo(detailMap)
-          .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + storyTitle + '</strong><br><span style="font-size:11px;color:#5f584c;">Kadikoy, Istanbul</span></div>')
-          .openPopup();
+  const urlParams = new URLSearchParams(window.location.search);
+  const storyId = urlParams.get('id');
+  
+  if (!storyId) {
+    document.getElementById('story-title').textContent = "Story not found";
+    document.getElementById('story-summary').textContent = "No ID provided in the URL.";
+  } else {
+    fetch(API_BASE + "/stories/" + storyId)
+      .then(res => res.json())
+      .then(story => {
+          document.getElementById('story-title').textContent = story.title || "Untitled";
+          document.getElementById('story-summary').textContent = story.summary || "";
+          document.getElementById('story-author').innerHTML = 'by ' + (story.author || "Unknown");
+          document.getElementById('story-date').textContent = story.date_label || "No Date";
+          document.getElementById('story-location').textContent = story.place_name || "Istanbul";
+          document.getElementById('story-content').textContent = story.content || "No content available.";
+          
+          if (story.latitude && story.longitude) {
+            detailMap.setView([story.latitude, story.longitude], 15);
+            L.marker([story.latitude, story.longitude])
+              .addTo(detailMap)
+              .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
+              .openPopup();
+          } else {
+             document.getElementById('detail-map').parentElement.style.display = 'none';
+          }
+          
+          if (story.media_files && story.media_files.length > 0) {
+             const images = story.media_files.filter(m => m.media_type === "image");
+             if (images.length > 0) {
+                 document.getElementById('story-cover').style.backgroundImage = "url('" + images[0].media_url + "')";
+             }
+             
+             let mediaHtml = "";
+             story.media_files.forEach(m => {
+                 if (m.media_type === "image") {
+                     mediaHtml += '<img src="' + m.media_url + '" class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;">';
+                 } else if (m.media_type === "video") {
+                     mediaHtml += '<video src="' + m.media_url + '" controls class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;"></video>';
+                 } else if (m.media_type === "audio") {
+                     mediaHtml += '<div class="p-4 bg-background border border-border rounded-xl w-full flex flex-col gap-2"><span class="text-sm font-semibold material-symbols-outlined text-primary">audio</span><audio src="' + m.media_url + '" controls class="w-full"></audio></div>';
+                 }
+             });
+             document.getElementById('story-media').innerHTML = mediaHtml;
+          }
+      })
+      .catch(err => {
+         console.error("Error loading story details:", err);
+         document.getElementById('story-title').textContent = "Failed to load story";
+         document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";
+      });
+  }
 </script>
 </body>
 </html>
