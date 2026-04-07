@@ -1,12 +1,15 @@
 import uuid
+from datetime import date
 
 import pytest
 
-from app.db.enums import StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
 from app.db.story import Story
 from tests.factories.story_factory import (
     DEFAULT_DATE_END,
     DEFAULT_DATE_START,
+    DEFAULT_ENTITY_DATE_END,
+    DEFAULT_ENTITY_DATE_START,
     DEFAULT_LATITUDE,
     DEFAULT_LONGITUDE,
     DEFAULT_PLACE_NAME,
@@ -100,8 +103,17 @@ class TestMakeStoryEntity:
         assert story.place_name == DEFAULT_PLACE_NAME
         assert story.latitude == DEFAULT_LATITUDE
         assert story.longitude == DEFAULT_LONGITUDE
-        assert story.date_start == DEFAULT_DATE_START
-        assert story.date_end == DEFAULT_DATE_END
+        assert story.date_start == DEFAULT_ENTITY_DATE_START
+        assert story.date_end == DEFAULT_ENTITY_DATE_END
+
+    def test_default_dates_are_date_objects(self):
+        story = make_story_entity(user_id=uuid.uuid4())
+        assert isinstance(story.date_start, date)
+        assert isinstance(story.date_end, date)
+
+    def test_default_date_precision_is_year(self):
+        story = make_story_entity(user_id=uuid.uuid4())
+        assert story.date_precision == DatePrecision.YEAR
 
     def test_default_status_is_published_and_public(self):
         story = make_story_entity(user_id=uuid.uuid4())
@@ -122,14 +134,26 @@ class TestMakeStoryEntity:
             title="Override Title",
             status=StoryStatus.DRAFT,
             visibility=StoryVisibility.PRIVATE,
-            date_start=1970,
-            date_end=1975,
+            date_start=date(1970, 1, 1),
+            date_end=date(1975, 12, 31),
+            date_precision=DatePrecision.YEAR,
         )
         assert story.title == "Override Title"
         assert story.status == StoryStatus.DRAFT
         assert story.visibility == StoryVisibility.PRIVATE
-        assert story.date_start == 1970
-        assert story.date_end == 1975
+        assert story.date_start == date(1970, 1, 1)
+        assert story.date_end == date(1975, 12, 31)
+        assert story.date_precision == DatePrecision.YEAR
+
+    def test_exact_date_precision_accepted(self):
+        story = make_story_entity(
+            user_id=uuid.uuid4(),
+            date_start=date(1965, 6, 12),
+            date_end=date(1965, 6, 12),
+            date_precision=DatePrecision.DATE,
+        )
+        assert story.date_start == date(1965, 6, 12)
+        assert story.date_precision == DatePrecision.DATE
 
     def test_optional_fields_can_be_none(self):
         story = make_story_entity(
@@ -140,6 +164,7 @@ class TestMakeStoryEntity:
             longitude=None,
             date_start=None,
             date_end=None,
+            date_precision=None,
         )
         assert story.summary is None
         assert story.place_name is None
@@ -147,3 +172,4 @@ class TestMakeStoryEntity:
         assert story.longitude is None
         assert story.date_start is None
         assert story.date_end is None
+        assert story.date_precision is None

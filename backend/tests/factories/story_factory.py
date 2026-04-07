@@ -1,6 +1,7 @@
 import uuid
+from datetime import date
 
-from app.db.enums import StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
 from app.db.story import Story
 
 # Fixed default coordinates: Çeliktepe, Istanbul — used as the primary
@@ -11,8 +12,16 @@ DEFAULT_SUMMARY = "A childhood memory from the Çeliktepe neighbourhood of Istan
 DEFAULT_PLACE_NAME = "Çeliktepe, Istanbul"
 DEFAULT_LATITUDE = 41.0739
 DEFAULT_LONGITUDE = 28.9606
+
+# Payload defaults: integers, because StoryCreateRequest accepts year integers
+# and normalises them internally before writing to the DB.
 DEFAULT_DATE_START = 1960
 DEFAULT_DATE_END = 1980
+
+# Entity defaults: full date objects, because the Story ORM column is DATE.
+# Year-precision stories are stored as Jan 1 (start) and Dec 31 (end).
+DEFAULT_ENTITY_DATE_START = date(1960, 1, 1)
+DEFAULT_ENTITY_DATE_END = date(1980, 12, 31)
 
 
 def make_story_payload(
@@ -84,13 +93,20 @@ def make_story_entity(
     place_name: str | None = DEFAULT_PLACE_NAME,
     latitude: float | None = DEFAULT_LATITUDE,
     longitude: float | None = DEFAULT_LONGITUDE,
-    date_start: int | None = DEFAULT_DATE_START,
-    date_end: int | None = DEFAULT_DATE_END,
+    date_start: date | None = DEFAULT_ENTITY_DATE_START,
+    date_end: date | None = DEFAULT_ENTITY_DATE_END,
+    date_precision: DatePrecision | None = DatePrecision.YEAR,
     status: StoryStatus = StoryStatus.PUBLISHED,
     visibility: StoryVisibility = StoryVisibility.PUBLIC,
     suffix: int | str | None = None,
 ) -> Story:
-    """Return a Story ORM object for direct insertion into a test DB session."""
+    """Return a Story ORM object for direct insertion into a test DB session.
+
+    date_start and date_end must be Python date objects matching the DATE
+    column type. Use year-precision stories as: date(1960, 1, 1) / date(1980, 12, 31).
+    The payload factories (make_story_payload) accept integers — that is correct
+    because StoryCreateRequest normalises them before writing to the DB.
+    """
     if suffix is not None:
         title = f"{title} {suffix}"
         if place_name is not None:
@@ -105,6 +121,7 @@ def make_story_entity(
         longitude=longitude,
         date_start=date_start,
         date_end=date_end,
+        date_precision=date_precision,
         status=status,
         visibility=visibility,
     )
