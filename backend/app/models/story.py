@@ -62,6 +62,31 @@ class StoryUpdateRequest(BaseModel):
         return self
 
 
+class StoryBoundsFilter(BaseModel):
+    min_lat: float | None = Field(default=None, ge=-90.0, le=90.0)
+    max_lat: float | None = Field(default=None, ge=-90.0, le=90.0)
+    min_lng: float | None = Field(default=None, ge=-180.0, le=180.0)
+    max_lng: float | None = Field(default=None, ge=-180.0, le=180.0)
+
+    @model_validator(mode="after")
+    def check_bounds(self) -> "StoryBoundsFilter":
+        values = [self.min_lat, self.max_lat, self.min_lng, self.max_lng]
+        provided_count = sum(v is not None for v in values)
+
+        if provided_count not in (0, 4):
+            raise ValueError(
+                "min_lat, max_lat, min_lng, max_lng must be provided together"
+            )
+
+        if provided_count == 4:
+            if self.min_lat > self.max_lat:
+                raise ValueError("min_lat must be less than or equal to max_lat")
+            if self.min_lng > self.max_lng:
+                raise ValueError("min_lng must be less than or equal to max_lng")
+
+        return self
+
+
 class StoryResponse(BaseModel):
     id: uuid.UUID
     title: str

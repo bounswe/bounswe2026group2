@@ -106,9 +106,16 @@
             profileMenuName.textContent = getProfileLabel(currentUser);
             profileMenuEmail.textContent = currentUser.email || "";
 
+            var profileLink = document.createElement("a");
+            profileLink.href = "profile.html";
+            profileLink.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-primary transition hover:bg-stone-50";
+            profileLink.textContent = "View Profile";
+            profileLink.setAttribute("role", "menuitem");
+            profileMenuActions.appendChild(profileLink);
+
             var signOutButton = document.createElement("button");
             signOutButton.type = "button";
-            signOutButton.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-textmain transition hover:bg-background";
+            signOutButton.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50";
             signOutButton.textContent = "Sign Out";
             signOutButton.setAttribute("role", "menuitem");
             signOutButton.addEventListener("click", function () {

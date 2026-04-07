@@ -106,7 +106,13 @@ def _build_media_storage_key(story_id: uuid.UUID, filename: str) -> str:
     return f"stories/{story_id}/media/{uuid.uuid4()}{ext}"
 
 
-async def list_available_stories(db: AsyncSession) -> StoryListResponse:
+async def list_available_stories(
+    db: AsyncSession,
+    min_lat: float | None = None,
+    max_lat: float | None = None,
+    min_lng: float | None = None,
+    max_lng: float | None = None,
+) -> StoryListResponse:
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
@@ -116,6 +122,16 @@ async def list_available_stories(db: AsyncSession) -> StoryListResponse:
         )
         .order_by(Story.created_at.desc())
     )
+
+    if all(v is not None for v in (min_lat, max_lat, min_lng, max_lng)):
+        stmt = stmt.where(
+            Story.latitude.is_not(None),
+            Story.longitude.is_not(None),
+            Story.latitude >= min_lat,
+            Story.latitude <= max_lat,
+            Story.longitude >= min_lng,
+            Story.longitude <= max_lng,
+        )
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -185,6 +201,8 @@ async def create_story_with_location(
         title=payload.title,
         summary=payload.summary,
         content=payload.content,
+        status=StoryStatus.PUBLISHED,
+        visibility=StoryVisibility.PUBLIC,
         place_name=place_name,
         latitude=payload.latitude,
         longitude=payload.longitude,
@@ -313,4 +331,4 @@ async def upload_media_for_story(
             detail="Failed to persist media metadata",
         )
 
-    return MediaUploadResponse(media=_map_media_file(media))
+    return MediaUploadResponse(media=MediaFileResponse.model_validate(media))
