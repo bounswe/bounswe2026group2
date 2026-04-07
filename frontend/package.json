@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "capacitor:prepare": "node scripts/prepare-capacitor-web.mjs",
+    "capacitor:sync": "node scripts/prepare-capacitor-web.mjs && npx cap sync android"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.0",
