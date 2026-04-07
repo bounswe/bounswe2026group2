@@ -10,6 +10,7 @@ from app.db.user import User
 from app.models.story import (
     MediaUploadRequest,
     MediaUploadResponse,
+    StoryBoundsFilter,
     StoryCreateRequest,
     StoryDetailResponse,
     StoryListResponse,
@@ -63,8 +64,26 @@ async def update_story(
 
 
 @router.get("", response_model=StoryListResponse)
-async def list_stories(db: AsyncSession = Depends(get_db)):
-    return await list_available_stories(db)
+async def list_stories(
+    min_lat: float | None = Query(default=None),
+    max_lat: float | None = Query(default=None),
+    min_lng: float | None = Query(default=None),
+    max_lng: float | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    bounds = StoryBoundsFilter(
+        min_lat=min_lat,
+        max_lat=max_lat,
+        min_lng=min_lng,
+        max_lng=max_lng,
+    )
+    return await list_available_stories(
+        db,
+        min_lat=bounds.min_lat,
+        max_lat=bounds.max_lat,
+        min_lng=bounds.min_lng,
+        max_lng=bounds.max_lng,
+    )
 
 
 @router.get("/search", response_model=StoryListResponse)
