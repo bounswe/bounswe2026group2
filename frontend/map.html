@@ -486,11 +486,25 @@
             var placeName = story.place_name || "";
             var dateLabel = story.date_label || "";
 
+            var coverImage = null;
+            if (story.media_files && story.media_files.length > 0) {
+                for (var i = 0; i < story.media_files.length; i++) {
+                    if (story.media_files[i].media_type === "image") {
+                        coverImage = story.media_files[i].media_url;
+                        break;
+                    }
+                }
+            }
+
+            var dateBadge = dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '';
+
+            var headerHtml = coverImage
+                ? '<div style="height:100px;position:relative;"><img src="' + coverImage + '" style="width:100%;height:100%;object-fit:cover;" alt="">' + dateBadge + '</div>'
+                : '<div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">' +
+                  '<span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>' + dateBadge + '</div>';
+
             return '<div style="width:300px;">' +
-                '<div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">' +
-                '<span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>' +
-                (dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '') +
-                '</div>' +
+                headerHtml +
                 '<div style="padding:16px;">' +
                 '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">' + story.title + '</h3>' +
                 '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
