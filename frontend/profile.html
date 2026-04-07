@@ -70,11 +70,11 @@
         <span class="material-symbols-outlined text-5xl md:text-6xl text-primary" style="font-variation-settings: 'FILL' 1;">person</span>
       </div>
       <div class="flex-1">
-        <h1 class="font-headline text-3xl md:text-4xl font-extrabold leading-tight text-textmain">Mehmet Arif</h1>
+        <h1 id="profile-name" class="font-headline text-3xl md:text-4xl font-extrabold leading-tight text-textmain">Loading...</h1>
         <p class="mt-2 text-textmuted text-base">Historian and native of Galata. Passionate about preserving the auditory and visual memories of old Istanbul.</p>
         <div class="mt-4 flex flex-wrap gap-4 text-sm font-medium text-textmuted">
             <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">location_on</span> Istanbul, Turkey</span>
-            <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">calendar_month</span> Joined March 2026</span>
+            <span id="profile-joined" class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">calendar_month</span> Joined...</span>
         </div>
       </div>
       <div class="flex gap-3 md:flex-col lg:flex-row">
@@ -186,5 +186,8 @@
     </div>
   </main>
 
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="profile.js"></script>
 </body>
 </html>
