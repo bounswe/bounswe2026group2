@@ -293,17 +293,15 @@
                 <div class="relative">
                     <button id="btn-profile" type="button"
                         class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
-                        aria-label="Open account menu"
-                        aria-haspopup="menu"
-                        aria-expanded="false">
-                        <span id="profile-button-icon" class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
+                        aria-label="Open account menu" aria-haspopup="menu" aria-expanded="false">
+                        <span id="profile-button-icon"
+                            class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
                         <span id="profile-button-initials"
                             class="hidden h-7 min-w-7 items-center justify-center rounded-full bg-primary text-xs font-bold uppercase text-white"></span>
                     </button>
                     <div id="profile-menu" hidden
                         class="absolute right-0 top-[calc(100%+0.75rem)] w-72 rounded-2xl border border-border bg-white p-2 shadow-soft"
-                        role="menu"
-                        aria-labelledby="btn-profile">
+                        role="menu" aria-labelledby="btn-profile">
                         <div id="profile-menu-state" class="px-4 py-3 text-sm text-textmuted">
                             Checking account status...
                         </div>
@@ -350,7 +348,8 @@
             <div class="absolute bottom-6 right-4 z-[1000] md:bottom-8 md:right-8">
                 <a href="story-create.html"
                     class="flex items-center gap-3 bg-primary text-white px-4 py-3 rounded-xl text-sm font-semibold shadow-xl hover:scale-105 active:scale-95 transition-all border border-primary-light/20 md:px-6 md:py-4 md:text-base">
-                    <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">edit_square</span>
+                    <span class="material-symbols-outlined"
+                        style="font-variation-settings: 'FILL' 1;">edit_square</span>
                     Share a Story
                 </a>
             </div>
@@ -361,7 +360,8 @@
             class="relative z-[1000] m-4 mt-5 glass-panel rounded-2xl p-5 shadow-sm border border-border/20 md:absolute md:top-48 md:right-4 md:m-0 md:mt-0 md:w-72 md:max-h-[calc(100vh-296px)] md:overflow-y-auto">
             <div class="flex items-center justify-between mb-5">
                 <h2 class="font-headline font-bold text-lg">Recent Stories</h2>
-                <button id="btn-close-sidebar" class="hidden text-textmuted hover:text-textmain transition-colors md:inline-flex">
+                <button id="btn-close-sidebar"
+                    class="hidden text-textmuted hover:text-textmain transition-colors md:inline-flex">
                     <span class="material-symbols-outlined text-xl">close</span>
                 </button>
             </div>
@@ -661,11 +661,15 @@
         });
 
         // ─── Initialize ───
-        map.on("moveend", function () {
-            clearTimeout(fetchTimeout);
-            fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
-        });
-        fetchStoriesInBounds();
+        fetch(API_BASE + "/stories")
+            .then(res => res.json())
+            .then(data => {
+                var realStories = data.stories || [];
+                loadStories(realStories);
+                populateSidebar(realStories);
+            })
+            .catch(err => console.error("Error loading stories:", err));
+
         loadCurrentUser();
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
