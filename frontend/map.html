@@ -386,22 +386,29 @@
         profileMenuUser = document.getElementById("profile-menu-user");
         profileMenuName = document.getElementById("profile-menu-name");
         profileMenuEmail = document.getElementById("profile-menu-email");
-        // ─── Story cache & fetching ───
-        var cachedStories = null;
+        // ─── Story fetching ───
+        var cachedStories = [];
+        var fetchTimeout = null;
 
-        async function fetchStories() {
-            if (cachedStories) return cachedStories;
+        async function fetchStoriesInBounds() {
+            var bounds = map.getBounds();
+            var params = new URLSearchParams({
+                min_lat: bounds.getSouthWest().lat,
+                max_lat: bounds.getNorthEast().lat,
+                min_lng: bounds.getSouthWest().lng,
+                max_lng: bounds.getNorthEast().lng
+            });
 
             try {
-                var response = await fetch(API_BASE + "/stories");
+                var response = await fetch(API_BASE + "/stories?" + params.toString());
                 if (!response.ok) throw new Error("Failed to fetch stories");
                 var data = await response.json();
                 cachedStories = data.stories || [];
-                return cachedStories;
+                loadStories(cachedStories);
+                populateSidebar(cachedStories);
             } catch (err) {
                 console.error("Error fetching stories:", err);
                 document.getElementById("story-count").textContent = "Failed to load stories";
-                return [];
             }
         }
 
@@ -654,10 +661,11 @@
         });
 
         // ─── Initialize ───
-        fetchStories().then(function (stories) {
-            loadStories(stories);
-            populateSidebar(stories);
+        map.on("moveend", function () {
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
         });
+        fetchStoriesInBounds();
         loadCurrentUser();
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
