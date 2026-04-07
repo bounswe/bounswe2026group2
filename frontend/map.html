@@ -280,16 +280,15 @@
             </div>
             <div class="flex items-center gap-3 sm:gap-4">
                 <!-- Search -->
-                <div class="relative hidden sm:block" id="search-container">
-                    <span
-                        class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl">search</span>
-                    <input id="search-input"
-                        class="pl-10 pr-4 py-2 bg-white border border-border rounded-xl w-72 text-sm focus:border-primary focus:ring-primary transition-all"
-                        placeholder="Search stories by location..." type="text" autocomplete="off" />
-                    <div id="search-results"
-                        class="absolute top-full left-0 right-0 mt-1 bg-white border border-border rounded-xl shadow-soft overflow-hidden hidden z-50">
+                <form id="search-form" class="relative hidden sm:flex items-center gap-2" action="search.html" method="get">
+                    <div class="relative">
+                        <span
+                            class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl">search</span>
+                        <input id="search-input" name="q"
+                            class="pl-10 pr-4 py-2 bg-white border border-border rounded-xl w-72 text-sm focus:border-primary focus:ring-primary transition-all"
+                            placeholder="Search stories by location..." type="text" autocomplete="off" />
                     </div>
-                </div>
+                </form>
                 <div class="relative">
                     <button id="btn-profile" type="button"
                         class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
@@ -583,68 +582,8 @@
             syncMapSize();
         });
 
-        // ─── Search ───
-        var searchInput = document.getElementById("search-input");
-        var searchResults = document.getElementById("search-results");
-        var searchTimeout;
-
-        searchInput.addEventListener("input", function () {
-            clearTimeout(searchTimeout);
-            var query = searchInput.value.trim().toLowerCase();
-
-            if (query.length < 2) {
-                searchResults.classList.add("hidden");
-                searchResults.innerHTML = "";
-                return;
-            }
-
-            searchTimeout = setTimeout(function () {
-                var stories = cachedStories || [];
-                var filtered = stories.filter(function (s) {
-                    return (s.title || "").toLowerCase().includes(query) ||
-                        (s.place_name || "").toLowerCase().includes(query) ||
-                        (s.content || "").toLowerCase().includes(query) ||
-                        (s.author || "").toLowerCase().includes(query);
-                });
-
-                if (filtered.length === 0) {
-                    searchResults.innerHTML = '<div class="px-4 py-3 text-sm text-textmuted">No stories found for "' + query + '"</div>';
-                    searchResults.classList.remove("hidden");
-                    return;
-                }
-
-                searchResults.innerHTML = "";
-                filtered.forEach(function (story) {
-                    var item = document.createElement("div");
-                    item.className = "px-4 py-3 hover:bg-background cursor-pointer border-b border-border/30 last:border-0";
-                    var placeName = story.place_name || "";
-                    var dateLabel = story.date_label || "";
-                    var subtitle = [placeName, dateLabel].filter(Boolean).join(" · ");
-                    item.innerHTML =
-                        '<div class="font-semibold text-sm text-textmain">' + story.title + '</div>' +
-                        (subtitle ? '<div class="text-xs text-textmuted mt-0.5">' + subtitle + '</div>' : '');
-                    item.addEventListener("click", function () {
-                        map.setView([story.latitude, story.longitude], 16);
-                        markers.forEach(function (m) {
-                            if (m.getLatLng().lat === story.latitude && m.getLatLng().lng === story.longitude) {
-                                m.openPopup();
-                            }
-                        });
-                        searchResults.classList.add("hidden");
-                        searchInput.value = story.title;
-                    });
-                    searchResults.appendChild(item);
-                });
-                searchResults.classList.remove("hidden");
-            }, 200);
-        });
-
-        // Close search results when clicking outside
+        // Close profile menu when clicking outside
         document.addEventListener("click", function (e) {
-            if (!document.getElementById("search-container").contains(e.target)) {
-                searchResults.classList.add("hidden");
-            }
-
             if (!profileMenu.hidden && !profileMenu.contains(e.target) && !profileButton.contains(e.target)) {
                 closeProfileMenu();
             }
