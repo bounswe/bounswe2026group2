@@ -393,10 +393,10 @@
         async function fetchStoriesInBounds() {
             var bounds = map.getBounds();
             var params = new URLSearchParams({
-                min_lat: bounds.getSouthWest().lat,
-                max_lat: bounds.getNorthEast().lat,
-                min_lng: bounds.getSouthWest().lng,
-                max_lng: bounds.getNorthEast().lng
+                min_lat: Math.max(-90, bounds.getSouthWest().lat),
+                max_lat: Math.min(90, bounds.getNorthEast().lat),
+                min_lng: Math.max(-180, bounds.getSouthWest().lng),
+                max_lng: Math.min(180, bounds.getNorthEast().lng)
             });
 
             try {
