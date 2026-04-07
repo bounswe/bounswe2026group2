@@ -479,22 +479,12 @@
             });
         }
 
-        function createPopupContent(story) {
+        function buildPopupHtml(story, coverImage) {
             var preview = (story.content || "").length > 200
                 ? story.content.substring(0, 200) + "..."
                 : (story.content || "");
             var placeName = story.place_name || "";
             var dateLabel = story.date_label || "";
-
-            var coverImage = null;
-            if (story.media_files && story.media_files.length > 0) {
-                for (var i = 0; i < story.media_files.length; i++) {
-                    if (story.media_files[i].media_type === "image") {
-                        coverImage = story.media_files[i].media_url;
-                        break;
-                    }
-                }
-            }
 
             var dateBadge = dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '';
 
@@ -526,7 +516,7 @@
                     icon: createMarkerIcon()
                 });
 
-                marker.bindPopup(createPopupContent(story), {
+                marker.bindPopup(buildPopupHtml(story, null), {
                     maxWidth: 300,
                     minWidth: 300,
                     closeButton: true
@@ -542,6 +532,25 @@
                         var markerDiv = el.querySelector(".story-marker");
                         if (markerDiv) markerDiv.classList.add("active");
                     }
+
+                    // Fetch detail to get media_files for the cover image
+                    fetch(API_BASE + "/stories/" + story.id)
+                        .then(function (res) { return res.json(); })
+                        .then(function (detail) {
+                            var coverImage = null;
+                            if (detail.media_files && detail.media_files.length > 0) {
+                                for (var i = 0; i < detail.media_files.length; i++) {
+                                    if (detail.media_files[i].media_type === "image") {
+                                        coverImage = detail.media_files[i].media_url;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (coverImage) {
+                                marker.setPopupContent(buildPopupHtml(story, coverImage));
+                            }
+                        })
+                        .catch(function () { /* keep placeholder on error */ });
                 });
 
                 marker.addTo(map);
