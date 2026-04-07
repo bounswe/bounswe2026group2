@@ -48,21 +48,12 @@
 <main class="max-w-6xl mx-auto px-6 py-10 lg:px-10">
   <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
     <div>
-      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary">Story Detail</p>
+      <a href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+        <span aria-hidden="true">&larr;</span> Back to Map
+      </a>
       <h1 id="story-title" class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">Loading Story...</h1>
       <p id="story-summary" class="mt-4 max-w-3xl text-base leading-7 text-textmuted italic">
       </p>
-    </div>
-    <div class="flex flex-wrap gap-3">
-      <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
-        Login Page
-      </a>
-      <a href="map.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
-        Map Page
-      </a>
-      <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-surface px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
-        Open Story Creation
-      </a>
     </div>
   </header>
 
@@ -87,8 +78,6 @@
 
         <div class="mt-8 flex flex-wrap gap-3">
           <a href="map.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Back to Map</a>
-          <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Create Another Story</a>
-          <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
         </div>
       </div>
     </article>
@@ -104,16 +93,7 @@
 
       <section class="rounded-3xl border border-border bg-surface p-6">
         <h2 class="font-headline text-2xl font-bold text-textmain">Comments</h2>
-        <div class="mt-5 space-y-4">
-          <div class="rounded-2xl bg-[rgba(119,90,25,0.06)] p-4">
-            <p class="text-sm font-semibold text-textmain">ayse_k</p>
-            <p class="mt-2 text-sm leading-6 text-textmuted">My grandmother used to describe the same streets and the cats near the pier. This brought that image back immediately.</p>
-          </div>
-          <div class="rounded-2xl bg-[rgba(53,97,143,0.06)] p-4">
-            <p class="text-sm font-semibold text-textmain">can_photo</p>
-            <p class="mt-2 text-sm leading-6 text-textmuted">I photographed the old fountain last year. The inscription is fading, but it is still visible if you visit in the morning light.</p>
-          </div>
-        </div>
+        <p class="mt-5 text-sm text-textmuted">No comments yet.</p>
       </section>
     </aside>
   </section>
