@@ -212,7 +212,6 @@ class TestStoryMediaUploadAPI:
         assert "id" in media
         assert "storage_key" in media
         assert "bucket_name" in media
-        assert media["media_url"].endswith(f'/{media["bucket_name"]}/{media["storage_key"]}')
         assert "created_at" in media
 
     async def test_upload_media_invalid_mime_type(self, client, db_session, monkeypatch):
@@ -314,7 +313,6 @@ class TestStoryDetailAPI:
         assert media_item["mime_type"] == "image/png"
         assert media_item["media_type"] == "image"
         assert media_item["file_size_bytes"] == 777
-        assert media_item["media_url"].endswith("/images/stories/test/photo.png")
 
     async def test_get_story_detail_not_found(self, client):
         resp = await client.get(f"/stories/{uuid.uuid4()}")

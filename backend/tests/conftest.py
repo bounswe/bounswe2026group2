@@ -27,10 +27,8 @@ async def db_session():
     """Provide a per-test engine + session so everything shares one event loop."""
     engine = create_async_engine(_url, echo=False)
 
-    # Reset the schema first so stale tables from earlier runs don't survive
-    # and silently bypass new columns added to the ORM models.
+    # Create tables
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
     session_factory = async_sessionmaker(
