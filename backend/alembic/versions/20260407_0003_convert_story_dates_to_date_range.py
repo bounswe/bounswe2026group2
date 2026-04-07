@@ -21,6 +21,8 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     date_precision_enum = sa.Enum("year", "date", name="date_precision", native_enum=False)
 
+    op.drop_constraint("ck_stories_date_range_valid", "stories", type_="check")
+
     op.alter_column(
         "stories",
         "date_start",
@@ -34,6 +36,12 @@ def upgrade() -> None:
         type_=sa.Date(),
         postgresql_using="CASE WHEN date_end IS NULL THEN NULL ELSE make_date(date_end, 12, 31) END",
         existing_nullable=True,
+    )
+
+    op.create_check_constraint(
+        "ck_stories_date_range_valid",
+        "stories",
+        "date_end IS NULL OR date_start IS NULL OR date_end >= date_start",
     )
 
     op.add_column(
@@ -53,6 +61,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("stories", "date_precision")
 
+    op.drop_constraint("ck_stories_date_range_valid", "stories", type_="check")
+
     op.alter_column(
         "stories",
         "date_start",
@@ -66,4 +76,10 @@ def downgrade() -> None:
         type_=sa.Integer(),
         postgresql_using="CASE WHEN date_end IS NULL THEN NULL ELSE EXTRACT(YEAR FROM date_end)::integer END",
         existing_nullable=True,
+    )
+
+    op.create_check_constraint(
+        "ck_stories_date_range_valid",
+        "stories",
+        "date_end IS NULL OR date_start IS NULL OR date_end >= date_start",
     )
