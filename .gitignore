@@ -34,3 +34,9 @@ logs/
 
 # Docker
 docker-compose.override.yml
+
+# Android SDK
+android-sdk/
+
+# APK artifacts
+*.apk

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Local History Map</string>
+    <string name="title_activity_main">Local History Map</string>
+    <string name="package_name">com.bounswe.localhistorymap</string>
+    <string name="custom_url_scheme">com.bounswe.localhistorymap</string>
+</resources>

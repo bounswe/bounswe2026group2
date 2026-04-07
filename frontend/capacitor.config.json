@@ -1,0 +1,14 @@
+{
+  "appId": "com.bounswe.localhistorymap",
+  "appName": "Local History Map",
+  "webDir": "capacitor-www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
