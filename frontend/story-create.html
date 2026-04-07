@@ -37,6 +37,14 @@
     };
   </script>
   <style>
+    #location-search-container {
+      position: relative;
+      z-index: 1000;
+    }
+    #create-map {
+      position: relative;
+      z-index: 0;
+    }
     .leaflet-container { font-family: "Inter", sans-serif; }
     .leaflet-control-zoom a {
       background: rgba(254,249,240,0.9) !important;
@@ -181,7 +189,7 @@
           <button type="button" id="btn-draft" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
             Save as Draft
           </button>
-          <button type="submit" class="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+          <button type="submit" id="btn-publish" class="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95">
             Publish Story
           </button>
         </div>
@@ -349,6 +357,10 @@
     return /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
   }
 
+  function getYearFromDateInput(value) {
+    return parseInt(value.slice(-4), 10);
+  }
+
   document.getElementById("date-range-toggle").addEventListener("change", function () {
     document.getElementById("date-range-fields").classList.toggle("hidden", !this.checked);
     document.getElementById("date-single").closest("div").classList.toggle("hidden", this.checked);
@@ -368,6 +380,52 @@
     }
     fileList.textContent = names.length + " file(s) selected: " + names.join(", ");
   });
+
+  function getSelectedFiles() {
+    return Array.prototype.slice.call(document.getElementById("media-files").files || []);
+  }
+
+  function getMediaType(file) {
+    if (!file || !file.type) return null;
+    if (file.type.indexOf("image/") === 0) return "image";
+    if (file.type.indexOf("video/") === 0) return "video";
+    if (file.type.indexOf("audio/") === 0) return "audio";
+    if (
+      file.type === "application/pdf" ||
+      file.type === "text/plain" ||
+      file.type === "application/msword" ||
+      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+      return "document";
+    }
+    return null;
+  }
+
+  async function readErrorMessage(response, fallbackMessage) {
+    try {
+      var data = await response.json();
+      if (data && typeof data.detail === "string") {
+        return data.detail;
+      }
+    } catch (err) {
+      // Ignore JSON parse errors and fall back to generic messaging.
+    }
+    return fallbackMessage;
+  }
+
+  function setSubmittingState(isSubmitting, publishLabel) {
+    var publishButton = document.getElementById("btn-publish");
+    var draftButton = document.getElementById("btn-draft");
+
+    publishButton.disabled = isSubmitting;
+    draftButton.disabled = isSubmitting;
+
+    publishButton.textContent = publishLabel || "Publish Story";
+    publishButton.classList.toggle("opacity-70", isSubmitting);
+    publishButton.classList.toggle("cursor-not-allowed", isSubmitting);
+    draftButton.classList.toggle("opacity-70", isSubmitting);
+    draftButton.classList.toggle("cursor-not-allowed", isSubmitting);
+  }
 
   // ─── Checklist Updates ───
   function updateChecklist() {
@@ -406,8 +464,16 @@
     document.getElementById(id).addEventListener("input", updateChecklist);
   });
 
+  document.getElementById("btn-draft").addEventListener("click", function () {
+    var errorEl = document.getElementById("form-error");
+    var successEl = document.getElementById("form-success");
+    successEl.classList.add("hidden");
+    errorEl.textContent = "Draft save is not available in the current API. Publishing now creates a public story directly.";
+    errorEl.classList.remove("hidden");
+  });
+
   // ─── Form Submission ───
-  document.getElementById("story-form").addEventListener("submit", function (e) {
+  document.getElementById("story-form").addEventListener("submit", async function (e) {
     e.preventDefault();
 
     var errorEl = document.getElementById("form-error");
@@ -417,12 +483,14 @@
 
     var title = document.getElementById("title").value.trim();
     var content = document.getElementById("story").value.trim();
+    var placeName = document.getElementById("location").value.trim();
     var lat = document.getElementById("latitude").value;
     var lng = document.getElementById("longitude").value;
     var dateSingle = document.getElementById("date-single").value.trim();
     var dateStart = document.getElementById("date-start").value.trim();
     var usingDateRange = document.getElementById("date-range-toggle").checked;
     var dateEnd = document.getElementById("date-end").value.trim();
+    var selectedFiles = getSelectedFiles();
 
     if (!title || !content) {
       errorEl.textContent = "Please fill in the title and story content.";
@@ -436,8 +504,8 @@
       return;
     }
 
-    if (!usingDateRange && !dateSingle) {
-      errorEl.textContent = "Please provide a date in mm/dd/yyyy format.";
+    if (!placeName) {
+      errorEl.textContent = "Please provide a location name for the pinned place.";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -466,24 +534,90 @@
       return;
     }
 
-    // In production: POST to /api/stories
+    if (usingDateRange && getYearFromDateInput(dateEnd) < getYearFromDateInput(dateStart)) {
+      errorEl.textContent = "End date year must be greater than or equal to the start date year.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    for (var i = 0; i < selectedFiles.length; i++) {
+      if (!getMediaType(selectedFiles[i])) {
+        errorEl.textContent = "One or more selected files are not supported by the upload API.";
+        errorEl.classList.remove("hidden");
+        return;
+      }
+    }
+
     var payload = {
       title: title,
       content: content,
+      summary: null,
       latitude: parseFloat(lat),
       longitude: parseFloat(lng),
-      location_name: document.getElementById("location").value.trim(),
-      date_start: usingDateRange ? dateStart : dateSingle,
-      date_end: usingDateRange ? dateEnd : null
+      place_name: placeName,
+      date_start: usingDateRange ? getYearFromDateInput(dateStart) : getYearFromDateInput(dateSingle),
+      date_end: usingDateRange ? getYearFromDateInput(dateEnd) : null
     };
 
-    console.log("Story payload:", payload);
-    successEl.textContent = "Story published successfully! Redirecting to map...";
-    successEl.classList.remove("hidden");
+    setSubmittingState(true, "Creating Story...");
 
-    setTimeout(function () {
-      window.location.assign("map.html");
-    }, 1500);
+    try {
+      var createResponse = await authFetch(API_BASE + "/stories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!createResponse.ok) {
+        throw new Error(await readErrorMessage(createResponse, "Failed to create the story."));
+      }
+
+      var createdStory = await createResponse.json();
+      var failedUploads = [];
+
+      for (var fileIndex = 0; fileIndex < selectedFiles.length; fileIndex++) {
+        var file = selectedFiles[fileIndex];
+        var mediaType = getMediaType(file);
+        var formData = new FormData();
+
+        setSubmittingState(true, "Uploading " + (fileIndex + 1) + " / " + selectedFiles.length + "...");
+
+        formData.append("file", file);
+        formData.append("media_type", mediaType);
+        formData.append("sort_order", String(fileIndex));
+
+        var uploadResponse = await authFetch(API_BASE + "/stories/" + createdStory.id + "/media", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!uploadResponse.ok) {
+          failedUploads.push(file.name + ": " + await readErrorMessage(uploadResponse, "Upload failed"));
+        }
+      }
+
+      if (failedUploads.length > 0) {
+        successEl.textContent = "Story published, but some media uploads failed.";
+        successEl.classList.remove("hidden");
+        errorEl.textContent = failedUploads.join(" ");
+        errorEl.classList.remove("hidden");
+        return;
+      }
+
+      successEl.textContent = "Story published successfully! Redirecting to the map...";
+      successEl.classList.remove("hidden");
+
+      setTimeout(function () {
+        window.location.assign("map.html");
+      }, 1500);
+    } catch (error) {
+      errorEl.textContent = error && error.message ? error.message : "Failed to publish the story.";
+      errorEl.classList.remove("hidden");
+    } finally {
+      setSubmittingState(false, "Publish Story");
+    }
   });
 
   function syncCreateMapSize() {

@@ -159,6 +159,8 @@ async def create_story_with_location(
         title=payload.title,
         summary=payload.summary,
         content=payload.content,
+        status=StoryStatus.PUBLISHED,
+        visibility=StoryVisibility.PUBLIC,
         place_name=place_name,
         latitude=payload.latitude,
         longitude=payload.longitude,
