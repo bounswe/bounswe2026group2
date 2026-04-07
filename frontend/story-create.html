@@ -357,8 +357,9 @@
     return /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
   }
 
-  function getYearFromDateInput(value) {
-    return parseInt(value.slice(-4), 10);
+  function getISODateFromDateInput(value) {
+    var parts = value.split("/");
+    return parts[2] + "-" + parts[0] + "-" + parts[1];
   }
 
   document.getElementById("date-range-toggle").addEventListener("change", function () {
@@ -534,8 +535,8 @@
       return;
     }
 
-    if (usingDateRange && getYearFromDateInput(dateEnd) < getYearFromDateInput(dateStart)) {
-      errorEl.textContent = "End date year must be greater than or equal to the start date year.";
+    if (usingDateRange && getISODateFromDateInput(dateEnd) < getISODateFromDateInput(dateStart)) {
+      errorEl.textContent = "End date must be greater than or equal to the start date.";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -555,8 +556,8 @@
       latitude: parseFloat(lat),
       longitude: parseFloat(lng),
       place_name: placeName,
-      date_start: usingDateRange ? getYearFromDateInput(dateStart) : getYearFromDateInput(dateSingle),
-      date_end: usingDateRange ? getYearFromDateInput(dateEnd) : null
+      date_start: usingDateRange ? getISODateFromDateInput(dateStart) : getISODateFromDateInput(dateSingle),
+      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null
     };
 
     setSubmittingState(true, "Creating Story...");
