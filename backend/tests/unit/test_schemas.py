@@ -1,7 +1,9 @@
 import pytest
+from datetime import date
 from pydantic import ValidationError
 
-from app.models.story import StoryCreateRequest, StoryUpdateRequest
+from app.db.enums import DatePrecision
+from app.models.story import StoryCreateRequest, StoryDateRangeFilter, StoryUpdateRequest
 from app.models.user import UserRegisterRequest, UserLoginRequest
 
 
@@ -74,6 +76,10 @@ class TestStoryDateSchemaValidation:
 
         assert req.date_start == 1400
         assert req.date_end == 1453
+        normalized_start, normalized_end, normalized_precision = req.normalize_date_range()
+        assert normalized_start == date(1400, 1, 1)
+        assert normalized_end == date(1453, 12, 31)
+        assert normalized_precision == DatePrecision.YEAR
 
     def test_create_accepts_single_date_start_only(self):
         payload = self._base_story_payload() | {"date_start": 1453, "date_end": None}
@@ -81,6 +87,19 @@ class TestStoryDateSchemaValidation:
 
         assert req.date_start == 1453
         assert req.date_end is None
+        normalized_start, normalized_end, normalized_precision = req.normalize_date_range()
+        assert normalized_start == date(1453, 1, 1)
+        assert normalized_end == date(1453, 12, 31)
+        assert normalized_precision == DatePrecision.YEAR
+
+    def test_create_accepts_single_exact_date(self):
+        payload = self._base_story_payload() | {"date_start": "1453-05-29"}
+        req = StoryCreateRequest(**payload)
+
+        normalized_start, normalized_end, normalized_precision = req.normalize_date_range()
+        assert normalized_start == date(1453, 5, 29)
+        assert normalized_end == date(1453, 5, 29)
+        assert normalized_precision == DatePrecision.DATE
 
     def test_create_rejects_invalid_date_range(self):
         payload = self._base_story_payload() | {"date_start": 1453, "date_end": 1400}
@@ -95,6 +114,24 @@ class TestStoryDateSchemaValidation:
         with pytest.raises(ValidationError):
             StoryCreateRequest(**payload)
 
+    def test_create_rejects_mixed_type_range(self):
+        payload = self._base_story_payload() | {
+            "date_start": 1453,
+            "date_end": "1453-05-29",
+        }
+
+        with pytest.raises(ValidationError, match="must use the same type"):
+            StoryCreateRequest(**payload)
+
+    def test_create_rejects_wrong_precision_for_date_inputs(self):
+        payload = self._base_story_payload() | {
+            "date_start": "1453-05-29",
+            "date_precision": "year",
+        }
+
+        with pytest.raises(ValidationError, match="must be 'date'"):
+            StoryCreateRequest(**payload)
+
     def test_update_accepts_valid_date_range(self):
         payload = self._base_story_payload() | {"date_start": 1900, "date_end": 1910}
         req = StoryUpdateRequest(**payload)
@@ -107,3 +144,21 @@ class TestStoryDateSchemaValidation:
 
         with pytest.raises(ValidationError, match="date_end must be greater than or equal to date_start"):
             StoryUpdateRequest(**payload)
+
+
+class TestStoryDateRangeFilter:
+    def test_normalizes_year_query_range(self):
+        req = StoryDateRangeFilter(query_start=2025, query_end=2025)
+        normalized_start, normalized_end, precision = req.normalize_query_range()
+
+        assert normalized_start == date(2025, 1, 1)
+        assert normalized_end == date(2025, 12, 31)
+        assert precision == DatePrecision.YEAR
+
+    def test_normalizes_date_query_range(self):
+        req = StoryDateRangeFilter(query_start="2025-08-01", query_end="2025-08-31")
+        normalized_start, normalized_end, precision = req.normalize_query_range()
+
+        assert normalized_start == date(2025, 8, 1)
+        assert normalized_end == date(2025, 8, 31)
+        assert precision == DatePrecision.DATE

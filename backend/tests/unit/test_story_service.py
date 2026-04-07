@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
-from app.db.enums import MediaType, StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdateRequest
 from app.services.story_service import (
     create_story_with_location,
@@ -29,8 +29,9 @@ def _make_story(**overrides):
         "place_name": "Istanbul",
         "latitude": 41.0082,
         "longitude": 28.9784,
-        "date_start": 1453,
-        "date_end": 1453,
+        "date_start": date(1453, 1, 1),
+        "date_end": date(1453, 12, 31),
+        "date_precision": DatePrecision.YEAR,
         "status": StoryStatus.PUBLISHED,
         "visibility": StoryVisibility.PUBLIC,
         "created_at": datetime.now(timezone.utc),
@@ -88,9 +89,9 @@ class TestListAvailableStoriesService:
         assert item.place_name == "Istanbul"
         assert item.latitude == 41.0082
         assert item.longitude == 28.9784
-        assert item.date_start == 1453
-        assert item.date_end == 1453
-        assert item.date_label == "1453 - 1453"
+        assert item.date_start == date(1453, 1, 1)
+        assert item.date_end == date(1453, 12, 31)
+        assert item.date_label == "1453"
         assert item.status == StoryStatus.PUBLISHED
         assert item.visibility == StoryVisibility.PUBLIC
         assert item.created_at == story.created_at
@@ -121,6 +122,46 @@ class TestListAvailableStoriesService:
         assert "stories.status" in sql
         assert "stories.visibility" in sql
         assert "ORDER BY stories.created_at DESC" in sql
+
+    async def test_query_includes_bounds_filters_when_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await list_available_stories(
+            db,
+            min_lat=40.9,
+            max_lat=41.1,
+            min_lng=28.8,
+            max_lng=29.1,
+        )
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.latitude IS NOT NULL" in sql
+        assert "stories.longitude IS NOT NULL" in sql
+        assert "stories.latitude >=" in sql
+        assert "stories.latitude <=" in sql
+        assert "stories.longitude >=" in sql
+        assert "stories.longitude <=" in sql
+
+    async def test_query_includes_date_overlap_filters_when_query_range_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await list_available_stories(
+            db,
+            query_start=date(2025, 8, 1),
+            query_end=date(2025, 8, 31),
+        )
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.date_start IS NOT NULL" in sql
+        assert "stories.date_end IS NOT NULL" in sql
+        assert "stories.date_start <=" in sql
+        assert "stories.date_end >=" in sql
 
 
 @pytest.mark.asyncio
@@ -153,6 +194,23 @@ class TestSearchAvailableStoriesByPlaceService:
         assert result.total == 0
         assert result.stories == []
         db.execute.assert_awaited_once()
+
+    async def test_search_query_includes_date_overlap_filters(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(
+            db,
+            "ankara",
+            query_start=date(1900, 1, 1),
+            query_end=date(1950, 12, 31),
+        )
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.date_start <=" in sql
+        assert "stories.date_end >=" in sql
 
 
 @pytest.mark.asyncio
@@ -247,6 +305,8 @@ class TestGetStoryDetailByIdService:
         assert len(result.media_files) == 2
         assert result.media_files[0].original_filename == "photo1.png"
         assert result.media_files[1].original_filename == "photo2.png"
+        assert result.media_files[0].media_url.endswith("/images/stories/key.png")
+        assert result.media_files[1].media_url.endswith("/images/stories/key.png")
         db.execute.assert_awaited_once()
 
     async def test_raises_404_when_story_not_found(self):
@@ -293,6 +353,9 @@ class TestCreateStoryWithLocationService:
         assert result.place_name == "Istanbul"
         assert result.latitude == 41.0082
         assert result.longitude == 28.9784
+        assert result.date_start == date(1453, 1, 1)
+        assert result.date_end == date(1453, 12, 31)
+        assert result.date_precision == DatePrecision.YEAR
         assert result.status == StoryStatus.PUBLISHED
         assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
@@ -350,8 +413,9 @@ class TestUpdateStoryWithLocationAndDatesService:
         assert result.place_name == "Ankara"
         assert result.latitude == 39.9334
         assert result.longitude == 32.8597
-        assert result.date_start == 1920
-        assert result.date_end == 1923
+        assert result.date_start == date(1920, 1, 1)
+        assert result.date_end == date(1923, 12, 31)
+        assert result.date_precision == DatePrecision.YEAR
         assert result.date_label == "1920 - 1923"
         assert result.media_files == []
         db.commit.assert_awaited_once()

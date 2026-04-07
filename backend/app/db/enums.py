@@ -23,3 +23,8 @@ class MediaType(str, Enum):
     AUDIO = "audio"
     VIDEO = "video"
     DOCUMENT = "document"
+
+
+class DatePrecision(str, Enum):
+    YEAR = "year"
+    DATE = "date"

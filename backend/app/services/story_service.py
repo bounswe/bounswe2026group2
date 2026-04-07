@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
@@ -12,15 +13,20 @@ from app.db.story import Story
 from app.db.user import User
 from app.models.story import (
     MediaFileResponse,
-    StoryDetailResponse,
-    StoryCreateRequest,
-    StoryUpdateRequest,
     MediaUploadRequest,
     MediaUploadResponse,
+    StoryCreateRequest,
+    StoryDetailResponse,
     StoryListResponse,
     StoryResponse,
+    StoryUpdateRequest,
 )
-from app.services.storage import delete_object, get_bucket_for_media_type, upload_bytes
+from app.services.storage import (
+    build_public_object_url,
+    delete_object,
+    get_bucket_for_media_type,
+    upload_bytes,
+)
 
 MAX_MEDIA_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
@@ -45,9 +51,30 @@ def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     return StoryListResponse(stories=stories, total=len(stories))
 
 
+def _map_media_file(media: MediaFile) -> MediaFileResponse:
+    return MediaFileResponse(
+        id=media.id,
+        story_id=media.story_id,
+        bucket_name=media.bucket_name,
+        storage_key=media.storage_key,
+        media_url=build_public_object_url(
+            bucket_name=media.bucket_name,
+            storage_key=media.storage_key,
+        ),
+        original_filename=media.original_filename,
+        mime_type=media.mime_type,
+        media_type=media.media_type,
+        file_size_bytes=media.file_size_bytes,
+        sort_order=media.sort_order,
+        alt_text=media.alt_text,
+        caption=media.caption,
+        created_at=media.created_at,
+    )
+
+
 def _map_story_detail(story: Story, author_username: str) -> StoryDetailResponse:
     story_response = StoryResponse.from_orm_with_author(story, author_username)
-    media_files = [MediaFileResponse.model_validate(media) for media in story.media_files]
+    media_files = [_map_media_file(media) for media in story.media_files]
     return StoryDetailResponse(**story_response.model_dump(), media_files=media_files)
 
 
@@ -80,7 +107,15 @@ def _build_media_storage_key(story_id: uuid.UUID, filename: str) -> str:
     return f"stories/{story_id}/media/{uuid.uuid4()}{ext}"
 
 
-async def list_available_stories(db: AsyncSession) -> StoryListResponse:
+async def list_available_stories(
+    db: AsyncSession,
+    min_lat: float | None = None,
+    max_lat: float | None = None,
+    min_lng: float | None = None,
+    max_lng: float | None = None,
+    query_start: date | None = None,
+    query_end: date | None = None,
+) -> StoryListResponse:
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
@@ -91,6 +126,24 @@ async def list_available_stories(db: AsyncSession) -> StoryListResponse:
         .order_by(Story.created_at.desc())
     )
 
+    if all(v is not None for v in (min_lat, max_lat, min_lng, max_lng)):
+        stmt = stmt.where(
+            Story.latitude.is_not(None),
+            Story.longitude.is_not(None),
+            Story.latitude >= min_lat,
+            Story.latitude <= max_lat,
+            Story.longitude >= min_lng,
+            Story.longitude <= max_lng,
+        )
+
+    if query_start is not None and query_end is not None:
+        stmt = stmt.where(
+            Story.date_start.is_not(None),
+            Story.date_end.is_not(None),
+            Story.date_start <= query_end,
+            Story.date_end >= query_start,
+        )
+
     result = await db.execute(stmt)
     rows = result.all()
 
@@ -100,6 +153,8 @@ async def list_available_stories(db: AsyncSession) -> StoryListResponse:
 async def search_available_stories_by_place(
     db: AsyncSession,
     place_name: str,
+    query_start: date | None = None,
+    query_end: date | None = None,
 ) -> StoryListResponse:
     stmt = (
         select(Story, User.username)
@@ -111,6 +166,14 @@ async def search_available_stories_by_place(
         )
         .order_by(Story.created_at.desc())
     )
+
+    if query_start is not None and query_end is not None:
+        stmt = stmt.where(
+            Story.date_start.is_not(None),
+            Story.date_end.is_not(None),
+            Story.date_start <= query_end,
+            Story.date_end >= query_start,
+        )
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -154,6 +217,10 @@ async def create_story_with_location(
             detail="place_name is required for story location binding",
         )
 
+    normalized_date_start, normalized_date_end, normalized_date_precision = (
+        payload.normalize_date_range()
+    )
+
     story = Story(
         user_id=current_user.id,
         title=payload.title,
@@ -164,8 +231,9 @@ async def create_story_with_location(
         place_name=place_name,
         latitude=payload.latitude,
         longitude=payload.longitude,
-        date_start=payload.date_start,
-        date_end=payload.date_end,
+        date_start=normalized_date_start,
+        date_end=normalized_date_end,
+        date_precision=normalized_date_precision,
     )
 
     db.add(story)
@@ -199,14 +267,19 @@ async def update_story_with_location_and_dates(
             detail="place_name is required for story location binding",
         )
 
+    normalized_date_start, normalized_date_end, normalized_date_precision = (
+        payload.normalize_date_range()
+    )
+
     story.title = payload.title
     story.summary = payload.summary
     story.content = payload.content
     story.place_name = place_name
     story.latitude = payload.latitude
     story.longitude = payload.longitude
-    story.date_start = payload.date_start
-    story.date_end = payload.date_end
+    story.date_start = normalized_date_start
+    story.date_end = normalized_date_end
+    story.date_precision = normalized_date_precision
 
     await db.commit()
     await db.refresh(story)
@@ -289,4 +362,4 @@ async def upload_media_for_story(
             detail="Failed to persist media metadata",
         )
 
-    return MediaUploadResponse(media=MediaFileResponse.model_validate(media))
+    return MediaUploadResponse(media=_map_media_file(media))

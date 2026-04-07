@@ -1,7 +1,8 @@
 import pytest
 import uuid
+from datetime import date
 
-from app.db.enums import MediaType, StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.story import Story
 from app.db.user import User
@@ -29,8 +30,9 @@ class TestStoryListingAPI:
             place_name="Istanbul",
             latitude=41.0082,
             longitude=28.9784,
-            date_start=1453,
-            date_end=1453,
+            date_start=date(1453, 1, 1),
+            date_end=date(1453, 12, 31),
+            date_precision=DatePrecision.YEAR,
         )
         hidden_story = Story(
             user_id=user.id,
@@ -59,9 +61,10 @@ class TestStoryListingAPI:
         assert item["place_name"] == "Istanbul"
         assert item["latitude"] == 41.0082
         assert item["longitude"] == 28.9784
-        assert item["date_start"] == 1453
-        assert item["date_end"] == 1453
-        assert item["date_label"] == "1453 - 1453"
+        assert item["date_start"] == "1453-01-01"
+        assert item["date_end"] == "1453-12-31"
+        assert item["date_precision"] == "year"
+        assert item["date_label"] == "1453"
         assert item["status"] == "published"
         assert item["visibility"] == "public"
         assert "id" in item
@@ -73,6 +76,122 @@ class TestStoryListingAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert data == {"stories": [], "total": 0}
+
+    async def test_list_stories_with_bounds_filters_results(self, client, db_session):
+        user = User(
+            username="mapauthor",
+            email="mapauthor@example.com",
+            password_hash=hash_password("StoryPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        in_bounds_story = Story(
+            user_id=user.id,
+            title="In Bounds",
+            summary="Visible in viewport",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.00,
+            longitude=29.00,
+        )
+        out_bounds_story = Story(
+            user_id=user.id,
+            title="Out Bounds",
+            summary="Outside viewport",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            latitude=39.93,
+            longitude=32.85,
+        )
+        null_coord_story = Story(
+            user_id=user.id,
+            title="Null Coord",
+            summary="No location",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Unknown",
+            latitude=None,
+            longitude=None,
+        )
+        db_session.add_all([in_bounds_story, out_bounds_story, null_coord_story])
+        await db_session.commit()
+
+        resp = await client.get(
+            "/stories?min_lat=40.9&max_lat=41.1&min_lng=28.9&max_lng=29.1"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert len(data["stories"]) == 1
+        assert data["stories"][0]["title"] == "In Bounds"
+
+    async def test_list_stories_with_date_overlap_filters_results(self, client, db_session):
+        user = User(
+            username="timeauthor",
+            email="timeauthor@example.com",
+            password_hash=hash_password("StoryPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        in_range_story = Story(
+            user_id=user.id,
+            title="Year 2025 Story",
+            summary="story in 2025",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.00,
+            longitude=29.00,
+            date_start=date(2025, 1, 1),
+            date_end=date(2025, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        out_range_story = Story(
+            user_id=user.id,
+            title="Year 1800 Story",
+            summary="story in 1800",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            latitude=39.93,
+            longitude=32.85,
+            date_start=date(1800, 1, 1),
+            date_end=date(1800, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add_all([in_range_story, out_range_story])
+        await db_session.commit()
+
+        resp = await client.get(
+            "/stories?query_start=2025-08-01&query_end=2025-08-31&query_precision=date"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Year 2025 Story"
+
+    async def test_list_stories_with_incomplete_bounds_returns_422(self, client):
+        resp = await client.get("/stories?min_lat=40.9&max_lat=41.1")
+
+        assert resp.status_code == 422
+
+    async def test_list_stories_with_invalid_bounds_order_returns_422(self, client):
+        resp = await client.get(
+            "/stories?min_lat=41.1&max_lat=40.9&min_lng=28.9&max_lng=29.1"
+        )
+
+        assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -145,6 +264,7 @@ class TestStoryMediaUploadAPI:
         assert "id" in media
         assert "storage_key" in media
         assert "bucket_name" in media
+        assert media["media_url"].endswith(f'/{media["bucket_name"]}/{media["storage_key"]}')
         assert "created_at" in media
 
     async def test_upload_media_invalid_mime_type(self, client, db_session, monkeypatch):
@@ -203,8 +323,9 @@ class TestStoryDetailAPI:
             place_name="Ankara",
             latitude=39.9334,
             longitude=32.8597,
-            date_start=1923,
-            date_end=1923,
+            date_start=date(1923, 1, 1),
+            date_end=date(1923, 12, 31),
+            date_precision=DatePrecision.YEAR,
         )
         db_session.add(story)
         await db_session.flush()
@@ -234,7 +355,10 @@ class TestStoryDetailAPI:
         assert data["content"] == "Detail content"
         assert data["author"] == "detailauthor"
         assert data["place_name"] == "Ankara"
-        assert data["date_label"] == "1923 - 1923"
+        assert data["date_start"] == "1923-01-01"
+        assert data["date_end"] == "1923-12-31"
+        assert data["date_precision"] == "year"
+        assert data["date_label"] == "1923"
         assert data["status"] == "published"
         assert data["visibility"] == "public"
         assert "created_at" in data
@@ -246,6 +370,7 @@ class TestStoryDetailAPI:
         assert media_item["mime_type"] == "image/png"
         assert media_item["media_type"] == "image"
         assert media_item["file_size_bytes"] == 777
+        assert media_item["media_url"].endswith("/images/stories/test/photo.png")
 
     async def test_get_story_detail_not_found(self, client):
         resp = await client.get(f"/stories/{uuid.uuid4()}")
@@ -302,7 +427,10 @@ class TestStoryCreateAPI:
         assert data["place_name"] == "Istanbul"
         assert data["latitude"] == 41.0082
         assert data["longitude"] == 28.9784
-        assert data["date_label"] == "1453 - 1453"
+        assert data["date_start"] == "1453-01-01"
+        assert data["date_end"] == "1453-12-31"
+        assert data["date_precision"] == "year"
+        assert data["date_label"] == "1453"
         assert data["status"] == "published"
         assert data["visibility"] == "public"
         assert data["media_files"] == []
@@ -346,8 +474,9 @@ class TestStoryCreateAPI:
 
         assert resp.status_code == 201
         data = resp.json()
-        assert data["date_start"] == 1453
-        assert data["date_end"] is None
+        assert data["date_start"] == "1453-01-01"
+        assert data["date_end"] == "1453-12-31"
+        assert data["date_precision"] == "year"
         assert data["date_label"] == "1453"
 
 
@@ -415,8 +544,9 @@ class TestStoryUpdateAPI:
         assert data["place_name"] == "Ankara"
         assert data["latitude"] == 39.9334
         assert data["longitude"] == 32.8597
-        assert data["date_start"] == 1920
-        assert data["date_end"] == 1923
+        assert data["date_start"] == "1920-01-01"
+        assert data["date_end"] == "1923-12-31"
+        assert data["date_precision"] == "year"
         assert data["date_label"] == "1920 - 1923"
 
     async def test_update_story_invalid_date_range_returns_422(self, client):
