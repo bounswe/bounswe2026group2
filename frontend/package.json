@@ -10,7 +10,9 @@
   "devDependencies": {
     "@capacitor/cli": "^8.3.0",
     "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0"
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-html-reporter": "^3.10.2",
+    "jest-junit": "^16.0.0"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
