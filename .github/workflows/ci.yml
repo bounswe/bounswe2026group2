@@ -5,7 +5,54 @@ on:
   pull_request:
 
 jobs:
-  # ── 0. HEALTH CHECK ──────────────────────────────────────────────────────────
+  # ── 0a. LINT & FORMAT ───────────────────────────────────────────────────────
+
+  backend-lint:
+    name: Backend Lint & Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff linter
+        working-directory: backend
+        run: ruff check .
+
+      - name: Run ruff format check
+        working-directory: backend
+        run: ruff format --check .
+
+  frontend-lint:
+    name: Frontend Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+
+  # ── 0b. HEALTH CHECK ────────────────────────────────────────────────────────
 
   backend-health:
     name: Backend Health Check
@@ -83,7 +130,7 @@ jobs:
   backend-unit:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
-    needs: [backend-health]
+    needs: [backend-health, backend-lint]
 
     steps:
       - name: Checkout code
@@ -116,6 +163,7 @@ jobs:
   frontend-unit:
     name: Frontend Unit Tests
     runs-on: ubuntu-latest
+    needs: [frontend-lint]
 
     steps:
       - name: Checkout code
