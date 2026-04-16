@@ -4,11 +4,14 @@
   "private": true,
   "scripts": {
     "test": "jest",
+    "lint": "eslint .",
     "capacitor:prepare": "node scripts/prepare-capacitor-web.mjs",
     "capacitor:sync": "node scripts/prepare-capacitor-web.mjs && npx cap sync android"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.0",
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "jest-html-reporter": "^3.10.2",

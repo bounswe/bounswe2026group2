@@ -23,3 +23,6 @@ python-multipart
 
 # Object storage (S3-compatible — works with MinIO locally and Supabase Storage in prod)
 boto3
+
+# Linting & formatting
+ruff

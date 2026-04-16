@@ -18,8 +18,7 @@ elif _raw_url.startswith("postgres://"):
     _url = _raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
 else:
     raise ValueError(
-        f"DATABASE_URL has an unexpected scheme. "
-        f"Expected postgresql:// or postgres://, got: {_raw_url[:30]!r}"
+        f"DATABASE_URL has an unexpected scheme. Expected postgresql:// or postgres://, got: {_raw_url[:30]!r}"
     )
 
 # SQL query logging
@@ -32,9 +31,7 @@ if settings.LOG_SQL:
     _log_path = Path(__file__).resolve().parents[3] / "logs" / "sql.log"
     _log_path.parent.mkdir(exist_ok=True)
 
-    _handler = logging.handlers.RotatingFileHandler(
-        _log_path, maxBytes=5 * 1024 * 1024, backupCount=3
-    )
+    _handler = logging.handlers.RotatingFileHandler(_log_path, maxBytes=5 * 1024 * 1024, backupCount=3)
     _handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
 
     _sql_logger = logging.getLogger("sqlalchemy.engine")

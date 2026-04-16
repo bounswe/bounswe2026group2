@@ -1,0 +1,16 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort (import ordering)
+]
+ignore = [
+    "E501", # line too long — handled by formatter
+]
+
+[lint.isort]
+known-first-party = ["app"]
