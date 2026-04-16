@@ -25,9 +25,7 @@ class TestHealthEndpoint:
     async def test_returns_degraded_when_db_unreachable(self, mock_engine, mock_check):
         from app.main import health
 
-        mock_engine.connect.return_value.__aenter__ = AsyncMock(
-            side_effect=Exception("DB connection refused")
-        )
+        mock_engine.connect.return_value.__aenter__ = AsyncMock(side_effect=Exception("DB connection refused"))
         mock_engine.connect.return_value.__aexit__ = AsyncMock(return_value=False)
 
         result = await health()
@@ -56,9 +54,7 @@ class TestHealthEndpoint:
     async def test_returns_degraded_when_both_unreachable(self, mock_engine, mock_check):
         from app.main import health
 
-        mock_engine.connect.return_value.__aenter__ = AsyncMock(
-            side_effect=Exception("DB down")
-        )
+        mock_engine.connect.return_value.__aenter__ = AsyncMock(side_effect=Exception("DB down"))
         mock_engine.connect.return_value.__aexit__ = AsyncMock(return_value=False)
 
         result = await health()
