@@ -44,10 +44,7 @@ ALLOWED_MIME_TYPES = {
 
 
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
-    stories = [
-        StoryResponse.from_orm_with_author(story, author_username)
-        for story, author_username in rows
-    ]
+    stories = [StoryResponse.from_orm_with_author(story, author_username) for story, author_username in rows]
     return StoryListResponse(stories=stories, total=len(stories))
 
 
@@ -95,10 +92,7 @@ def _validate_media_upload(file: UploadFile, payload: MediaUploadRequest) -> Non
     if file.content_type not in allowed_for_type:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(
-                f"Unsupported mime type '{file.content_type}' for media type "
-                f"'{payload.media_type.value}'"
-            ),
+            detail=(f"Unsupported mime type '{file.content_type}' for media type '{payload.media_type.value}'"),
         )
 
 
@@ -217,9 +211,7 @@ async def create_story_with_location(
             detail="place_name is required for story location binding",
         )
 
-    normalized_date_start, normalized_date_end, normalized_date_precision = (
-        payload.normalize_date_range()
-    )
+    normalized_date_start, normalized_date_end, normalized_date_precision = payload.normalize_date_range()
 
     story = Story(
         user_id=current_user.id,
@@ -250,9 +242,7 @@ async def update_story_with_location_and_dates(
     current_user: User,
     payload: StoryUpdateRequest,
 ) -> StoryDetailResponse:
-    story_result = await db.execute(
-        select(Story).where(Story.id == story_id, Story.user_id == current_user.id)
-    )
+    story_result = await db.execute(select(Story).where(Story.id == story_id, Story.user_id == current_user.id))
     story = story_result.scalar_one_or_none()
     if story is None:
         raise HTTPException(
@@ -267,9 +257,7 @@ async def update_story_with_location_and_dates(
             detail="place_name is required for story location binding",
         )
 
-    normalized_date_start, normalized_date_end, normalized_date_precision = (
-        payload.normalize_date_range()
-    )
+    normalized_date_start, normalized_date_end, normalized_date_precision = payload.normalize_date_range()
 
     story.title = payload.title
     story.summary = payload.summary

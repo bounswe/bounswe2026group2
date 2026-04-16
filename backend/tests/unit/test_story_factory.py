@@ -1,8 +1,6 @@
 import uuid
 from datetime import date
 
-import pytest
-
 from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
 from app.db.story import Story
 from tests.factories.story_factory import (

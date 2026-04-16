@@ -32,9 +32,7 @@ def create_access_token(user: User) -> str:
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-async def register_user(
-    db: AsyncSession, payload: UserRegisterRequest
-) -> UserResponse:
+async def register_user(db: AsyncSession, payload: UserRegisterRequest) -> UserResponse:
     email = payload.email.strip().lower()
     username = payload.username.strip()
 
@@ -67,9 +65,7 @@ async def register_user(
     return UserResponse.model_validate(user)
 
 
-async def login_user(
-    db: AsyncSession, payload: UserLoginRequest
-) -> TokenResponse:
+async def login_user(db: AsyncSession, payload: UserLoginRequest) -> TokenResponse:
     email = payload.email.strip().lower()
 
     result = await db.execute(select(User).where(User.email == email))

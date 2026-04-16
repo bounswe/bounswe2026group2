@@ -105,9 +105,7 @@ class StoryBoundsFilter(BaseModel):
         provided_count = sum(v is not None for v in values)
 
         if provided_count not in (0, 4):
-            raise ValueError(
-                "min_lat, max_lat, min_lng, max_lng must be provided together"
-            )
+            raise ValueError("min_lat, max_lat, min_lng, max_lng must be provided together")
 
         if provided_count == 4:
             if self.min_lat > self.max_lat:
@@ -167,11 +165,7 @@ class StoryResponse(BaseModel):
             else:
                 date_label = f"{date_start.isoformat()} - {date_end.isoformat()}"
         elif date_start:
-            date_label = (
-                str(date_start.year)
-                if date_precision == DatePrecision.YEAR
-                else date_start.isoformat()
-            )
+            date_label = str(date_start.year) if date_precision == DatePrecision.YEAR else date_start.isoformat()
         else:
             date_label = None
 

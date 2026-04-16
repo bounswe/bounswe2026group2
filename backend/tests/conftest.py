@@ -6,13 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 from app.db.base import Base
+from app.db.media_file import MediaFile  # noqa: F401
 from app.db.session import get_db
+from app.db.story import Story  # noqa: F401
 
 # Import all models so Base.metadata knows about them
 from app.db.user import User  # noqa: F401
-from app.db.story import Story  # noqa: F401
-from app.db.media_file import MediaFile  # noqa: F401
-
 
 # Build the async DB URL
 _url = settings.DATABASE_URL
@@ -33,9 +32,7 @@ async def db_session():
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(
-        bind=engine, class_=AsyncSession, expire_on_commit=False
-    )
+    session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     session = session_factory()
 
     yield session
@@ -54,6 +51,7 @@ async def client(db_session):
 
     # Override storage check so tests don't need MinIO
     from app.services import storage
+
     original_check = storage.check_connection
     storage.check_connection = MagicMock()
 

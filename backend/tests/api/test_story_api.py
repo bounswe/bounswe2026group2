@@ -1,6 +1,7 @@
-import pytest
 import uuid
 from datetime import date
+
+import pytest
 
 from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
@@ -122,9 +123,7 @@ class TestStoryListingAPI:
         db_session.add_all([in_bounds_story, out_bounds_story, null_coord_story])
         await db_session.commit()
 
-        resp = await client.get(
-            "/stories?min_lat=40.9&max_lat=41.1&min_lng=28.9&max_lng=29.1"
-        )
+        resp = await client.get("/stories?min_lat=40.9&max_lat=41.1&min_lng=28.9&max_lng=29.1")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -172,9 +171,7 @@ class TestStoryListingAPI:
         db_session.add_all([in_range_story, out_range_story])
         await db_session.commit()
 
-        resp = await client.get(
-            "/stories?query_start=2025-08-01&query_end=2025-08-31&query_precision=date"
-        )
+        resp = await client.get("/stories?query_start=2025-08-01&query_end=2025-08-31&query_precision=date")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -187,9 +184,7 @@ class TestStoryListingAPI:
         assert resp.status_code == 422
 
     async def test_list_stories_with_invalid_bounds_order_returns_422(self, client):
-        resp = await client.get(
-            "/stories?min_lat=41.1&max_lat=40.9&min_lng=28.9&max_lng=29.1"
-        )
+        resp = await client.get("/stories?min_lat=41.1&max_lat=40.9&min_lng=28.9&max_lng=29.1")
 
         assert resp.status_code == 422
 
@@ -264,7 +259,7 @@ class TestStoryMediaUploadAPI:
         assert "id" in media
         assert "storage_key" in media
         assert "bucket_name" in media
-        assert media["media_url"].endswith(f'/{media["bucket_name"]}/{media["storage_key"]}')
+        assert media["media_url"].endswith(f"/{media['bucket_name']}/{media['storage_key']}")
         assert "created_at" in media
 
     async def test_upload_media_invalid_mime_type(self, client, db_session, monkeypatch):

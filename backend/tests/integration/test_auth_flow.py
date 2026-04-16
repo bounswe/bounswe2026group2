@@ -1,5 +1,4 @@
 import pytest
-import pytest_asyncio
 from sqlalchemy import select
 
 from app.db.user import User
@@ -23,17 +22,13 @@ class TestRegisterAndLoginFlow:
         assert user_resp.email == "flow@example.com"
 
         # Verify password stored as hash
-        result = await db_session.execute(
-            select(User).where(User.email == "flow@example.com")
-        )
+        result = await db_session.execute(select(User).where(User.email == "flow@example.com"))
         db_user = result.scalar_one()
         assert db_user.password_hash != "FlowPass1!"
         assert verify_password("FlowPass1!", db_user.password_hash) is True
 
         # Login
-        login_payload = UserLoginRequest(
-            email="flow@example.com", password="FlowPass1!"
-        )
+        login_payload = UserLoginRequest(email="flow@example.com", password="FlowPass1!")
         token_resp = await login_user(db_session, login_payload)
         assert token_resp.access_token is not None
         assert token_resp.token_type == "bearer"
@@ -66,9 +61,7 @@ class TestDuplicateEmailRejection:
         # Confirm no duplicate user record was created
         from sqlalchemy import func
 
-        count = await db_session.execute(
-            select(func.count()).where(User.email == "dupe@example.com")
-        )
+        count = await db_session.execute(select(func.count()).where(User.email == "dupe@example.com"))
         assert count.scalar_one() == 1
 
 
@@ -87,9 +80,7 @@ class TestInvalidCredentialsRejection:
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            login_payload = UserLoginRequest(
-                email="cred@example.com", password="WrongPass1!"
-            )
+            login_payload = UserLoginRequest(email="cred@example.com", password="WrongPass1!")
             await login_user(db_session, login_payload)
         assert exc_info.value.status_code == 401
 
@@ -97,8 +88,6 @@ class TestInvalidCredentialsRejection:
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            login_payload = UserLoginRequest(
-                email="nobody@example.com", password="AnyPass1!"
-            )
+            login_payload = UserLoginRequest(email="nobody@example.com", password="AnyPass1!")
             await login_user(db_session, login_payload)
         assert exc_info.value.status_code == 401
