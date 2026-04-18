@@ -32,7 +32,7 @@ MAX_MEDIA_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
 
 ALLOWED_MIME_TYPES = {
     "image": {"image/jpeg", "image/png", "image/webp", "image/gif"},
-    "audio": {"audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4"},
+    "audio": {"audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4", "audio/webm"},
     "video": {"video/mp4", "video/webm", "video/quicktime"},
     "document": {
         "application/pdf",
@@ -89,10 +89,11 @@ def _validate_media_upload(file: UploadFile, payload: MediaUploadRequest) -> Non
         )
 
     allowed_for_type = ALLOWED_MIME_TYPES[payload.media_type.value]
-    if file.content_type not in allowed_for_type:
+    base_content_type = (file.content_type or "").split(";")[0].strip()
+    if base_content_type not in allowed_for_type:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(f"Unsupported mime type '{file.content_type}' for media type '{payload.media_type.value}'"),
+            detail=(f"Unsupported mime type '{base_content_type}' for media type '{payload.media_type.value}'"),
         )
 
 
