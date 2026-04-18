@@ -703,11 +703,12 @@ class TestStorySearchAPI:
     """API tests for GET /stories/search covering #135."""
 
     async def _seed_stories(self, db_session):
+        from datetime import date
+
         from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
         from app.db.story import Story
         from app.db.user import User
         from app.services.auth_service import hash_password
-        from datetime import date
 
         user = User(
             username="searchauthor",
@@ -790,11 +791,12 @@ class TestStorySearchAPI:
         assert data == {"stories": [], "total": 0}
 
     async def test_search_with_date_filter_narrows_results(self, client, db_session):
+        from datetime import date
+
         from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
         from app.db.story import Story
         from app.db.user import User
         from app.services.auth_service import hash_password
-        from datetime import date
 
         user = User(
             username="datefilterauthor",
