@@ -34,6 +34,8 @@ router = APIRouter(prefix="/stories", tags=["stories"])
     "",
     response_model=StoryDetailResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Create a story",
+    description="Create a new story tied to a geographic location and historical date range. Requires authentication.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
         422: {"description": "Validation error for story/location input"},
@@ -50,8 +52,11 @@ async def create_story(
 @router.put(
     "/{story_id}",
     response_model=StoryDetailResponse,
+    summary="Update a story",
+    description="Update an existing story. Only the story owner may update it. Requires authentication.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "Authenticated user is not the story owner"},
         404: {"description": "Story not found"},
         422: {"description": "Validation error for story/location input"},
     },
@@ -65,7 +70,19 @@ async def update_story(
     return await update_story_with_location_and_dates(db, story_id, current_user, payload)
 
 
-@router.get("", response_model=StoryListResponse)
+@router.get(
+    "",
+    response_model=StoryListResponse,
+    summary="List public stories",
+    description=(
+        "Return all published public stories. Optionally filter by geographic bounding box "
+        "(min_lat/max_lat/min_lng/max_lng) and/or date range (query_start/query_end/query_precision). "
+        "query_precision accepts 'year' or 'date'."
+    ),
+    responses={
+        422: {"description": "Validation error for bounds or date filter parameters"},
+    },
+)
 async def list_stories(
     min_lat: float | None = Query(default=None),
     max_lat: float | None = Query(default=None),
@@ -106,7 +123,18 @@ async def list_stories(
     )
 
 
-@router.get("/search", response_model=StoryListResponse)
+@router.get(
+    "/search",
+    response_model=StoryListResponse,
+    summary="Search stories by place name",
+    description=(
+        "Search published public stories by place name (case-insensitive substring match). "
+        "Optionally filter by date range using query_start/query_end/query_precision."
+    ),
+    responses={
+        422: {"description": "Validation error for place_name or date filter parameters"},
+    },
+)
 async def search_stories(
     place_name: str = Query(min_length=1, max_length=255),
     query_start: int | str | None = Query(default=None),
@@ -138,7 +166,11 @@ async def search_stories(
 @router.get(
     "/{story_id}",
     response_model=StoryDetailResponse,
-    responses={404: {"description": "Story not found"}},
+    summary="Get story by ID",
+    description="Return the full detail of a single story including its media files.",
+    responses={
+        404: {"description": "Story not found"},
+    },
 )
 async def get_story_by_id(
     story_id: uuid.UUID,
@@ -151,6 +183,17 @@ async def get_story_by_id(
     "/{story_id}/media",
     response_model=MediaUploadResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Upload media for a story",
+    description=(
+        "Attach an image, audio, or video file to a story. "
+        "Maximum file size is 20 MB. Requires authentication."
+    ),
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+        413: {"description": "File exceeds the 20 MB size limit"},
+        502: {"description": "Object storage backend unavailable"},
+    },
 )
 async def upload_story_media(
     story_id: uuid.UUID,
