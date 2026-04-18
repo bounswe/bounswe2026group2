@@ -602,3 +602,254 @@ class TestStoryUpdateAPI:
 
         assert update_resp.status_code == 404
         assert update_resp.json()["detail"] == "Story not found"
+
+
+# --- Issue #133: Story Creation Endpoint (additional cases) ---
+
+
+@pytest.mark.asyncio
+class TestStoryCreateAuthAPI:
+    """Additional creation tests covering #133 — auth rejection and validation."""
+
+    async def test_create_story_unauthenticated_returns_401(self, client):
+        resp = await client.post(
+            "/stories",
+            json={
+                "title": "No Auth Story",
+                "content": "Some content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+
+        assert resp.status_code == 401
+
+    async def test_create_story_missing_title_returns_422(self, client):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": "notitleuser",
+                "email": "notitle@example.com",
+                "password": "NoTitle1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": "notitle@example.com", "password": "NoTitle1!"},
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "content": "No title content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+
+        assert resp.status_code == 422
+
+    async def test_create_story_missing_content_returns_422(self, client):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": "nocontentuser",
+                "email": "nocontent@example.com",
+                "password": "NoContent1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": "nocontent@example.com", "password": "NoContent1!"},
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "No Content Story",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+
+        assert resp.status_code == 422
+
+
+# --- Issue #134: Story Retrieval Endpoint (additional cases) ---
+
+
+@pytest.mark.asyncio
+class TestStoryRetrievalAPI:
+    """Additional retrieval tests covering #134 — invalid ID format."""
+
+    async def test_get_story_with_invalid_uuid_returns_422(self, client):
+        resp = await client.get("/stories/not-a-uuid")
+
+        assert resp.status_code == 422
+
+
+# --- Issue #135: Story Search Endpoint ---
+
+
+@pytest.mark.asyncio
+class TestStorySearchAPI:
+    """API tests for GET /stories/search covering #135."""
+
+    async def _seed_stories(self, db_session):
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+        from datetime import date
+
+        user = User(
+            username="searchauthor",
+            email="searchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        istanbul_story = Story(
+            user_id=user.id,
+            title="Istanbul Story",
+            summary="About Istanbul",
+            content="Content about Istanbul",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=date(1453, 1, 1),
+            date_end=date(1453, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        ankara_story = Story(
+            user_id=user.id,
+            title="Ankara Story",
+            summary="About Ankara",
+            content="Content about Ankara",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=date(1923, 1, 1),
+            date_end=date(1923, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        draft_istanbul_story = Story(
+            user_id=user.id,
+            title="Draft Istanbul Story",
+            summary="Draft about Istanbul",
+            content="Draft content",
+            status=StoryStatus.DRAFT,
+            visibility=StoryVisibility.PRIVATE,
+            place_name="Istanbul",
+        )
+        db_session.add_all([istanbul_story, ankara_story, draft_istanbul_story])
+        await db_session.commit()
+
+        return istanbul_story, ankara_story
+
+    async def test_search_by_place_name_returns_matching_stories(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?place_name=Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Istanbul Story"
+        assert data["stories"][0]["place_name"] == "Istanbul"
+
+    async def test_search_by_place_name_returns_only_public_published(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?place_name=Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [s["title"] for s in data["stories"]]
+        assert "Draft Istanbul Story" not in titles
+
+    async def test_search_by_place_name_no_match_returns_empty(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?place_name=Trabzon")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"stories": [], "total": 0}
+
+    async def test_search_with_date_filter_narrows_results(self, client, db_session):
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+        from datetime import date
+
+        user = User(
+            username="datefilterauthor",
+            email="datefilterauthor@example.com",
+            password_hash=hash_password("DateFilter1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        old_story = Story(
+            user_id=user.id,
+            title="Old Izmir Story",
+            summary="Old",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Izmir",
+            latitude=38.4192,
+            longitude=27.1287,
+            date_start=date(1800, 1, 1),
+            date_end=date(1800, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        recent_story = Story(
+            user_id=user.id,
+            title="Recent Izmir Story",
+            summary="Recent",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Izmir",
+            latitude=38.4192,
+            longitude=27.1287,
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add_all([old_story, recent_story])
+        await db_session.commit()
+
+        resp = await client.get(
+            "/stories/search?place_name=Izmir&query_start=2020-01-01&query_end=2020-12-31&query_precision=date"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Recent Izmir Story"
+
+    async def test_search_missing_place_name_returns_422(self, client):
+        resp = await client.get("/stories/search")
+
+        assert resp.status_code == 422
+
+    async def test_search_empty_place_name_returns_422(self, client):
+        resp = await client.get("/stories/search?place_name=")
+
+        assert resp.status_code == 422
