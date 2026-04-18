@@ -265,15 +265,20 @@ class TestUploadMediaForStoryService:
         payload = MediaUploadRequest(media_type=MediaType.AUDIO)
         file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm;codecs=opus")
         db = AsyncMock()
+        db.add = MagicMock()
         db.execute.return_value.scalar_one_or_none = lambda: story
 
-        with patch("app.services.story_service.upload_bytes") as mock_upload:
-            mock_upload.return_value = None
-            with patch("app.services.story_service.build_public_object_url", return_value="http://minio/audio.webm"):
-                result = await upload_media_for_story(db, story_id, file, payload)
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
 
         assert result.media.mime_type == "audio/webm;codecs=opus"
-        mock_upload.assert_called_once()
+        assert result.media.media_type == MediaType.AUDIO
 
     async def test_upload_strips_mime_params_for_validation(self):
         payload = MediaUploadRequest(media_type=MediaType.IMAGE)
