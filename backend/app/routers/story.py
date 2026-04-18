@@ -185,8 +185,7 @@ async def get_story_by_id(
     status_code=status.HTTP_201_CREATED,
     summary="Upload media for a story",
     description=(
-        "Attach an image, audio, or video file to a story. "
-        "Maximum file size is 20 MB. Requires authentication."
+        "Attach an image, audio, or video file to a story. Maximum file size is 20 MB. Requires authentication."
     ),
     responses={
         401: {"description": "Missing or invalid authentication token"},
