@@ -23,7 +23,16 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Local History Story Map API",
+    description=(
+        "API for creating, discovering, and exploring stories tied to geographic locations "
+        "and historical dates. Supports authentication, story CRUD, geographic/date filtering, "
+        "full-text search, and media uploads."
+    ),
+    version="1.0.0",
+    lifespan=lifespan,
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
