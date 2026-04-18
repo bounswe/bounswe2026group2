@@ -259,6 +259,35 @@ class TestUploadMediaForStoryService:
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once()
 
+    async def test_upload_accepts_audio_webm(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm;codecs=opus")
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            mock_upload.return_value = None
+            with patch("app.services.story_service.build_public_object_url", return_value="http://minio/audio.webm"):
+                result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.mime_type == "audio/webm;codecs=opus"
+        mock_upload.assert_called_once()
+
+    async def test_upload_strips_mime_params_for_validation(self):
+        payload = MediaUploadRequest(media_type=MediaType.IMAGE)
+        file = _make_upload_file("clip.webm", b"audio-bytes", "audio/webm;codecs=opus")
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, uuid.uuid4(), file, payload)
+
+        assert exc_info.value.status_code == 422
+        assert "audio/webm" in exc_info.value.detail
+        mock_upload.assert_not_called()
+
     async def test_upload_rejects_unsupported_mime_type(self):
         payload = MediaUploadRequest(media_type=MediaType.IMAGE)
         file = _make_upload_file("clip.mp4", b"video-bytes", "video/mp4")
