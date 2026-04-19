@@ -35,7 +35,9 @@ class TestStorySaveFlow:
         return create_resp.json()["id"]
 
     async def test_authenticated_user_can_save_and_list_story(self, client):
-        author_token = await self._register_and_login(client, "saveflowauthor", "saveflowauthor@example.com", "FlowPass1!")
+        author_token = await self._register_and_login(
+            client, "saveflowauthor", "saveflowauthor@example.com", "FlowPass1!"
+        )
         saver_token = await self._register_and_login(client, "saveflowuser", "saveflowuser@example.com", "FlowPass2!")
         story_id = await self._create_story(client, author_token)
 
@@ -55,7 +57,9 @@ class TestStorySaveFlow:
         assert payload["stories"][0]["id"] == story_id
 
     async def test_duplicate_save_and_unsave_are_idempotent(self, client):
-        author_token = await self._register_and_login(client, "saveflowauthor2", "saveflowauthor2@example.com", "FlowPass3!")
+        author_token = await self._register_and_login(
+            client, "saveflowauthor2", "saveflowauthor2@example.com", "FlowPass3!"
+        )
         saver_token = await self._register_and_login(client, "saveflowuser2", "saveflowuser2@example.com", "FlowPass4!")
         story_id = await self._create_story(client, author_token)
 
