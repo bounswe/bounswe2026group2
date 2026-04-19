@@ -222,5 +222,10 @@ class MediaUploadResponse(BaseModel):
     media: MediaFileResponse
 
 
+class StorySaveResponse(BaseModel):
+    story_id: uuid.UUID
+    saved: bool
+
+
 class StoryDetailResponse(StoryResponse):
     media_files: list[MediaFileResponse] = Field(default_factory=list)

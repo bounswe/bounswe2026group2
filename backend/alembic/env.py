@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.base import Base  # noqa: F401 — import all models here so autogenerate sees them
 from app.db.media_file import MediaFile  # noqa: F401
 from app.db.story import Story  # noqa: F401
+from app.db.story_save import StorySave  # noqa: F401
 from app.db.user import User  # noqa: F401
 
 config = context.config
