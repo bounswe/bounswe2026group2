@@ -295,9 +295,17 @@ class TestCommentCreateRequestSchema:
         req = CommentCreateRequest(content="This is a valid comment")
         assert req.content == "This is a valid comment"
 
+    def test_trims_surrounding_whitespace(self):
+        req = CommentCreateRequest(content="  This is a valid comment  ")
+        assert req.content == "This is a valid comment"
+
     def test_rejects_empty_content(self):
         with pytest.raises(ValidationError):
             CommentCreateRequest(content="")
+
+    def test_rejects_whitespace_only_content(self):
+        with pytest.raises(ValidationError):
+            CommentCreateRequest(content="   ")
 
     def test_rejects_too_long_content(self):
         with pytest.raises(ValidationError):

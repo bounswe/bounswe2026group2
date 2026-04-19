@@ -777,7 +777,9 @@ class TestStoryCommentAPI:
         )
 
         assert resp.status_code == 422
-        assert resp.json()["detail"] == "content must not be blank"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, list)
+        assert detail[0]["loc"] == ["body", "content"]
 
     async def test_create_comment_missing_story_returns_404(self, client):
         commenter_token = await self._create_user_and_token(client, "commenter3", "commenter3@example.com")

@@ -254,17 +254,10 @@ async def create_comment_for_story(
             detail="Story not found",
         )
 
-    content = payload.content.strip()
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="content must not be blank",
-        )
-
     comment = StoryComment(
         story_id=story_id,
         user_id=current_user.id,
-        content=content,
+        content=payload.content,
     )
     db.add(comment)
     await db.commit()

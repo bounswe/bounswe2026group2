@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CommentAuthorResponse(BaseModel):
@@ -12,6 +12,13 @@ class CommentAuthorResponse(BaseModel):
 
 class CommentCreateRequest(BaseModel):
     content: str = Field(min_length=1, max_length=5000)
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def strip_content(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class CommentResponse(BaseModel):

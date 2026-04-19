@@ -404,20 +404,6 @@ class TestStoryCommentService:
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once()
 
-    async def test_create_comment_rejects_blank_content(self):
-        story_id = uuid.uuid4()
-        current_user = _make_user()
-        payload = CommentCreateRequest(content="   ")
-        db = AsyncMock()
-        db.execute.return_value.scalar_one_or_none = lambda: story_id
-
-        with pytest.raises(HTTPException) as exc_info:
-            await create_comment_for_story(db, story_id, current_user, payload)
-
-        assert exc_info.value.status_code == 422
-        assert exc_info.value.detail == "content must not be blank"
-        db.add.assert_not_called()
-
     async def test_create_comment_raises_404_when_story_missing(self):
         current_user = _make_user()
         payload = CommentCreateRequest(content="Hello")

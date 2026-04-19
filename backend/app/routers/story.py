@@ -187,7 +187,7 @@ async def get_story_by_id(
     "/{story_id}/comments",
     response_model=CommentListResponse,
     summary="List comments for a story",
-    description="Return story comments in chronological order. Comment deletion is currently out of scope.",
+    description="Return story comments in chronological order.",
     responses={
         404: {"description": "Story not found"},
     },
@@ -204,7 +204,7 @@ async def list_story_comments(
     response_model=CommentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a comment on a story",
-    description="Create a comment as the authenticated user. Comment deletion is currently out of scope.",
+    description="Create a comment as the authenticated user.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
         404: {"description": "Story not found"},

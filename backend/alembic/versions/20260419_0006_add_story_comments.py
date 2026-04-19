@@ -1,7 +1,7 @@
 """Add story comments table.
 
-Revision ID: 20260419_0004
-Revises: 20260407_0003
+Revision ID: 20260419_0006
+Revises: 20260419_0005
 Create Date: 2026-04-19 00:00:00
 """
 
@@ -13,8 +13,8 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "20260419_0004"
-down_revision: Union[str, Sequence[str], None] = "20260407_0003"
+revision: str = "20260419_0006"
+down_revision: Union[str, Sequence[str], None] = "20260419_0005"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
