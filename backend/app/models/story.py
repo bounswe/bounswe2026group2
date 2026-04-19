@@ -225,7 +225,8 @@ class MediaUploadResponse(BaseModel):
 class StorySaveResponse(BaseModel):
     story_id: uuid.UUID
     saved: bool
-      
+
+
 class StoryLikeResponse(BaseModel):
     story_id: uuid.UUID
     liked: bool
