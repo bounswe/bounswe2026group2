@@ -74,4 +74,3 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="story",
         cascade="all, delete-orphan",
     )
-
