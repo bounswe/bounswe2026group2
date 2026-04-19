@@ -8,6 +8,7 @@ from app.core.deps import get_current_user
 from app.db.enums import MediaType
 from app.db.session import get_db
 from app.db.user import User
+from app.models.comment import CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
     MediaUploadRequest,
     MediaUploadResponse,
@@ -15,18 +16,25 @@ from app.models.story import (
     StoryCreateRequest,
     StoryDateRangeFilter,
     StoryDetailResponse,
+    StoryLikeResponse,
     StoryListResponse,
     StorySaveResponse,
     StoryUpdateRequest,
 )
 from app.services.story_service import (
+    create_comment_for_story,
     create_story_with_location,
+    delete_comment_for_story,
     get_story_detail_by_id,
+    like_story,
     list_available_stories,
     list_saved_stories_for_user,
     save_story_for_user,
     search_available_stories_by_place,
     unsave_story_for_user,
+    list_comments_for_story,
+    search_available_stories_by_place,
+    unlike_story,
     update_story_with_location_and_dates,
     upload_media_for_story,
 )
@@ -197,6 +205,99 @@ async def get_story_by_id(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_story_detail_by_id(db, story_id)
+
+
+@router.get(
+    "/{story_id}/comments",
+    response_model=CommentListResponse,
+    summary="List comments for a story",
+    description="Return story comments in chronological order.",
+    responses={
+        404: {"description": "Story not found"},
+    },
+)
+async def list_story_comments(
+    story_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_comments_for_story(db, story_id)
+
+
+@router.post(
+    "/{story_id}/comments",
+    response_model=CommentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a comment on a story",
+    description="Create a comment as the authenticated user.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+        422: {"description": "Validation error for comment payload"},
+    },
+)
+async def create_story_comment(
+    story_id: uuid.UUID,
+    payload: CommentCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await create_comment_for_story(db, story_id, current_user, payload)
+
+
+@router.delete(
+    "/{story_id}/comments/{comment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a comment",
+    description="Delete a comment owned by the authenticated user.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "Authenticated user does not own the comment"},
+        404: {"description": "Story or comment not found"},
+    },
+)
+async def delete_story_comment(
+    story_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await delete_comment_for_story(db, story_id, comment_id, current_user)
+
+
+@router.post(
+    "/{story_id}/like",
+    response_model=StoryLikeResponse,
+    summary="Like a story",
+    description="Like a story as the authenticated user. Repeating the request keeps the story liked.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+    },
+)
+async def like_story_by_id(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await like_story(db, story_id, current_user)
+
+
+@router.delete(
+    "/{story_id}/like",
+    response_model=StoryLikeResponse,
+    summary="Unlike a story",
+    description="Remove the authenticated user's like from a story. Repeating the request keeps the story unliked.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+    },
+)
+async def unlike_story_by_id(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await unlike_story(db, story_id, current_user)
 
 
 @router.post(

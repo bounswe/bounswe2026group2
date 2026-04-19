@@ -1,13 +1,15 @@
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.story import Story
 from app.db.story_save import StorySave
+from app.db.story_comment import StoryComment
+from app.db.story_like import StoryLike
 from app.db.user import User
 from app.services.auth_service import hash_password
 
@@ -358,6 +360,7 @@ class TestStoryDetailAPI:
         assert data["date_label"] == "1923"
         assert data["status"] == "published"
         assert data["visibility"] == "public"
+        assert data["like_count"] == 0
         assert "created_at" in data
 
         assert len(data["media_files"]) == 1
@@ -375,6 +378,162 @@ class TestStoryDetailAPI:
         assert resp.status_code == 404
         data = resp.json()
         assert data["detail"] == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStoryLikeAPI:
+    async def _create_user_and_token(self, client, username, email):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": "StoryLike1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": "StoryLike1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_like_story_success(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi", "likeauthorapi@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi", "likerapi@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "API Like Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "story_id": story_id,
+            "liked": True,
+            "like_count": 1,
+        }
+
+    async def test_duplicate_like_is_idempotent_and_persists_once(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "likeauthorapi2", "likeauthorapi2@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi2", "likerapi2@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Duplicate Like Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        first_resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        second_resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        like_count_result = await db_session.execute(
+            select(func.count(StoryLike.id)).where(StoryLike.story_id == uuid.UUID(story_id))
+        )
+
+        assert first_resp.status_code == 200
+        assert second_resp.status_code == 200
+        assert first_resp.json()["like_count"] == 1
+        assert second_resp.json()["like_count"] == 1
+        assert like_count_result.scalar_one() == 1
+
+    async def test_unlike_story_success_and_repeat_is_idempotent(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi3", "likeauthorapi3@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi3", "likerapi3@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Unlike Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Izmir",
+                "latitude": 38.4237,
+                "longitude": 27.1428,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        first_unlike = await client.delete(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        second_unlike = await client.delete(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        detail_resp = await client.get(f"/stories/{story_id}")
+
+        assert first_unlike.status_code == 200
+        assert second_unlike.status_code == 200
+        assert first_unlike.json()["liked"] is False
+        assert second_unlike.json()["liked"] is False
+        assert first_unlike.json()["like_count"] == 0
+        assert second_unlike.json()["like_count"] == 0
+        assert detail_resp.json()["like_count"] == 0
+
+    async def test_like_story_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi4", "likerapi4@example.com")
+
+        resp = await client.post(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_unlike_story_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi5", "likerapi5@example.com")
+
+        resp = await client.delete(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_like_story_requires_authentication(self, client):
+        resp = await client.post(f"/stories/{uuid.uuid4()}/like")
+
+        assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -695,6 +854,264 @@ class TestStoryRetrievalAPI:
         resp = await client.get("/stories/not-a-uuid")
 
         assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestStoryCommentAPI:
+    async def _create_user_and_token(self, client, username, email):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": "CommentPass1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": "CommentPass1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_create_comment_success(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor", "commentauthor@example.com")
+        commenter_token = await self._create_user_and_token(client, "commenter", "commenter@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Comments",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "Great story"},
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["story_id"] == story_id
+        assert data["content"] == "Great story"
+        assert data["author"]["username"] == "commenter"
+        assert "created_at" in data
+        assert "updated_at" in data
+
+    async def test_create_comment_requires_authentication(self, client):
+        resp = await client.post(f"/stories/{uuid.uuid4()}/comments", json={"content": "Hello"})
+        assert resp.status_code == 401
+
+    async def test_create_comment_rejects_blank_content(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor2", "commentauthor2@example.com")
+        commenter_token = await self._create_user_and_token(client, "commenter2", "commenter2@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Blank Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "   "},
+        )
+
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert isinstance(detail, list)
+        assert detail[0]["loc"] == ["body", "content"]
+
+    async def test_create_comment_missing_story_returns_404(self, client):
+        commenter_token = await self._create_user_and_token(client, "commenter3", "commenter3@example.com")
+
+        resp = await client.post(
+            f"/stories/{uuid.uuid4()}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "Hello"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_list_comments_success_in_chronological_order(self, client, db_session):
+        story_author = User(
+            username="storycommentauthor",
+            email="storycommentauthor@example.com",
+            password_hash=hash_password("StoryPass1!"),
+            display_name="Story Author",
+        )
+        first_commenter = User(
+            username="firstcommenter",
+            email="firstcommenter@example.com",
+            password_hash=hash_password("StoryPass1!"),
+            display_name="First Commenter",
+        )
+        second_commenter = User(
+            username="secondcommenter",
+            email="secondcommenter@example.com",
+            password_hash=hash_password("StoryPass1!"),
+            display_name="Second Commenter",
+        )
+        db_session.add_all([story_author, first_commenter, second_commenter])
+        await db_session.flush()
+
+        story = Story(
+            user_id=story_author.id,
+            title="Comment List Story",
+            summary="summary",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+        )
+        db_session.add(story)
+        await db_session.flush()
+
+        first_comment = StoryComment(
+            story_id=story.id,
+            user_id=first_commenter.id,
+            content="First comment",
+            created_at=datetime(2026, 4, 19, 12, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 4, 19, 12, 0, tzinfo=timezone.utc),
+        )
+        second_comment = StoryComment(
+            story_id=story.id,
+            user_id=second_commenter.id,
+            content="Second comment",
+            created_at=datetime(2026, 4, 19, 12, 5, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 4, 19, 12, 5, tzinfo=timezone.utc),
+        )
+        db_session.add_all([first_comment, second_comment])
+        await db_session.commit()
+
+        resp = await client.get(f"/stories/{story.id}/comments")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+        assert [comment["content"] for comment in data["comments"]] == ["First comment", "Second comment"]
+        assert data["comments"][0]["author"]["username"] == "firstcommenter"
+        assert data["comments"][1]["author"]["display_name"] == "Second Commenter"
+
+    async def test_list_comments_missing_story_returns_404(self, client):
+        resp = await client.get(f"/stories/{uuid.uuid4()}/comments")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_delete_comment_success_for_owner(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor4", "commentauthor4@example.com")
+        commenter_token = await self._create_user_and_token(client, "commenter4", "commenter4@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Deletable Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Izmir",
+                "latitude": 38.4237,
+                "longitude": 27.1428,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        create_comment_resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "Delete me"},
+        )
+        comment_id = create_comment_resp.json()["id"]
+
+        delete_resp = await client.delete(
+            f"/stories/{story_id}/comments/{comment_id}",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+        )
+        list_resp = await client.get(f"/stories/{story_id}/comments")
+
+        assert delete_resp.status_code == 204
+        assert list_resp.status_code == 200
+        assert list_resp.json() == {"comments": [], "total": 0}
+
+    async def test_delete_comment_returns_403_for_non_owner(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor5", "commentauthor5@example.com")
+        owner_token = await self._create_user_and_token(client, "commentowner5", "commentowner5@example.com")
+        other_user_token = await self._create_user_and_token(client, "commentother5", "commentother5@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Protected Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Bursa",
+                "latitude": 40.1826,
+                "longitude": 29.0665,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        create_comment_resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"content": "Cannot delete me"},
+        )
+        comment_id = create_comment_resp.json()["id"]
+
+        delete_resp = await client.delete(
+            f"/stories/{story_id}/comments/{comment_id}",
+            headers={"Authorization": f"Bearer {other_user_token}"},
+        )
+
+        assert delete_resp.status_code == 403
+        assert delete_resp.json()["detail"] == "Not allowed to delete this comment"
+
+    async def test_delete_comment_missing_comment_returns_404(self, client):
+        commenter_token = await self._create_user_and_token(client, "commenter6", "commenter6@example.com")
+        author_token = await self._create_user_and_token(client, "commentauthor6", "commentauthor6@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story For Missing Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Adana",
+                "latitude": 37.0,
+                "longitude": 35.3213,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        delete_resp = await client.delete(
+            f"/stories/{story_id}/comments/{uuid.uuid4()}",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+        )
+
+        assert delete_resp.status_code == 404
+        assert delete_resp.json()["detail"] == "Comment not found"
 
 
 # --- Issue #135: Story Search Endpoint ---
