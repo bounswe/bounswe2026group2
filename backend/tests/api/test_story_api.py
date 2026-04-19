@@ -2,11 +2,13 @@ import uuid
 from datetime import date, datetime, timezone
 
 import pytest
+from sqlalchemy import func, select
 
 from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.story import Story
 from app.db.story_comment import StoryComment
+from app.db.story_like import StoryLike
 from app.db.user import User
 from app.services.auth_service import hash_password
 
@@ -357,6 +359,7 @@ class TestStoryDetailAPI:
         assert data["date_label"] == "1923"
         assert data["status"] == "published"
         assert data["visibility"] == "public"
+        assert data["like_count"] == 0
         assert "created_at" in data
 
         assert len(data["media_files"]) == 1
@@ -374,6 +377,162 @@ class TestStoryDetailAPI:
         assert resp.status_code == 404
         data = resp.json()
         assert data["detail"] == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStoryLikeAPI:
+    async def _create_user_and_token(self, client, username, email):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": "StoryLike1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": "StoryLike1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_like_story_success(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi", "likeauthorapi@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi", "likerapi@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "API Like Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "story_id": story_id,
+            "liked": True,
+            "like_count": 1,
+        }
+
+    async def test_duplicate_like_is_idempotent_and_persists_once(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "likeauthorapi2", "likeauthorapi2@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi2", "likerapi2@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Duplicate Like Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        first_resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        second_resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        like_count_result = await db_session.execute(
+            select(func.count(StoryLike.id)).where(StoryLike.story_id == uuid.UUID(story_id))
+        )
+
+        assert first_resp.status_code == 200
+        assert second_resp.status_code == 200
+        assert first_resp.json()["like_count"] == 1
+        assert second_resp.json()["like_count"] == 1
+        assert like_count_result.scalar_one() == 1
+
+    async def test_unlike_story_success_and_repeat_is_idempotent(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi3", "likeauthorapi3@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi3", "likerapi3@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Unlike Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Izmir",
+                "latitude": 38.4237,
+                "longitude": 27.1428,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        first_unlike = await client.delete(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        second_unlike = await client.delete(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        detail_resp = await client.get(f"/stories/{story_id}")
+
+        assert first_unlike.status_code == 200
+        assert second_unlike.status_code == 200
+        assert first_unlike.json()["liked"] is False
+        assert second_unlike.json()["liked"] is False
+        assert first_unlike.json()["like_count"] == 0
+        assert second_unlike.json()["like_count"] == 0
+        assert detail_resp.json()["like_count"] == 0
+
+    async def test_like_story_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi4", "likerapi4@example.com")
+
+        resp = await client.post(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_unlike_story_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi5", "likerapi5@example.com")
+
+        resp = await client.delete(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_like_story_requires_authentication(self, client):
+        resp = await client.post(f"/stories/{uuid.uuid4()}/like")
+
+        assert resp.status_code == 401
 
 
 @pytest.mark.asyncio

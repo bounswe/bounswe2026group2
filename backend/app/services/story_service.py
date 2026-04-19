@@ -3,7 +3,8 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,6 +12,7 @@ from app.db.enums import StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.story import Story
 from app.db.story_comment import StoryComment
+from app.db.story_like import StoryLike
 from app.db.user import User
 from app.models.comment import CommentAuthorResponse, CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
@@ -19,6 +21,7 @@ from app.models.story import (
     MediaUploadResponse,
     StoryCreateRequest,
     StoryDetailResponse,
+    StoryLikeResponse,
     StoryListResponse,
     StoryResponse,
     StoryUpdateRequest,
@@ -71,10 +74,23 @@ def _map_media_file(media: MediaFile) -> MediaFileResponse:
     )
 
 
-def _map_story_detail(story: Story, author_username: str) -> StoryDetailResponse:
+def _map_story_detail(
+    story: Story,
+    author_username: str,
+    like_count: int,
+) -> StoryDetailResponse:
     story_response = StoryResponse.from_orm_with_author(story, author_username)
     media_files = [_map_media_file(media) for media in story.media_files]
-    return StoryDetailResponse(**story_response.model_dump(), media_files=media_files)
+    return StoryDetailResponse(
+        **story_response.model_dump(),
+        media_files=media_files,
+        like_count=like_count,
+    )
+
+
+async def _get_story_like_count(db: AsyncSession, story_id: uuid.UUID) -> int:
+    result = await db.execute(select(func.count(StoryLike.id)).where(StoryLike.story_id == story_id))
+    return result.scalar_one()
 
 
 def _map_comment_row(comment: StoryComment, author: User) -> CommentResponse:
@@ -213,7 +229,8 @@ async def get_story_detail_by_id(
         )
 
     story, author_username = row
-    return _map_story_detail(story, author_username)
+    like_count = await _get_story_like_count(db, story.id)
+    return _map_story_detail(story, author_username, like_count)
 
 
 async def list_comments_for_story(
@@ -337,7 +354,8 @@ async def create_story_with_location(
     await db.refresh(story)
 
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[])
+    like_count = await _get_story_like_count(db, story.id)
+    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
 
 
 async def update_story_with_location_and_dates(
@@ -377,7 +395,82 @@ async def update_story_with_location_and_dates(
     await db.refresh(story)
 
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[])
+    like_count = await _get_story_like_count(db, story.id)
+    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
+
+
+async def like_story(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+) -> StoryLikeResponse:
+    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
+    story_exists = story_result.scalar_one_or_none()
+    if story_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    existing_like_result = await db.execute(
+        select(StoryLike).where(
+            StoryLike.story_id == story_id,
+            StoryLike.user_id == current_user.id,
+        )
+    )
+    existing_like = existing_like_result.scalar_one_or_none()
+
+    if existing_like is None:
+        db.add(
+            StoryLike(
+                story_id=story_id,
+                user_id=current_user.id,
+            )
+        )
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+
+    like_count = await _get_story_like_count(db, story_id)
+    return StoryLikeResponse(
+        story_id=story_id,
+        liked=True,
+        like_count=like_count,
+    )
+
+
+async def unlike_story(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+) -> StoryLikeResponse:
+    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
+    story_exists = story_result.scalar_one_or_none()
+    if story_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    existing_like_result = await db.execute(
+        select(StoryLike).where(
+            StoryLike.story_id == story_id,
+            StoryLike.user_id == current_user.id,
+        )
+    )
+    existing_like = existing_like_result.scalar_one_or_none()
+
+    if existing_like is not None:
+        await db.delete(existing_like)
+        await db.commit()
+
+    like_count = await _get_story_like_count(db, story_id)
+    return StoryLikeResponse(
+        story_id=story_id,
+        liked=False,
+        like_count=like_count,
+    )
 
 
 async def upload_media_for_story(

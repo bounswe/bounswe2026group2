@@ -13,6 +13,7 @@ from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:
     from app.db.media_file import MediaFile
     from app.db.story_comment import StoryComment
+    from app.db.story_like import StoryLike
     from app.db.user import User
 
 
@@ -68,3 +69,9 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="story",
         cascade="all, delete-orphan",
     )
+
+    story_likes: Mapped[list["StoryLike"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+    )
+
