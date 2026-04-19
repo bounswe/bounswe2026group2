@@ -222,5 +222,12 @@ class MediaUploadResponse(BaseModel):
     media: MediaFileResponse
 
 
+class StoryLikeResponse(BaseModel):
+    story_id: uuid.UUID
+    liked: bool
+    like_count: int = Field(default=0, ge=0)
+
+
 class StoryDetailResponse(StoryResponse):
     media_files: list[MediaFileResponse] = Field(default_factory=list)
+    like_count: int = Field(default=0, ge=0)

@@ -15,14 +15,17 @@ from app.models.story import (
     StoryCreateRequest,
     StoryDateRangeFilter,
     StoryDetailResponse,
+    StoryLikeResponse,
     StoryListResponse,
     StoryUpdateRequest,
 )
 from app.services.story_service import (
     create_story_with_location,
     get_story_detail_by_id,
+    like_story,
     list_available_stories,
     search_available_stories_by_place,
+    unlike_story,
     update_story_with_location_and_dates,
     upload_media_for_story,
 )
@@ -177,6 +180,42 @@ async def get_story_by_id(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_story_detail_by_id(db, story_id)
+
+
+@router.post(
+    "/{story_id}/like",
+    response_model=StoryLikeResponse,
+    summary="Like a story",
+    description="Like a story as the authenticated user. Repeating the request keeps the story liked.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+    },
+)
+async def like_story_by_id(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await like_story(db, story_id, current_user)
+
+
+@router.delete(
+    "/{story_id}/like",
+    response_model=StoryLikeResponse,
+    summary="Unlike a story",
+    description="Remove the authenticated user's like from a story. Repeating the request keeps the story unliked.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+    },
+)
+async def unlike_story_by_id(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await unlike_story(db, story_id, current_user)
 
 
 @router.post(
