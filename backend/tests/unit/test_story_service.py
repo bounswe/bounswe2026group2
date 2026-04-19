@@ -9,10 +9,14 @@ from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
 from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
+from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdateRequest
 from app.services.story_service import (
+    create_comment_for_story,
     create_story_with_location,
+    delete_comment_for_story,
     get_story_detail_by_id,
+    list_comments_for_story,
     list_available_stories,
     search_available_stories_by_place,
     update_story_with_location_and_dates,
@@ -62,6 +66,29 @@ def _make_media_file(**overrides):
         "alt_text": None,
         "caption": None,
         "created_at": datetime.now(timezone.utc),
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _make_user(**overrides):
+    base = {
+        "id": uuid.uuid4(),
+        "username": "storyauthor",
+        "display_name": "Story Author",
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _make_comment(**overrides):
+    base = {
+        "id": uuid.uuid4(),
+        "story_id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "content": "Comment content",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -315,6 +342,148 @@ class TestGetStoryDetailByIdService:
 
         with pytest.raises(HTTPException) as exc_info:
             await get_story_detail_by_id(db, uuid.uuid4())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStoryCommentService:
+    async def test_list_comments_returns_comments_in_order(self):
+        story_id = uuid.uuid4()
+        first_author = _make_user()
+        second_author = _make_user(username="otherauthor", display_name="Other Author")
+        first_comment = _make_comment(story_id=story_id, content="First")
+        second_comment = _make_comment(story_id=story_id, content="Second")
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(all=lambda: [(first_comment, first_author), (second_comment, second_author)]),
+        ]
+
+        result = await list_comments_for_story(db, story_id)
+
+        assert result.total == 2
+        assert [comment.content for comment in result.comments] == ["First", "Second"]
+        assert result.comments[0].author.username == "storyauthor"
+        assert result.comments[1].author.username == "otherauthor"
+
+    async def test_list_comments_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await list_comments_for_story(db, uuid.uuid4())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_create_comment_success(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        payload = CommentCreateRequest(content="  New comment  ")
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story_id
+
+        async def _refresh_side_effect(comment_obj):
+            comment_obj.id = uuid.uuid4()
+            comment_obj.created_at = datetime.now(timezone.utc)
+            comment_obj.updated_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        result = await create_comment_for_story(db, story_id, current_user, payload)
+
+        assert result.story_id == story_id
+        assert result.content == "New comment"
+        assert result.author.username == "storyauthor"
+        db.add.assert_called_once()
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once()
+
+    async def test_create_comment_rejects_blank_content(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        payload = CommentCreateRequest(content="   ")
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story_id
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_comment_for_story(db, story_id, current_user, payload)
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "content must not be blank"
+        db.add.assert_not_called()
+
+    async def test_create_comment_raises_404_when_story_missing(self):
+        current_user = _make_user()
+        payload = CommentCreateRequest(content="Hello")
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_comment_for_story(db, uuid.uuid4(), current_user, payload)
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_delete_comment_success_for_owner(self):
+        story_id = uuid.uuid4()
+        comment_id = uuid.uuid4()
+        current_user = _make_user()
+        comment = _make_comment(id=comment_id, story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: comment),
+        ]
+
+        await delete_comment_for_story(db, story_id, comment_id, current_user)
+
+        db.delete.assert_awaited_once_with(comment)
+        db.commit.assert_awaited_once()
+
+    async def test_delete_comment_raises_403_for_non_owner(self):
+        story_id = uuid.uuid4()
+        comment_id = uuid.uuid4()
+        current_user = _make_user()
+        comment = _make_comment(id=comment_id, story_id=story_id, user_id=uuid.uuid4())
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: comment),
+        ]
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_comment_for_story(db, story_id, comment_id, current_user)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Not allowed to delete this comment"
+        db.delete.assert_not_awaited()
+
+    async def test_delete_comment_raises_404_when_comment_missing(self):
+        story_id = uuid.uuid4()
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_comment_for_story(db, story_id, uuid.uuid4(), _make_user())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Comment not found"
+
+    async def test_delete_comment_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_comment_for_story(db, uuid.uuid4(), uuid.uuid4(), _make_user())
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"

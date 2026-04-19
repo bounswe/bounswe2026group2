@@ -10,7 +10,9 @@ from sqlalchemy.orm import selectinload
 from app.db.enums import StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.story import Story
+from app.db.story_comment import StoryComment
 from app.db.user import User
+from app.models.comment import CommentAuthorResponse, CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
     MediaFileResponse,
     MediaUploadRequest,
@@ -73,6 +75,21 @@ def _map_story_detail(story: Story, author_username: str) -> StoryDetailResponse
     story_response = StoryResponse.from_orm_with_author(story, author_username)
     media_files = [_map_media_file(media) for media in story.media_files]
     return StoryDetailResponse(**story_response.model_dump(), media_files=media_files)
+
+
+def _map_comment_row(comment: StoryComment, author: User) -> CommentResponse:
+    return CommentResponse(
+        id=comment.id,
+        story_id=comment.story_id,
+        content=comment.content,
+        author=CommentAuthorResponse(
+            id=author.id,
+            username=author.username,
+            display_name=author.display_name,
+        ),
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+    )
 
 
 def _validate_media_upload(file: UploadFile, payload: MediaUploadRequest) -> None:
@@ -197,6 +214,100 @@ async def get_story_detail_by_id(
 
     story, author_username = row
     return _map_story_detail(story, author_username)
+
+
+async def list_comments_for_story(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+) -> CommentListResponse:
+    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
+    story_exists = story_result.scalar_one_or_none()
+    if story_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    stmt = (
+        select(StoryComment, User)
+        .join(User, StoryComment.user_id == User.id)
+        .where(StoryComment.story_id == story_id)
+        .order_by(StoryComment.created_at.asc(), StoryComment.id.asc())
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    comments = [_map_comment_row(comment, author) for comment, author in rows]
+    return CommentListResponse(comments=comments, total=len(comments))
+
+
+async def create_comment_for_story(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+    payload: CommentCreateRequest,
+) -> CommentResponse:
+    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
+    story_exists = story_result.scalar_one_or_none()
+    if story_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="content must not be blank",
+        )
+
+    comment = StoryComment(
+        story_id=story_id,
+        user_id=current_user.id,
+        content=content,
+    )
+    db.add(comment)
+    await db.commit()
+    await db.refresh(comment)
+
+    return _map_comment_row(comment, current_user)
+
+
+async def delete_comment_for_story(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    current_user: User,
+) -> None:
+    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
+    story_exists = story_result.scalar_one_or_none()
+    if story_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    comment_result = await db.execute(
+        select(StoryComment).where(
+            StoryComment.id == comment_id,
+            StoryComment.story_id == story_id,
+        )
+    )
+    comment = comment_result.scalar_one_or_none()
+    if comment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Comment not found",
+        )
+
+    if comment.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not allowed to delete this comment",
+        )
+
+    await db.delete(comment)
+    await db.commit()
 
 
 async def create_story_with_location(
