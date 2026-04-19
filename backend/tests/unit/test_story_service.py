@@ -13,8 +13,10 @@ from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdate
 from app.services.story_service import (
     create_story_with_location,
     get_story_detail_by_id,
+    like_story,
     list_available_stories,
     search_available_stories_by_place,
+    unlike_story,
     update_story_with_location_and_dates,
     upload_media_for_story,
 )
@@ -35,6 +37,7 @@ def _make_story(**overrides):
         "status": StoryStatus.PUBLISHED,
         "visibility": StoryVisibility.PUBLIC,
         "created_at": datetime.now(timezone.utc),
+        "story_likes": [],
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -292,7 +295,11 @@ class TestGetStoryDetailByIdService:
         story_id = uuid.uuid4()
         media_1 = _make_media_file(story_id=story_id, original_filename="photo1.png")
         media_2 = _make_media_file(story_id=story_id, original_filename="photo2.png")
-        story = _make_story(id=story_id, media_files=[media_1, media_2])
+        story = _make_story(
+            id=story_id,
+            media_files=[media_1, media_2],
+            story_likes=[SimpleNamespace(), SimpleNamespace()],
+        )
 
         db = AsyncMock()
         db.execute.return_value.one_or_none = lambda: (story, "storyauthor")
@@ -307,6 +314,7 @@ class TestGetStoryDetailByIdService:
         assert result.media_files[1].original_filename == "photo2.png"
         assert result.media_files[0].media_url.endswith("/images/stories/key.png")
         assert result.media_files[1].media_url.endswith("/images/stories/key.png")
+        assert result.like_count == 2
         db.execute.assert_awaited_once()
 
     async def test_raises_404_when_story_not_found(self):
@@ -318,6 +326,95 @@ class TestGetStoryDetailByIdService:
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStoryLikeService:
+    async def test_like_story_creates_like_and_returns_count(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+            SimpleNamespace(scalar_one=lambda: 1),
+        ]
+
+        result = await like_story(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.liked is True
+        assert result.like_count == 1
+        db.commit.assert_awaited_once()
+        added_like = db.add.call_args.args[0]
+        assert added_like.story_id == story_id
+        assert added_like.user_id == current_user.id
+
+    async def test_like_story_is_idempotent_when_like_exists(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        existing_like = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_like),
+            SimpleNamespace(scalar_one=lambda: 1),
+        ]
+
+        result = await like_story(db, story_id, current_user)
+
+        assert result.liked is True
+        assert result.like_count == 1
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
+    async def test_like_story_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await like_story(db, uuid.uuid4(), SimpleNamespace(id=uuid.uuid4()))
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_unlike_story_deletes_like_and_returns_zero_count(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        existing_like = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_like),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await unlike_story(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.liked is False
+        assert result.like_count == 0
+        db.delete.assert_awaited_once_with(existing_like)
+        db.commit.assert_awaited_once()
+
+    async def test_unlike_story_is_idempotent_when_like_missing(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await unlike_story(db, story_id, current_user)
+
+        assert result.liked is False
+        assert result.like_count == 0
+        db.delete.assert_not_awaited()
+        db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
