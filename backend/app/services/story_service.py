@@ -269,7 +269,11 @@ async def list_saved_stories_for_user(
         select(Story, User.username)
         .join(StorySave, StorySave.story_id == Story.id)
         .join(User, Story.user_id == User.id)
-        .where(StorySave.user_id == current_user.id)
+        .where(
+            StorySave.user_id == current_user.id,
+            Story.status == StoryStatus.PUBLISHED,
+            Story.visibility == StoryVisibility.PUBLIC,
+        )
         .order_by(StorySave.created_at.desc())
     )
 

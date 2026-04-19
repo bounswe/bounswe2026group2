@@ -171,7 +171,7 @@ async def search_stories(
     "/saved",
     response_model=StoryListResponse,
     summary="List saved stories",
-    description="Return the authenticated user's saved stories.",
+    description="Return the authenticated user's saved stories that are still published and public.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
     },

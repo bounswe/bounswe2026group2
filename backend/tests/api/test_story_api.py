@@ -1020,6 +1020,51 @@ class TestStorySaveAPI:
         assert data["total"] == 1
         assert data["stories"][0]["title"] == "First Saved Story"
 
+    async def test_list_saved_stories_excludes_saved_stories_that_are_no_longer_public(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "saveauthor5", "saveauthor5@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser7", "saver7@example.com")
+
+        public_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Still Public Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        hidden_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Later Hidden Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        public_story_id = public_story_resp.json()["id"]
+        hidden_story_id = hidden_story_resp.json()["id"]
+
+        await client.post(f"/stories/{public_story_id}/save", headers={"Authorization": f"Bearer {saver_token}"})
+        await client.post(f"/stories/{hidden_story_id}/save", headers={"Authorization": f"Bearer {saver_token}"})
+
+        hidden_story = await db_session.get(Story, uuid.UUID(hidden_story_id))
+        hidden_story.visibility = StoryVisibility.PRIVATE
+        await db_session.commit()
+
+        resp = await client.get("/stories/saved", headers={"Authorization": f"Bearer {saver_token}"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert [story["id"] for story in data["stories"]] == [public_story_id]
+
     async def test_save_story_missing_story_returns_404(self, client):
         saver_token = await self._create_user_and_token(client, "saveruser6", "saver6@example.com")
 

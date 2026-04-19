@@ -426,6 +426,19 @@ class TestStorySaveService:
         assert result.stories[0].id == saved_story.id
         assert result.stories[0].author == "storyauthor"
 
+    async def test_list_saved_stories_query_filters_to_public_published(self):
+        current_user = _make_user()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await list_saved_stories_for_user(db, current_user)
+
+        stmt = db.execute.await_args.args[0]
+        where_clause = str(stmt.whereclause)
+        assert "story_saves.user_id" in where_clause
+        assert "stories.status" in where_clause
+        assert "stories.visibility" in where_clause
+
 
 @pytest.mark.asyncio
 class TestCreateStoryWithLocationService:
