@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
+from app.models.comment import CommentCreateRequest
 from app.models.story import (
     MediaUploadRequest,
     StoryBoundsFilter,
@@ -287,6 +288,28 @@ class TestMediaUploadRequestSchema:
     def test_rejects_caption_too_long(self):
         with pytest.raises(ValidationError):
             MediaUploadRequest(media_type=MediaType.IMAGE, caption="x" * 501)
+
+
+class TestCommentCreateRequestSchema:
+    def test_valid_payload(self):
+        req = CommentCreateRequest(content="This is a valid comment")
+        assert req.content == "This is a valid comment"
+
+    def test_trims_surrounding_whitespace(self):
+        req = CommentCreateRequest(content="  This is a valid comment  ")
+        assert req.content == "This is a valid comment"
+
+    def test_rejects_empty_content(self):
+        with pytest.raises(ValidationError):
+            CommentCreateRequest(content="")
+
+    def test_rejects_whitespace_only_content(self):
+        with pytest.raises(ValidationError):
+            CommentCreateRequest(content="   ")
+
+    def test_rejects_too_long_content(self):
+        with pytest.raises(ValidationError):
+            CommentCreateRequest(content="x" * 5001)
 
 
 def _make_story_obj(**overrides):

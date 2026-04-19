@@ -9,6 +9,7 @@ from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.db.story import Story
+    from app.db.story_comment import StoryComment
     from app.db.story_like import StoryLike
 
 
@@ -41,6 +42,11 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    comments: Mapped[list["StoryComment"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
     story_likes: Mapped[list["StoryLike"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",

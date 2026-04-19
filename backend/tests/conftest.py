@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.db.media_file import MediaFile  # noqa: F401
 from app.db.session import get_db
 from app.db.story import Story  # noqa: F401
+from app.db.story_comment import StoryComment  # noqa: F401
 from app.db.story_like import StoryLike  # noqa: F401
 
 # Import all models so Base.metadata knows about them
