@@ -280,6 +280,26 @@ class TestUploadMediaForStoryService:
         assert result.media.mime_type == "audio/webm;codecs=opus"
         assert result.media.media_type == MediaType.AUDIO
 
+    async def test_upload_accepts_audio_webm_mixed_case(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.webm", b"audio-bytes", "Audio/WebM;codecs=opus")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.media_type == MediaType.AUDIO
+
     async def test_upload_strips_mime_params_for_validation(self):
         payload = MediaUploadRequest(media_type=MediaType.IMAGE)
         file = _make_upload_file("clip.webm", b"audio-bytes", "audio/webm;codecs=opus")

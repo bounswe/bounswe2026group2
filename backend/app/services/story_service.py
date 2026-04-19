@@ -105,7 +105,7 @@ def _validate_media_upload(file: UploadFile, payload: MediaUploadRequest) -> Non
         )
 
     allowed_for_type = ALLOWED_MIME_TYPES[payload.media_type.value]
-    base_content_type = (file.content_type or "").split(";")[0].strip()
+    base_content_type = (file.content_type or "").split(";")[0].strip().lower()
     if base_content_type not in allowed_for_type:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
