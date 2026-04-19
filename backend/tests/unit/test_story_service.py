@@ -295,14 +295,13 @@ class TestGetStoryDetailByIdService:
         story_id = uuid.uuid4()
         media_1 = _make_media_file(story_id=story_id, original_filename="photo1.png")
         media_2 = _make_media_file(story_id=story_id, original_filename="photo2.png")
-        story = _make_story(
-            id=story_id,
-            media_files=[media_1, media_2],
-            story_likes=[SimpleNamespace(), SimpleNamespace()],
-        )
+        story = _make_story(id=story_id, media_files=[media_1, media_2])
 
         db = AsyncMock()
-        db.execute.return_value.one_or_none = lambda: (story, "storyauthor")
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 2),
+        ]
 
         result = await get_story_detail_by_id(db, story_id)
 
@@ -315,7 +314,7 @@ class TestGetStoryDetailByIdService:
         assert result.media_files[0].media_url.endswith("/images/stories/key.png")
         assert result.media_files[1].media_url.endswith("/images/stories/key.png")
         assert result.like_count == 2
-        db.execute.assert_awaited_once()
+        assert db.execute.await_count == 2
 
     async def test_raises_404_when_story_not_found(self):
         db = AsyncMock()
@@ -442,6 +441,7 @@ class TestCreateStoryWithLocationService:
             story_obj.visibility = StoryVisibility.PUBLIC
 
         db.refresh.side_effect = _refresh_side_effect
+        db.execute.return_value.scalar_one = lambda: 0
 
         result = await create_story_with_location(db, current_user, payload)
 
@@ -456,6 +456,7 @@ class TestCreateStoryWithLocationService:
         assert result.status == StoryStatus.PUBLISHED
         assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
+        assert result.like_count == 0
         db.add.assert_called_once()
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once()
@@ -499,7 +500,10 @@ class TestUpdateStoryWithLocationAndDatesService:
         current_user = SimpleNamespace(id=story.user_id, username="authoruser")
 
         db = AsyncMock()
-        db.execute.return_value.scalar_one_or_none = lambda: story
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one=lambda: 4),
+        ]
 
         result = await update_story_with_location_and_dates(db, story_id, current_user, payload)
 
@@ -514,6 +518,7 @@ class TestUpdateStoryWithLocationAndDatesService:
         assert result.date_end == date(1923, 12, 31)
         assert result.date_precision == DatePrecision.YEAR
         assert result.date_label == "1920 - 1923"
+        assert result.like_count == 4
         assert result.media_files == []
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once_with(story)

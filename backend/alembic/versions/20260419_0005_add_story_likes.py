@@ -1,6 +1,6 @@
 """Add story likes table.
 
-Revision ID: 20260419_0004
+Revision ID: 20260419_0005
 Revises: 20260407_0003
 Create Date: 2026-04-19 00:00:00
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "20260419_0004"
+revision: str = "20260419_0005"
 down_revision: Union[str, Sequence[str], None] = "20260407_0003"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

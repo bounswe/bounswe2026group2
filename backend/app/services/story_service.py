@@ -72,10 +72,13 @@ def _map_media_file(media: MediaFile) -> MediaFileResponse:
     )
 
 
-def _map_story_detail(story: Story, author_username: str) -> StoryDetailResponse:
+def _map_story_detail(
+    story: Story,
+    author_username: str,
+    like_count: int,
+) -> StoryDetailResponse:
     story_response = StoryResponse.from_orm_with_author(story, author_username)
     media_files = [_map_media_file(media) for media in story.media_files]
-    like_count = len(getattr(story, "story_likes", []))
     return StoryDetailResponse(
         **story_response.model_dump(),
         media_files=media_files,
@@ -196,7 +199,7 @@ async def get_story_detail_by_id(
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
         .where(Story.id == story_id)
-        .options(selectinload(Story.media_files), selectinload(Story.story_likes))
+        .options(selectinload(Story.media_files))
     )
 
     result = await db.execute(stmt)
@@ -209,7 +212,8 @@ async def get_story_detail_by_id(
         )
 
     story, author_username = row
-    return _map_story_detail(story, author_username)
+    like_count = await _get_story_like_count(db, story.id)
+    return _map_story_detail(story, author_username, like_count)
 
 
 async def create_story_with_location(
@@ -246,7 +250,8 @@ async def create_story_with_location(
     await db.refresh(story)
 
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=0)
+    like_count = await _get_story_like_count(db, story.id)
+    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
 
 
 async def update_story_with_location_and_dates(
@@ -286,7 +291,8 @@ async def update_story_with_location_and_dates(
     await db.refresh(story)
 
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=0)
+    like_count = await _get_story_like_count(db, story.id)
+    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
 
 
 async def like_story(
