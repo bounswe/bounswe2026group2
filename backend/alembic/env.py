@@ -11,6 +11,7 @@ from app.db.media_file import MediaFile  # noqa: F401
 from app.db.story import Story  # noqa: F401
 from app.db.story_comment import StoryComment  # noqa: F401
 from app.db.story_like import StoryLike  # noqa: F401
+from app.db.story_save import StorySave  # noqa: F401
 from app.db.user import User  # noqa: F401
 
 config = context.config

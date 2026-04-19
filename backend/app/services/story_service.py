@@ -13,6 +13,7 @@ from app.db.media_file import MediaFile
 from app.db.story import Story
 from app.db.story_comment import StoryComment
 from app.db.story_like import StoryLike
+from app.db.story_save import StorySave
 from app.db.user import User
 from app.models.comment import CommentAuthorResponse, CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
@@ -24,6 +25,7 @@ from app.models.story import (
     StoryLikeResponse,
     StoryListResponse,
     StoryResponse,
+    StorySaveResponse,
     StoryUpdateRequest,
 )
 from app.services.storage import (
@@ -318,6 +320,86 @@ async def delete_comment_for_story(
 
     await db.delete(comment)
     await db.commit()
+
+
+async def save_story_for_user(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+) -> StorySaveResponse:
+    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
+    story_exists = story_result.scalar_one_or_none()
+    if story_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    existing_save_result = await db.execute(
+        select(StorySave).where(
+            StorySave.story_id == story_id,
+            StorySave.user_id == current_user.id,
+        )
+    )
+    existing_save = existing_save_result.scalar_one_or_none()
+
+    if existing_save is None:
+        db.add(StorySave(story_id=story_id, user_id=current_user.id))
+        try:
+            await db.commit()
+        except IntegrityError:
+            await db.rollback()
+
+    return StorySaveResponse(story_id=story_id, saved=True)
+
+
+async def unsave_story_for_user(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+) -> StorySaveResponse:
+    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
+    story_exists = story_result.scalar_one_or_none()
+    if story_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    existing_save_result = await db.execute(
+        select(StorySave).where(
+            StorySave.story_id == story_id,
+            StorySave.user_id == current_user.id,
+        )
+    )
+    existing_save = existing_save_result.scalar_one_or_none()
+
+    if existing_save is not None:
+        await db.delete(existing_save)
+        await db.commit()
+
+    return StorySaveResponse(story_id=story_id, saved=False)
+
+
+async def list_saved_stories_for_user(
+    db: AsyncSession,
+    current_user: User,
+) -> StoryListResponse:
+    stmt = (
+        select(Story, User.username)
+        .join(StorySave, StorySave.story_id == Story.id)
+        .join(User, Story.user_id == User.id)
+        .where(
+            StorySave.user_id == current_user.id,
+            Story.status == StoryStatus.PUBLISHED,
+            Story.visibility == StoryVisibility.PUBLIC,
+        )
+        .order_by(StorySave.created_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+    return _map_story_rows(rows)
 
 
 async def create_story_with_location(

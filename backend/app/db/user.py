@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.db.story import Story
     from app.db.story_comment import StoryComment
     from app.db.story_like import StoryLike
+    from app.db.story_save import StorySave
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -39,6 +40,10 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     stories: Mapped[list["Story"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    saved_stories: Mapped[list["StorySave"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )

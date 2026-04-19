@@ -9,6 +9,7 @@ from app.db.media_file import MediaFile
 from app.db.story import Story
 from app.db.story_comment import StoryComment
 from app.db.story_like import StoryLike
+from app.db.story_save import StorySave
 from app.db.user import User
 from app.services.auth_service import hash_password
 
@@ -1273,3 +1274,228 @@ class TestStorySearchAPI:
         resp = await client.get("/stories/search?place_name=")
 
         assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestStorySaveAPI:
+    async def _create_user_and_token(self, client, username, email):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": "SavePass1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": "SavePass1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_save_story_success(self, client):
+        author_token = await self._create_user_and_token(client, "saveauthor", "saveauthor@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser", "saver@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Savable Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"story_id": story_id, "saved": True}
+
+    async def test_duplicate_save_is_idempotent_and_persists_once(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "saveauthor2", "saveauthor2@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser2", "saver2@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Duplicate Save Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        first_resp = await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+        second_resp = await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        save_result = await db_session.execute(select(StorySave).where(StorySave.story_id == uuid.UUID(story_id)))
+        saves = save_result.scalars().all()
+
+        assert first_resp.status_code == 200
+        assert second_resp.status_code == 200
+        assert first_resp.json()["saved"] is True
+        assert second_resp.json()["saved"] is True
+        assert len(saves) == 1
+
+    async def test_unsave_story_success_and_repeat_is_idempotent(self, client):
+        author_token = await self._create_user_and_token(client, "saveauthor3", "saveauthor3@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser3", "saver3@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Unsave Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Izmir",
+                "latitude": 38.4237,
+                "longitude": 27.1428,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        first_unsave = await client.delete(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+        second_unsave = await client.delete(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        assert first_unsave.status_code == 200
+        assert second_unsave.status_code == 200
+        assert first_unsave.json() == {"story_id": story_id, "saved": False}
+        assert second_unsave.json() == {"story_id": story_id, "saved": False}
+
+    async def test_list_saved_stories_returns_only_current_users_saves(self, client):
+        author_token = await self._create_user_and_token(client, "saveauthor4", "saveauthor4@example.com")
+        saver_one_token = await self._create_user_and_token(client, "saveruser4", "saver4@example.com")
+        saver_two_token = await self._create_user_and_token(client, "saveruser5", "saver5@example.com")
+
+        first_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "First Saved Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        second_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Second Saved Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Bursa",
+                "latitude": 40.1826,
+                "longitude": 29.0665,
+            },
+        )
+        first_story_id = first_story_resp.json()["id"]
+        second_story_id = second_story_resp.json()["id"]
+
+        await client.post(f"/stories/{first_story_id}/save", headers={"Authorization": f"Bearer {saver_one_token}"})
+        await client.post(f"/stories/{second_story_id}/save", headers={"Authorization": f"Bearer {saver_two_token}"})
+
+        resp = await client.get("/stories/saved", headers={"Authorization": f"Bearer {saver_one_token}"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "First Saved Story"
+
+    async def test_list_saved_stories_excludes_saved_stories_that_are_no_longer_public(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "saveauthor5", "saveauthor5@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser7", "saver7@example.com")
+
+        public_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Still Public Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        hidden_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Later Hidden Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        public_story_id = public_story_resp.json()["id"]
+        hidden_story_id = hidden_story_resp.json()["id"]
+
+        await client.post(f"/stories/{public_story_id}/save", headers={"Authorization": f"Bearer {saver_token}"})
+        await client.post(f"/stories/{hidden_story_id}/save", headers={"Authorization": f"Bearer {saver_token}"})
+
+        hidden_story = await db_session.get(Story, uuid.UUID(hidden_story_id))
+        hidden_story.visibility = StoryVisibility.PRIVATE
+        await db_session.commit()
+
+        resp = await client.get("/stories/saved", headers={"Authorization": f"Bearer {saver_token}"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert [story["id"] for story in data["stories"]] == [public_story_id]
+
+    async def test_save_story_missing_story_returns_404(self, client):
+        saver_token = await self._create_user_and_token(client, "saveruser6", "saver6@example.com")
+
+        resp = await client.post(
+            f"/stories/{uuid.uuid4()}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_saved_story_endpoints_require_authentication(self, client):
+        save_resp = await client.post(f"/stories/{uuid.uuid4()}/save")
+        list_resp = await client.get("/stories/saved")
+
+        assert save_resp.status_code == 401
+        assert list_resp.status_code == 401

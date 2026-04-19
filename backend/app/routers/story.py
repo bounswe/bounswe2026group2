@@ -18,6 +18,7 @@ from app.models.story import (
     StoryDetailResponse,
     StoryLikeResponse,
     StoryListResponse,
+    StorySaveResponse,
     StoryUpdateRequest,
 )
 from app.services.story_service import (
@@ -28,8 +29,11 @@ from app.services.story_service import (
     like_story,
     list_available_stories,
     list_comments_for_story,
+    list_saved_stories_for_user,
+    save_story_for_user,
     search_available_stories_by_place,
     unlike_story,
+    unsave_story_for_user,
     update_story_with_location_and_dates,
     upload_media_for_story,
 )
@@ -171,6 +175,22 @@ async def search_stories(
 
 
 @router.get(
+    "/saved",
+    response_model=StoryListResponse,
+    summary="List saved stories",
+    description="Return the authenticated user's saved stories that are still published and public.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+    },
+)
+async def list_saved_stories(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_saved_stories_for_user(db, current_user)
+
+
+@router.get(
     "/{story_id}",
     response_model=StoryDetailResponse,
     summary="Get story by ID",
@@ -277,6 +297,42 @@ async def unlike_story_by_id(
     db: AsyncSession = Depends(get_db),
 ):
     return await unlike_story(db, story_id, current_user)
+
+
+@router.post(
+    "/{story_id}/save",
+    response_model=StorySaveResponse,
+    summary="Save a story",
+    description="Save a story for the authenticated user. Repeating the request keeps the story saved.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+    },
+)
+async def save_story(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await save_story_for_user(db, story_id, current_user)
+
+
+@router.delete(
+    "/{story_id}/save",
+    response_model=StorySaveResponse,
+    summary="Remove a saved story",
+    description="Remove a saved story for the authenticated user. Repeating the request keeps the story unsaved.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+    },
+)
+async def unsave_story(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await unsave_story_for_user(db, story_id, current_user)
 
 
 @router.post(

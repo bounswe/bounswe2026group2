@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.db.media_file import MediaFile
     from app.db.story_comment import StoryComment
     from app.db.story_like import StoryLike
+    from app.db.story_save import StorySave
     from app.db.user import User
 
 
@@ -62,6 +63,10 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     user: Mapped["User"] = relationship(back_populates="stories")
     media_files: Mapped[list["MediaFile"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+    )
+    saves: Mapped[list["StorySave"]] = relationship(
         back_populates="story",
         cascade="all, delete-orphan",
     )

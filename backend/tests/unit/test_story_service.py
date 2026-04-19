@@ -19,8 +19,11 @@ from app.services.story_service import (
     like_story,
     list_available_stories,
     list_comments_for_story,
+    list_saved_stories_for_user,
+    save_story_for_user,
     search_available_stories_by_place,
     unlike_story,
+    unsave_story_for_user,
     update_story_with_location_and_dates,
     upload_media_for_story,
 )
@@ -352,6 +355,114 @@ class TestGetStoryDetailByIdService:
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStorySaveService:
+    async def test_save_story_creates_save_and_returns_saved_true(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+
+        result = await save_story_for_user(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.saved is True
+        db.add.assert_called_once()
+        added_save = db.add.call_args.args[0]
+        assert added_save.story_id == story_id
+        assert added_save.user_id == current_user.id
+        db.commit.assert_awaited_once()
+
+    async def test_save_story_is_idempotent_when_already_saved(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        existing_save = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_save),
+        ]
+
+        result = await save_story_for_user(db, story_id, current_user)
+
+        assert result.saved is True
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
+    async def test_save_story_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await save_story_for_user(db, uuid.uuid4(), _make_user())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_unsave_story_deletes_save_when_present(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        existing_save = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_save),
+        ]
+
+        result = await unsave_story_for_user(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.saved is False
+        db.delete.assert_awaited_once_with(existing_save)
+        db.commit.assert_awaited_once()
+
+    async def test_unsave_story_is_idempotent_when_not_saved(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+
+        result = await unsave_story_for_user(db, story_id, current_user)
+
+        assert result.saved is False
+        db.delete.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
+    async def test_list_saved_stories_returns_story_list(self):
+        current_user = _make_user()
+        saved_story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(saved_story, "storyauthor")]
+
+        result = await list_saved_stories_for_user(db, current_user)
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+        assert result.stories[0].id == saved_story.id
+        assert result.stories[0].author == "storyauthor"
+
+    async def test_list_saved_stories_query_filters_to_public_published(self):
+        current_user = _make_user()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await list_saved_stories_for_user(db, current_user)
+
+        stmt = db.execute.await_args.args[0]
+        where_clause = str(stmt.whereclause)
+        assert "story_saves.user_id" in where_clause
+        assert "stories.status" in where_clause
+        assert "stories.visibility" in where_clause
 
 
 @pytest.mark.asyncio
