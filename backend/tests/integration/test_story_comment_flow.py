@@ -35,8 +35,12 @@ class TestStoryCommentFlow:
         return create_resp.json()["id"]
 
     async def test_authenticated_user_can_create_comment_and_list_it(self, client):
-        author_token = await self._register_and_login(client, "commentflowauthor", "commentflowauthor@example.com", "FlowPass1!")
-        commenter_token = await self._register_and_login(client, "commentflowuser", "commentflowuser@example.com", "FlowPass2!")
+        author_token = await self._register_and_login(
+            client, "commentflowauthor", "commentflowauthor@example.com", "FlowPass1!"
+        )
+        commenter_token = await self._register_and_login(
+            client, "commentflowuser", "commentflowuser@example.com", "FlowPass2!"
+        )
         story_id = await self._create_story(client, author_token)
 
         create_comment_resp = await client.post(
@@ -56,7 +60,9 @@ class TestStoryCommentFlow:
         assert payload["comments"][0]["content"] == "Wonderful context"
 
     async def test_unauthenticated_comment_creation_is_rejected(self, client):
-        token = await self._register_and_login(client, "commentflowauthor2", "commentflowauthor2@example.com", "FlowPass3!")
+        token = await self._register_and_login(
+            client, "commentflowauthor2", "commentflowauthor2@example.com", "FlowPass3!"
+        )
         story_id = await self._create_story(client, token)
 
         resp = await client.post(
@@ -67,7 +73,9 @@ class TestStoryCommentFlow:
         assert resp.status_code == 401
 
     async def test_comment_endpoints_return_404_for_missing_story(self, client):
-        commenter_token = await self._register_and_login(client, "commentflowuser2", "commentflowuser2@example.com", "FlowPass4!")
+        commenter_token = await self._register_and_login(
+            client, "commentflowuser2", "commentflowuser2@example.com", "FlowPass4!"
+        )
         missing_story_id = uuid.uuid4()
 
         create_resp = await client.post(
@@ -81,8 +89,12 @@ class TestStoryCommentFlow:
         assert list_resp.status_code == 404
 
     async def test_comment_owner_can_delete_comment(self, client):
-        author_token = await self._register_and_login(client, "commentflowauthor3", "commentflowauthor3@example.com", "FlowPass5!")
-        commenter_token = await self._register_and_login(client, "commentflowuser3", "commentflowuser3@example.com", "FlowPass6!")
+        author_token = await self._register_and_login(
+            client, "commentflowauthor3", "commentflowauthor3@example.com", "FlowPass5!"
+        )
+        commenter_token = await self._register_and_login(
+            client, "commentflowuser3", "commentflowuser3@example.com", "FlowPass6!"
+        )
         story_id = await self._create_story(client, author_token)
 
         create_comment_resp = await client.post(
