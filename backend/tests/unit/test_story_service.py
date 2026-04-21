@@ -330,6 +330,60 @@ class TestUploadMediaForStoryService:
 
         assert result.media.media_type == MediaType.AUDIO
 
+    async def test_upload_accepts_video_webm(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.VIDEO)
+        file = _make_upload_file("recording.webm", b"video-bytes", "video/webm;codecs=vp8,opus")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.mime_type == "video/webm;codecs=vp8,opus"
+        assert result.media.media_type == MediaType.VIDEO
+
+    async def test_upload_accepts_video_webm_mixed_case(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.VIDEO)
+        file = _make_upload_file("recording.webm", b"video-bytes", "Video/WebM;codecs=vp9")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.media_type == MediaType.VIDEO
+
+    async def test_upload_rejects_video_webm_as_wrong_media_type(self):
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("clip.webm", b"video-bytes", "video/webm;codecs=vp8,opus")
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, uuid.uuid4(), file, payload)
+
+        assert exc_info.value.status_code == 422
+        assert "video/webm" in exc_info.value.detail
+        mock_upload.assert_not_called()
+
     async def test_upload_strips_mime_params_for_validation(self):
         payload = MediaUploadRequest(media_type=MediaType.IMAGE)
         file = _make_upload_file("clip.webm", b"audio-bytes", "audio/webm;codecs=opus")
