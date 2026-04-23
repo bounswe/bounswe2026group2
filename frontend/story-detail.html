@@ -42,6 +42,24 @@
       background: rgba(254,249,240,0.75) !important;
       font-size: 10px;
     }
+
+    .like-button {
+      transform-origin: center;
+    }
+
+    .like-button[data-animating="true"] {
+      animation: like-pop 180ms ease-out;
+    }
+
+    @keyframes like-pop {
+      0% { transform: scale(1); }
+      55% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .like-button[data-animating="true"] { animation: none; }
+    }
   </style>
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
@@ -66,6 +84,24 @@
           <span id="story-location" class="rounded-full bg-[rgba(119,90,25,0.1)] px-3 py-1 font-semibold text-primary">Map Reference</span>
           <span id="story-date">Date Unknown</span>
           <span id="story-author">by Author</span>
+          <span class="inline-flex items-center gap-2">
+            <button
+              id="like-button"
+              type="button"
+              class="like-button inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 font-semibold text-primary transition hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Like this story"
+              aria-pressed="false"
+              data-liked="false"
+              data-animating="false"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+              <span id="like-button-text" class="text-sm leading-none">Like</span>
+            </button>
+            <span id="like-count" class="text-sm font-semibold text-textmuted" aria-label="Total likes">0</span>
+            <span id="like-status" class="hidden text-xs text-textmuted" role="status" aria-live="polite"></span>
+          </span>
         </div>
 
         <div id="story-content" class="mt-6 space-y-5 text-base leading-8 text-textmain whitespace-pre-wrap">
@@ -102,6 +138,7 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+<script src="auth.js"></script>
 <script src="config.js"></script>
 <script>
   // Initialize mini-map with arbitrary center initially
@@ -163,12 +200,134 @@
              });
              document.getElementById('story-media').innerHTML = mediaHtml;
           }
+
+          setupLikes(String(story.id || storyId));
       })
       .catch(err => {
          console.error("Error loading story details:", err);
          document.getElementById('story-title').textContent = "Failed to load story";
          document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";
       });
+  }
+
+  function setLikeStatus(message) {
+    var el = document.getElementById("like-status");
+    if (!message) {
+      el.classList.add("hidden");
+      el.textContent = "";
+      return;
+    }
+    el.textContent = message;
+    el.classList.remove("hidden");
+  }
+
+  function setLikeUi(state) {
+    var btn = document.getElementById("like-button");
+    var count = document.getElementById("like-count");
+    var label = document.getElementById("like-button-text");
+
+    btn.dataset.liked = state.liked_by_me ? "true" : "false";
+    btn.setAttribute("aria-pressed", state.liked_by_me ? "true" : "false");
+    count.textContent = String(state.likes_count || 0);
+
+    if (state.liked_by_me) {
+      btn.classList.remove("bg-white", "text-primary", "hover:bg-stone-50");
+      btn.classList.add("bg-primary", "text-white", "hover:opacity-95");
+      label.textContent = "Liked";
+      btn.setAttribute("aria-label", "Unlike this story");
+    } else {
+      btn.classList.remove("bg-primary", "text-white", "hover:opacity-95");
+      btn.classList.add("bg-white", "text-primary", "hover:bg-stone-50");
+      label.textContent = "Like";
+      btn.setAttribute("aria-label", "Like this story");
+    }
+  }
+
+  async function fetchLikeSummary(storyId) {
+    // Uses authFetch so backend can optionally infer liked_by_me.
+    var res = await authFetch(API_BASE + "/stories/" + storyId + "/likes");
+    if (!res.ok) {
+      var err = new Error("Likes endpoint unavailable");
+      err.status = res.status;
+      throw err;
+    }
+    return await res.json();
+  }
+
+  async function sendLikeToggle(storyId, likedByMe) {
+    if (!isLoggedIn()) {
+      // Keep behavior consistent with other authenticated actions.
+      window.location.assign("index.html");
+      return null;
+    }
+
+    var method = likedByMe ? "DELETE" : "POST";
+    var res = await authFetch(API_BASE + "/stories/" + storyId + "/likes", { method: method });
+    if (!res.ok) {
+      var err = new Error("Failed to update like");
+      err.status = res.status;
+      throw err;
+    }
+    return await res.json();
+  }
+
+  function setupLikes(storyId) {
+    var btn = document.getElementById("like-button");
+    var state = { story_id: storyId, likes_count: 0, liked_by_me: false };
+
+    btn.disabled = true;
+    setLikeStatus("");
+
+    fetchLikeSummary(storyId)
+      .then(function (summary) {
+        state = summary || state;
+        setLikeUi(state);
+      })
+      .catch(function () {
+        // Backend team will wire this later — don't break the page meanwhile.
+        setLikeUi(state);
+        setLikeStatus("Likes unavailable (backend pending).");
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
+
+    btn.addEventListener("click", async function () {
+      if (btn.disabled) return;
+
+      btn.dataset.animating = "true";
+      window.setTimeout(function () {
+        btn.dataset.animating = "false";
+      }, 200);
+
+      setLikeStatus("");
+
+      // Optimistic update.
+      var optimistic = {
+        story_id: storyId,
+        liked_by_me: !state.liked_by_me,
+        likes_count: Math.max(0, (state.likes_count || 0) + (state.liked_by_me ? -1 : 1))
+      };
+      setLikeUi(optimistic);
+
+      btn.disabled = true;
+      try {
+        var updated = await sendLikeToggle(storyId, state.liked_by_me);
+        if (updated) {
+          state = updated;
+          setLikeUi(state);
+        } else {
+          // Redirecting to login will happen inside sendLikeToggle; revert just in case.
+          setLikeUi(state);
+        }
+      } catch (err) {
+        // Revert if backend not ready or request fails.
+        setLikeUi(state);
+        setLikeStatus("Unable to save like yet.");
+      } finally {
+        btn.disabled = false;
+      }
+    });
   }
 </script>
 </body>
