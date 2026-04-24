@@ -650,9 +650,7 @@ async def get_nearby_stories(
     dlat = lat2 - lat1
     dlon = lon2 - lon1
 
-    a = func.pow(func.sin(dlat / 2), 2) + func.cos(lat1) * func.cos(lat2) * func.pow(
-        func.sin(dlon / 2), 2
-    )
+    a = func.pow(func.sin(dlat / 2), 2) + func.cos(lat1) * func.cos(lat2) * func.pow(func.sin(dlon / 2), 2)
     distance_km = func.asin(func.sqrt(a)) * (_EARTH_RADIUS_KM * 2)
 
     stmt = (
