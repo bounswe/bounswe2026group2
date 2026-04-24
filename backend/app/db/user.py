@@ -8,6 +8,7 @@ from app.db.enums import UserRole
 from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.db.notification import Notification
     from app.db.story import Story
     from app.db.story_comment import StoryComment
     from app.db.story_like import StoryLike
@@ -55,4 +56,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     story_likes: Mapped[list["StoryLike"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+    received_notifications: Mapped[list["Notification"]] = relationship(
+        back_populates="recipient_user",
+        foreign_keys="Notification.recipient_user_id",
+    )
+    triggered_notifications: Mapped[list["Notification"]] = relationship(
+        back_populates="actor_user",
+        foreign_keys="Notification.actor_user_id",
     )
