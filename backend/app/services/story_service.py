@@ -631,3 +631,44 @@ async def upload_media_for_story(
         )
 
     return MediaUploadResponse(media=_map_media_file(media))
+
+
+_EARTH_RADIUS_KM = 6371.0
+
+
+async def get_nearby_stories(
+    db: AsyncSession,
+    center_lat: float,
+    center_lng: float,
+    radius_km: float = 10.0,
+) -> StoryListResponse:
+    lat1 = func.radians(center_lat)
+    lat2 = func.radians(Story.latitude)
+    lon1 = func.radians(center_lng)
+    lon2 = func.radians(Story.longitude)
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = func.pow(func.sin(dlat / 2), 2) + func.cos(lat1) * func.cos(lat2) * func.pow(
+        func.sin(dlon / 2), 2
+    )
+    distance_km = func.asin(func.sqrt(a)) * (_EARTH_RADIUS_KM * 2)
+
+    stmt = (
+        select(Story, User.username)
+        .join(User, Story.user_id == User.id)
+        .where(
+            Story.status == StoryStatus.PUBLISHED,
+            Story.visibility == StoryVisibility.PUBLIC,
+            Story.latitude.is_not(None),
+            Story.longitude.is_not(None),
+            distance_km <= radius_km,
+        )
+        .order_by(distance_km)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return _map_story_rows(rows)
