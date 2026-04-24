@@ -41,7 +41,9 @@ class TestStoryNotificationFlow:
         return create_resp.json()["id"]
 
     async def _get_notifications(self, db_session):
-        result = await db_session.execute(select(Notification).order_by(Notification.created_at.asc(), Notification.id.asc()))
+        result = await db_session.execute(
+            select(Notification).order_by(Notification.created_at.asc(), Notification.id.asc())
+        )
         return result.scalars().all()
 
     async def test_like_comment_and_save_create_notifications_for_story_author(self, client, db_session):
@@ -64,12 +66,8 @@ class TestStoryNotificationFlow:
         )
 
         story = await db_session.get(Story, uuid.UUID(story_id))
-        author = (
-            await db_session.execute(select(User).where(User.username == "notifauthor"))
-        ).scalar_one()
-        actor = (
-            await db_session.execute(select(User).where(User.username == "notifactor"))
-        ).scalar_one()
+        author = (await db_session.execute(select(User).where(User.username == "notifauthor"))).scalar_one()
+        actor = (await db_session.execute(select(User).where(User.username == "notifactor"))).scalar_one()
         notifications = await self._get_notifications(db_session)
 
         assert like_resp.status_code == 200
@@ -131,7 +129,9 @@ class TestStoryNotificationFlow:
         author_token = await self._register_and_login(
             client, "notifdedupeauthor", "notifdedupeauthor@example.com", "NotifPass4!"
         )
-        actor_token = await self._register_and_login(client, "notifdedupeactor", "notifdedupeactor@example.com", "NotifPass5!")
+        actor_token = await self._register_and_login(
+            client, "notifdedupeactor", "notifdedupeactor@example.com", "NotifPass5!"
+        )
         story_id = await self._create_story(client, author_token, title="Dedupe story")
 
         first_like = await client.post(
@@ -165,7 +165,9 @@ class TestStoryNotificationFlow:
         author_token = await self._register_and_login(
             client, "notifrepeatauthor", "notifrepeatauthor@example.com", "NotifPass6!"
         )
-        actor_token = await self._register_and_login(client, "notifrepeatactor", "notifrepeatactor@example.com", "NotifPass7!")
+        actor_token = await self._register_and_login(
+            client, "notifrepeatactor", "notifrepeatactor@example.com", "NotifPass7!"
+        )
         story_id = await self._create_story(client, author_token, title="Repeat story")
 
         await client.post(
