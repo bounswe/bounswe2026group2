@@ -1499,3 +1499,90 @@ class TestStorySaveAPI:
 
         assert save_resp.status_code == 401
         assert list_resp.status_code == 401
+
+
+@pytest.mark.asyncio
+class TestNearbyStoriesAPI:
+    def _make_user(self, username: str, email: str) -> User:
+        return User(
+            username=username,
+            email=email,
+            password_hash=hash_password("TestPass1!"),
+        )
+
+    def _make_story(self, user_id, title, lat, lng, place_name="Istanbul") -> Story:
+        return Story(
+            user_id=user_id,
+            title=title,
+            content="content",
+            summary="summary",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name=place_name,
+            latitude=lat,
+            longitude=lng,
+        )
+
+    async def test_returns_story_within_radius(self, client, db_session):
+        user = self._make_user("nearbyauthor1", "nearby1@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        # Çeliktepe, Istanbul — ~0.4 km from query centre
+        story = self._make_story(user.id, "Nearby Story", lat=41.0739, lng=28.9606)
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/nearby?lat=41.0770&lng=28.9620&radius_km=5")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Nearby Story"
+
+    async def test_excludes_story_outside_radius(self, client, db_session):
+        user = self._make_user("nearbyauthor2", "nearby2@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        # Ankara — ~350 km from Istanbul
+        story = self._make_story(user.id, "Far Away Story", lat=39.9334, lng=32.8597, place_name="Ankara")
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784&radius_km=10")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+
+    async def test_returns_empty_when_no_stories_exist(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"stories": [], "total": 0}
+
+    async def test_invalid_lat_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=999&lng=28.9784")
+
+        assert resp.status_code == 422
+
+    async def test_invalid_lng_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=999")
+
+        assert resp.status_code == 422
+
+    async def test_non_positive_radius_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784&radius_km=0")
+
+        assert resp.status_code == 422
+
+    async def test_missing_lat_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lng=28.9784")
+
+        assert resp.status_code == 422
+
+    async def test_missing_lng_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082")
+
+        assert resp.status_code == 422

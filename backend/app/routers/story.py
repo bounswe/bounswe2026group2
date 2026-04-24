@@ -25,6 +25,7 @@ from app.services.story_service import (
     create_comment_for_story,
     create_story_with_location,
     delete_comment_for_story,
+    get_nearby_stories,
     get_story_detail_by_id,
     like_story,
     list_available_stories,
@@ -188,6 +189,28 @@ async def list_saved_stories(
     db: AsyncSession = Depends(get_db),
 ):
     return await list_saved_stories_for_user(db, current_user)
+
+
+@router.get(
+    "/nearby",
+    response_model=StoryListResponse,
+    summary="List stories near a location",
+    description=(
+        "Return published public stories within a given radius of a coordinate point, "
+        "ordered by distance ascending (nearest first). "
+        "lat and lng are required. radius_km defaults to 10 km (max 500 km)."
+    ),
+    responses={
+        422: {"description": "Validation error for lat, lng, or radius_km"},
+    },
+)
+async def list_nearby_stories(
+    lat: float = Query(ge=-90.0, le=90.0),
+    lng: float = Query(ge=-180.0, le=180.0),
+    radius_km: float = Query(default=10.0, gt=0.0, le=500.0),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_nearby_stories(db, center_lat=lat, center_lng=lng, radius_km=radius_km)
 
 
 @router.get(
