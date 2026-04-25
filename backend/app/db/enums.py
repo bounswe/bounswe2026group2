@@ -28,3 +28,9 @@ class MediaType(str, Enum):
 class DatePrecision(str, Enum):
     YEAR = "year"
     DATE = "date"
+
+
+class NotificationEventType(str, Enum):
+    STORY_LIKED = "story_liked"
+    STORY_COMMENTED = "story_commented"
+    STORY_BOOKMARKED = "story_bookmarked"

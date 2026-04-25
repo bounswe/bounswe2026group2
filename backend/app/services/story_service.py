@@ -8,8 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.enums import StoryStatus, StoryVisibility
+from app.db.enums import NotificationEventType, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
+from app.db.notification import Notification
 from app.db.story import Story
 from app.db.story_comment import StoryComment
 from app.db.story_like import StoryLike
@@ -137,6 +138,44 @@ def _build_media_storage_key(story_id: uuid.UUID, filename: str) -> str:
     return f"stories/{story_id}/media/{uuid.uuid4()}{ext}"
 
 
+async def _get_story_or_404(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+) -> Story:
+    story_result = await db.execute(select(Story).where(Story.id == story_id))
+    story = story_result.scalar_one_or_none()
+    if story is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+    return story
+
+
+def _queue_story_interaction_notification(
+    db: AsyncSession,
+    *,
+    story: Story,
+    actor: User,
+    event_type: NotificationEventType,
+    comment_id: uuid.UUID | None = None,
+) -> None:
+    # Duplicate likes/saves are ignored at the interaction-table level; notifications
+    # are only queued when a new interaction row is actually being created.
+    if story.user_id == actor.id:
+        return
+
+    db.add(
+        Notification(
+            recipient_user_id=story.user_id,
+            actor_user_id=actor.id,
+            story_id=story.id,
+            comment_id=comment_id,
+            event_type=event_type,
+        )
+    )
+
+
 async def list_available_stories(
     db: AsyncSession,
     min_lat: float | None = None,
@@ -240,13 +279,7 @@ async def list_comments_for_story(
     db: AsyncSession,
     story_id: uuid.UUID,
 ) -> CommentListResponse:
-    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
-    story_exists = story_result.scalar_one_or_none()
-    if story_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
+    await _get_story_or_404(db, story_id)
 
     stmt = (
         select(StoryComment, User)
@@ -266,13 +299,7 @@ async def create_comment_for_story(
     current_user: User,
     payload: CommentCreateRequest,
 ) -> CommentResponse:
-    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
-    story_exists = story_result.scalar_one_or_none()
-    if story_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
+    story = await _get_story_or_404(db, story_id)
 
     comment = StoryComment(
         story_id=story_id,
@@ -280,6 +307,14 @@ async def create_comment_for_story(
         content=payload.content,
     )
     db.add(comment)
+    await db.flush()
+    _queue_story_interaction_notification(
+        db,
+        story=story,
+        actor=current_user,
+        event_type=NotificationEventType.STORY_COMMENTED,
+        comment_id=comment.id,
+    )
     await db.commit()
     await db.refresh(comment)
 
@@ -292,13 +327,7 @@ async def delete_comment_for_story(
     comment_id: uuid.UUID,
     current_user: User,
 ) -> None:
-    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
-    story_exists = story_result.scalar_one_or_none()
-    if story_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
+    await _get_story_or_404(db, story_id)
 
     comment_result = await db.execute(
         select(StoryComment).where(
@@ -328,13 +357,7 @@ async def save_story_for_user(
     story_id: uuid.UUID,
     current_user: User,
 ) -> StorySaveResponse:
-    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
-    story_exists = story_result.scalar_one_or_none()
-    if story_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
+    story = await _get_story_or_404(db, story_id)
 
     existing_save_result = await db.execute(
         select(StorySave).where(
@@ -346,6 +369,12 @@ async def save_story_for_user(
 
     if existing_save is None:
         db.add(StorySave(story_id=story_id, user_id=current_user.id))
+        _queue_story_interaction_notification(
+            db,
+            story=story,
+            actor=current_user,
+            event_type=NotificationEventType.STORY_BOOKMARKED,
+        )
         try:
             await db.commit()
         except IntegrityError:
@@ -359,13 +388,7 @@ async def unsave_story_for_user(
     story_id: uuid.UUID,
     current_user: User,
 ) -> StorySaveResponse:
-    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
-    story_exists = story_result.scalar_one_or_none()
-    if story_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
+    await _get_story_or_404(db, story_id)
 
     existing_save_result = await db.execute(
         select(StorySave).where(
@@ -487,13 +510,7 @@ async def like_story(
     story_id: uuid.UUID,
     current_user: User,
 ) -> StoryLikeResponse:
-    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
-    story_exists = story_result.scalar_one_or_none()
-    if story_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
+    story = await _get_story_or_404(db, story_id)
 
     existing_like_result = await db.execute(
         select(StoryLike).where(
@@ -509,6 +526,12 @@ async def like_story(
                 story_id=story_id,
                 user_id=current_user.id,
             )
+        )
+        _queue_story_interaction_notification(
+            db,
+            story=story,
+            actor=current_user,
+            event_type=NotificationEventType.STORY_LIKED,
         )
         try:
             await db.commit()
@@ -528,13 +551,7 @@ async def unlike_story(
     story_id: uuid.UUID,
     current_user: User,
 ) -> StoryLikeResponse:
-    story_result = await db.execute(select(Story.id).where(Story.id == story_id))
-    story_exists = story_result.scalar_one_or_none()
-    if story_exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
+    await _get_story_or_404(db, story_id)
 
     existing_like_result = await db.execute(
         select(StoryLike).where(
