@@ -15,6 +15,7 @@ from app.services.story_service import (
     create_comment_for_story,
     create_story_with_location,
     delete_comment_for_story,
+    get_nearby_stories,
     get_story_detail_by_id,
     like_story,
     list_available_stories,
@@ -943,3 +944,85 @@ class TestUpdateStoryWithLocationAndDatesService:
         assert exc_info.value.status_code == 422
         assert "place_name is required" in exc_info.value.detail
         db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestGetNearbyStoriesService:
+    async def test_returns_nearby_stories_and_total(self):
+        story = _make_story()
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "storyauthor")]
+
+        result = await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+        item = result.stories[0]
+        assert item.id == story.id
+        assert item.title == "Story Title"
+        assert item.author == "storyauthor"
+        assert item.latitude == 41.0082
+        assert item.longitude == 28.9784
+        db.execute.assert_awaited_once()
+
+    async def test_returns_empty_response_when_no_stories_in_radius(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await get_nearby_stories(db, center_lat=0.0, center_lng=0.0, radius_km=1.0)
+
+        assert result.total == 0
+        assert result.stories == []
+        db.execute.assert_awaited_once()
+
+    async def test_query_uses_haversine_formula(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "asin" in sql
+        assert "sqrt" in sql
+        assert "sin" in sql
+        assert "cos" in sql
+        assert "radians" in sql
+
+    async def test_query_filters_null_coordinates(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.latitude IS NOT NULL" in sql
+        assert "stories.longitude IS NOT NULL" in sql
+
+    async def test_query_filters_published_public_stories_only(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.status" in sql
+        assert "stories.visibility" in sql
+
+    async def test_query_orders_by_distance_ascending(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "ORDER BY" in sql
+        assert "DESC" not in sql
