@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Moderation Panel</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#fef9f0",
+            surface: "#ffffff",
+            primary: "#775a19",
+            "primary-light": "#c5a059",
+            secondary: "#506169",
+            tertiary: "#35618f",
+            border: "#e7e2d9",
+            textmain: "#1d1c16",
+            textmuted: "#5f584c"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"],
+            headline: ["Noto Serif", "serif"]
+          },
+          boxShadow: {
+            soft: "0 20px 50px rgba(0,0,0,0.08)"
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-background text-textmain font-body min-h-screen">
+
+<!-- ─── Header ─────────────────────────────────────────────────────────────── -->
+<header class="sticky top-0 z-40 border-b border-border bg-surface/90 backdrop-blur-sm">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="material-symbols-outlined text-primary" style="font-size:24px;">shield</span>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-widest text-primary">Admin</p>
+        <h1 class="font-headline text-xl font-bold text-textmain leading-tight">Moderation Panel</h1>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="map.html" class="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+        <span class="material-symbols-outlined" style="font-size:16px;">map</span>
+        Back to Map
+      </a>
+      <button onclick="logout()" class="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50">
+        <span class="material-symbols-outlined" style="font-size:16px;">logout</span>
+        Logout
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ─── Main ───────────────────────────────────────────────────────────────── -->
+<main class="max-w-6xl mx-auto px-6 py-10">
+
+  <!-- Stats bar -->
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+    <div class="rounded-2xl border border-border bg-surface p-5">
+      <p class="text-xs font-semibold uppercase tracking-widest text-textmuted">Total Reports</p>
+      <p id="stat-total" class="mt-1 text-3xl font-extrabold text-textmain">—</p>
+    </div>
+    <div class="rounded-2xl border border-border bg-surface p-5">
+      <p class="text-xs font-semibold uppercase tracking-widest text-textmuted">Pending</p>
+      <p id="stat-pending" class="mt-1 text-3xl font-extrabold text-red-500">—</p>
+    </div>
+    <div class="rounded-2xl border border-border bg-surface p-5 col-span-2 md:col-span-1">
+      <p class="text-xs font-semibold uppercase tracking-widest text-textmuted">Resolved Today</p>
+      <p id="stat-resolved" class="mt-1 text-3xl font-extrabold text-emerald-600">—</p>
+    </div>
+  </div>
+
+  <!-- Section title + refresh -->
+  <div class="flex items-center justify-between mb-5">
+    <h2 class="font-headline text-2xl font-bold text-textmain">Active Reports</h2>
+    <button onclick="loadReports()" class="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+      <span class="material-symbols-outlined" style="font-size:16px;">refresh</span>
+      Refresh
+    </button>
+  </div>
+
+  <!-- Loading state -->
+  <div id="reports-loading" class="flex items-center justify-center py-20">
+    <span class="material-symbols-outlined animate-spin text-primary" style="font-size:32px;">progress_activity</span>
+  </div>
+
+  <!-- Empty state -->
+  <div id="reports-empty" class="hidden flex flex-col items-center justify-center py-20 text-center">
+    <span class="material-symbols-outlined text-textmuted mb-4" style="font-size:48px;font-variation-settings:'FILL' 0;">check_circle</span>
+    <p class="font-headline text-xl font-bold text-textmain">All clear!</p>
+    <p class="mt-2 text-sm text-textmuted">No pending reports at this time.</p>
+  </div>
+
+  <!-- Report list -->
+  <div id="reports-list" class="hidden space-y-4"></div>
+
+</main>
+
+<!-- ─── Confirm Modal ──────────────────────────────────────────────────────── -->
+<div id="confirm-modal" class="hidden fixed inset-0 z-[1100] flex items-center justify-center p-4">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeConfirm()"></div>
+  <div class="relative w-full max-w-sm rounded-3xl border border-border bg-surface p-8 shadow-soft">
+    <div class="flex items-start gap-4 mb-6">
+      <div id="confirm-icon-wrap" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
+        <span id="confirm-icon" class="material-symbols-outlined text-xl"></span>
+      </div>
+      <div>
+        <h2 id="confirm-title" class="font-headline text-lg font-bold text-textmain"></h2>
+        <p id="confirm-body" class="mt-1 text-sm text-textmuted leading-6"></p>
+      </div>
+    </div>
+    <div class="flex gap-3">
+      <button onclick="closeConfirm()" class="flex-1 rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Cancel</button>
+      <button id="confirm-ok" class="flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Toast ──────────────────────────────────────────────────────────────── -->
+<div id="toast" class="hidden fixed bottom-6 right-6 z-[1200] flex items-center gap-3 rounded-2xl border border-border bg-white px-5 py-4 shadow-soft">
+  <span id="toast-icon" class="material-symbols-outlined text-xl"></span>
+  <p id="toast-message" class="text-sm font-semibold text-textmain max-w-xs"></p>
+</div>
+
+<!-- ─── Scripts ────────────────────────────────────────────────────────────── -->
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+
+
+var REASON_LABELS = {
+  spam: "Spam or misleading",
+  inappropriate: "Inappropriate content",
+  misinformation: "Misinformation",
+  harassment: "Harassment or hate speech",
+  copyright: "Copyright violation",
+  other: "Other"
+};
+
+var REASON_COLORS = {
+  spam:          "bg-yellow-100 text-yellow-800",
+  inappropriate: "bg-red-100 text-red-700",
+  misinformation:"bg-orange-100 text-orange-700",
+  harassment:    "bg-red-100 text-red-800",
+  copyright:     "bg-purple-100 text-purple-700",
+  other:         "bg-stone-100 text-stone-600"
+};
+
+// ── Admin check ────────────────────────────────────────────────────────────
+function getTokenPayload() {
+  var token = getToken();
+  if (!token) return null;
+  try {
+    return JSON.parse(atob(token.split('.')[1]));
+  } catch (e) {
+    return null;
+  }
+}
+
+function requireAdmin() {
+  if (!isLoggedIn()) { window.location.assign("index.html"); return false; }
+  var payload = getTokenPayload();
+  if (!payload || payload.role !== "admin") {
+    window.location.assign("map.html");
+    return false;
+  }
+  return true;
+}
+
+// ── Report loading ─────────────────────────────────────────────────────────
+var resolvedCount = 0;
+
+function loadReports() {
+  show("reports-loading");
+  hide("reports-list");
+  hide("reports-empty");
+
+  authFetch(API_BASE + "/admin/reports")
+    .then(function(res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    })
+    .then(renderReports)
+    .catch(function(err) {
+      hide("reports-loading");
+      showToast("error", "Failed to load reports: " + err.message);
+    });
+}
+
+function renderReports(reports) {
+  hide("reports-loading");
+  updateStats(reports);
+
+  if (!reports || reports.length === 0) {
+    show("reports-empty");
+    return;
+  }
+
+  var list = document.getElementById("reports-list");
+  list.innerHTML = "";
+  reports.forEach(function(r) { list.appendChild(buildCard(r)); });
+  show("reports-list");
+}
+
+function updateStats(reports) {
+  document.getElementById("stat-total").textContent = reports.length;
+  document.getElementById("stat-pending").textContent = reports.length;
+  document.getElementById("stat-resolved").textContent = resolvedCount;
+}
+
+function buildCard(report) {
+  var reasonClass = REASON_COLORS[report.reason] || "bg-stone-100 text-stone-600";
+  var reasonLabel = REASON_LABELS[report.reason] || report.reason;
+  var dateStr = new Date(report.created_at).toLocaleDateString("en-GB", {
+    day: "numeric", month: "short", year: "numeric"
+  });
+
+  var card = document.createElement("div");
+  card.id = "card-" + report.id;
+  card.className = "rounded-3xl border border-border bg-surface p-6 shadow-soft transition-all";
+  card.innerHTML =
+    '<div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">' +
+      '<div class="flex-1 min-w-0">' +
+        '<div class="flex flex-wrap items-center gap-2 mb-2">' +
+          '<span class="inline-block rounded-full px-3 py-1 text-xs font-semibold ' + reasonClass + '">' + reasonLabel + '</span>' +
+          '<span class="text-xs text-textmuted">' + dateStr + '</span>' +
+        '</div>' +
+        '<a href="story-detail.html?id=' + report.story_id + '" class="font-headline text-lg font-bold text-textmain hover:text-primary transition-colors line-clamp-1">' +
+          escapeHtml(report.story_title) +
+        '</a>' +
+        '<div class="mt-2 flex flex-wrap gap-4 text-sm text-textmuted">' +
+          '<span><span class="font-semibold text-textmain">Posted by:</span> ' + escapeHtml(report.reported_username) + '</span>' +
+          '<span><span class="font-semibold text-textmain">Reported by:</span> ' + escapeHtml(report.reporter_username) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="flex flex-wrap gap-2 md:flex-col md:items-end">' +
+        '<button onclick="confirmRemovePost(\'' + report.id + '\',\'' + report.story_id + '\',\'' + escapeHtml(report.story_title) + '\')" ' +
+          'class="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700">' +
+          '<span class="material-symbols-outlined" style="font-size:15px;">delete</span>Remove Post' +
+        '</button>' +
+        '<button onclick="confirmRestrictUser(\'' + report.id + '\',\'' + report.reported_user_id + '\',\'' + escapeHtml(report.reported_username) + '\')" ' +
+          'class="inline-flex items-center gap-2 rounded-xl border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-semibold text-orange-700 transition hover:bg-orange-100">' +
+          '<span class="material-symbols-outlined" style="font-size:15px;">block</span>Restrict User' +
+        '</button>' +
+        '<button onclick="dismissReport(\'' + report.id + '\')" ' +
+          'class="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold text-textmuted transition hover:bg-stone-50">' +
+          '<span class="material-symbols-outlined" style="font-size:15px;">close</span>Dismiss' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  return card;
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────
+function confirmRemovePost(reportId, storyId, storyTitle) {
+  openConfirm({
+    icon: "delete",
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    title: "Remove Post?",
+    body: "\"" + storyTitle + "\" will be permanently deleted. This cannot be undone.",
+    okLabel: "Remove Post",
+    okClass: "bg-red-600",
+    onOk: function() { doRemovePost(reportId, storyId); }
+  });
+}
+
+function confirmRestrictUser(reportId, userId, username) {
+  openConfirm({
+    icon: "block",
+    iconBg: "bg-orange-100",
+    iconColor: "text-orange-600",
+    title: "Restrict @" + username + "?",
+    body: "This user will be prevented from making future uploads.",
+    okLabel: "Restrict User",
+    okClass: "bg-orange-500",
+    onOk: function() { doRestrictUser(reportId, userId); }
+  });
+}
+
+function doRemovePost(reportId, storyId) {
+  authFetch(API_BASE + "/stories/" + storyId, { method: "DELETE" })
+    .then(function(res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return dismissReport(reportId, true);
+    })
+    .catch(function(err) {
+      showToast("error", "Failed to remove post: " + err.message);
+    });
+}
+
+function doRestrictUser(reportId, userId) {
+  authFetch(API_BASE + "/admin/users/" + userId + "/restrict", { method: "PATCH" })
+    .then(function(res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return dismissReport(reportId, true);
+    })
+    .catch(function(err) {
+      showToast("error", "Failed to restrict user: " + err.message);
+    });
+}
+
+function dismissReport(reportId, silent) {
+  return authFetch(API_BASE + "/admin/reports/" + reportId, { method: "DELETE" })
+    .then(function(res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      removeCard(reportId);
+      if (!silent) showToast("success", "Report dismissed.");
+    })
+    .catch(function(err) {
+      showToast("error", "Failed to dismiss report: " + err.message);
+    });
+}
+
+function removeCard(reportId) {
+  resolvedCount++;
+  var card = document.getElementById("card-" + reportId);
+  if (!card) return;
+  card.style.transition = "opacity 0.3s, transform 0.3s";
+  card.style.opacity = "0";
+  card.style.transform = "translateX(20px)";
+  setTimeout(function() {
+    card.remove();
+    var list = document.getElementById("reports-list");
+    if (list.children.length === 0) {
+      hide("reports-list");
+      show("reports-empty");
+    }
+    document.getElementById("stat-pending").textContent = list.children.length;
+    document.getElementById("stat-resolved").textContent = resolvedCount;
+    document.getElementById("stat-total").textContent =
+      parseInt(document.getElementById("stat-total").textContent) - 1;
+  }, 300);
+}
+
+// ── Confirm modal ──────────────────────────────────────────────────────────
+var confirmCallback = null;
+
+function openConfirm(opts) {
+  document.getElementById("confirm-icon").textContent = opts.icon;
+  document.getElementById("confirm-icon-wrap").className =
+    "flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center " + opts.iconBg;
+  document.getElementById("confirm-icon").className =
+    "material-symbols-outlined text-xl " + opts.iconColor;
+  document.getElementById("confirm-title").textContent = opts.title;
+  document.getElementById("confirm-body").textContent = opts.body;
+  var btn = document.getElementById("confirm-ok");
+  btn.textContent = opts.okLabel;
+  btn.className = "flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90 " + opts.okClass;
+  confirmCallback = opts.onOk;
+  show("confirm-modal");
+}
+
+function closeConfirm() {
+  hide("confirm-modal");
+  confirmCallback = null;
+}
+
+document.getElementById("confirm-ok").addEventListener("click", function() {
+  var cb = confirmCallback;
+  closeConfirm();
+  if (cb) cb();
+});
+
+document.addEventListener("keydown", function(e) {
+  if (e.key === "Escape") closeConfirm();
+});
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+var toastTimer = null;
+function showToast(type, message) {
+  var toast = document.getElementById("toast");
+  var icon = document.getElementById("toast-icon");
+  icon.textContent = type === "success" ? "check_circle" : "error";
+  icon.style.color = type === "success" ? "#10b981" : "#ef4444";
+  document.getElementById("toast-message").textContent = message;
+  toast.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { toast.classList.add("hidden"); }, 4000);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function show(id) { document.getElementById(id).classList.remove("hidden"); }
+function hide(id) { document.getElementById(id).classList.add("hidden"); }
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+if (requireAdmin()) {
+  loadReports();
+}
+
+</script>
+</body>
+</html>
