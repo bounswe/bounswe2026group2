@@ -486,12 +486,19 @@
             var placeName = story.place_name || "";
             var dateLabel = story.date_label || "";
 
+<<<<<<< Updated upstream
             var dateBadge = dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '';
 
             var headerHtml = coverImage
                 ? '<div style="height:100px;position:relative;"><img src="' + coverImage + '" style="width:100%;height:100%;object-fit:cover;" alt="">' + dateBadge + '</div>'
                 : '<div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">' +
                   '<span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>' + dateBadge + '</div>';
+=======
+            var reportBtn = isLoggedIn()
+                ? '<button onclick="openReportModal(\'' + story.id + '\')" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#dc2626;font-weight:600;background:none;border:none;cursor:pointer;padding:0;line-height:1;">' +
+                  '<span class="material-symbols-outlined" style="font-size:13px;">flag</span>Report</button>'
+                : '';
+>>>>>>> Stashed changes
 
             return '<div style="width:300px;">' +
                 headerHtml +
@@ -500,8 +507,10 @@
                 '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
                 '<div style="display:flex;align-items:center;justify-content:space-between;">' +
                 (placeName ? '<span style="font-size:11px;color:#35618f;font-weight:600;">' + placeName + '</span>' : '<span></span>') +
+                '<div style="display:flex;align-items:center;gap:10px;">' +
+                reportBtn +
                 '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read Story →</a>' +
-                '</div></div></div>';
+                '</div></div></div></div>';
         }
 
         const markers = [];
@@ -632,7 +641,130 @@
         loadCurrentUser();
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
+
+        // ─── Report functionality ────────────────────────────────────────────
+        var reportModalStoryId = null;
+        var reportSelectedReason = null;
+        var reportReasonsList = [
+            { value: "spam", label: "Spam or misleading" },
+            { value: "inappropriate", label: "Inappropriate content" },
+            { value: "misinformation", label: "Misinformation" },
+            { value: "harassment", label: "Harassment or hate speech" },
+            { value: "copyright", label: "Copyright violation" },
+            { value: "other", label: "Other" }
+        ];
+
+        function setReportSubmitEnabled(enabled) {
+            var btn = document.getElementById("btn-submit-report");
+            btn.disabled = !enabled;
+            btn.style.opacity = enabled ? "1" : "0.4";
+            btn.style.cursor = enabled ? "" : "not-allowed";
+        }
+
+        function openReportModal(storyId) {
+            reportModalStoryId = storyId;
+            reportSelectedReason = null;
+            setReportSubmitEnabled(false);
+            document.getElementById("btn-submit-report").textContent = "Submit Report";
+            var container = document.getElementById("report-reasons");
+            container.innerHTML = "";
+            reportReasonsList.forEach(function(reason) {
+                var label = document.createElement("label");
+                label.className = "flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer transition-all";
+                label.innerHTML =
+                    '<input type="radio" name="report-reason" value="' + reason.value + '" class="accent-primary" onchange="onReportReasonChange(this)">' +
+                    '<span class="text-sm text-textmain">' + reason.label + '</span>';
+                container.appendChild(label);
+            });
+            document.getElementById("report-modal").classList.remove("hidden");
+            document.body.style.overflow = "hidden";
+        }
+
+        function onReportReasonChange(radio) {
+            reportSelectedReason = radio.value;
+            document.querySelectorAll("#report-reasons label").forEach(function(l) {
+                l.style.borderColor = "";
+                l.style.backgroundColor = "";
+            });
+            radio.closest("label").style.borderColor = "#775a19";
+            radio.closest("label").style.backgroundColor = "rgba(119,90,25,0.07)";
+            setReportSubmitEnabled(true);
+        }
+
+        function closeReportModal() {
+            document.getElementById("report-modal").classList.add("hidden");
+            document.body.style.overflow = "";
+            reportModalStoryId = null;
+            reportSelectedReason = null;
+        }
+
+        async function submitReport() {
+            if (!reportSelectedReason || !reportModalStoryId) return;
+            setReportSubmitEnabled(false);
+            document.getElementById("btn-submit-report").textContent = "Submitting...";
+            try {
+                var res = await authFetch(API_BASE + "/stories/" + reportModalStoryId + "/reports", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reason: reportSelectedReason })
+                });
+                closeReportModal();
+                showReportToast(res.ok ? "success" : "error",
+                    res.ok
+                        ? "Report submitted. Thank you for helping keep the community safe."
+                        : "Failed to submit report. Please try again.");
+            } catch (err) {
+                closeReportModal();
+                showReportToast("error", "Failed to submit report. Please try again.");
+            }
+        }
+
+        var reportToastTimer = null;
+        function showReportToast(type, message) {
+            var toast = document.getElementById("report-toast");
+            var icon = document.getElementById("report-toast-icon");
+            var msg = document.getElementById("report-toast-message");
+            icon.textContent = type === "success" ? "check_circle" : "error";
+            icon.style.color = type === "success" ? "#10b981" : "#ef4444";
+            msg.textContent = message;
+            toast.classList.remove("hidden");
+            clearTimeout(reportToastTimer);
+            reportToastTimer = setTimeout(function() { toast.classList.add("hidden"); }, 4000);
+        }
+
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") closeReportModal();
+        });
     </script>
+
+<!-- Report Modal -->
+<div id="report-modal" class="hidden fixed inset-0 z-[2000] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeReportModal()"></div>
+    <div class="relative w-full max-w-md rounded-3xl border border-border bg-white p-8 shadow-soft">
+        <div class="flex items-start justify-between mb-6">
+            <div>
+                <h2 id="report-modal-title" class="font-headline text-xl font-bold text-textmain">Report Story</h2>
+                <p class="mt-1 text-sm text-textmuted">Help us keep the community safe.</p>
+            </div>
+            <button onclick="closeReportModal()" class="text-textmuted hover:text-textmain transition-colors -mt-1 -mr-1 p-1">
+                <span class="material-symbols-outlined text-xl">close</span>
+            </button>
+        </div>
+        <p class="text-sm font-semibold text-textmain mb-3">Reason for reporting</p>
+        <div id="report-reasons" class="space-y-2"></div>
+        <div class="mt-6 flex gap-3">
+            <button onclick="closeReportModal()" class="flex-1 rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Cancel</button>
+            <button id="btn-submit-report" onclick="submitReport()" disabled class="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95" style="opacity:0.4;cursor:not-allowed;">Submit Report</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div id="report-toast" class="hidden fixed bottom-6 right-6 z-[2000] flex items-center gap-3 rounded-2xl border border-border bg-white px-5 py-4 shadow-soft">
+    <span id="report-toast-icon" class="material-symbols-outlined text-xl"></span>
+    <p id="report-toast-message" class="text-sm font-semibold text-textmain max-w-xs"></p>
+</div>
+
 </body>
 
 </html>

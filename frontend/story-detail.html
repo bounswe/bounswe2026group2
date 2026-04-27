@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       theme: {
@@ -78,6 +79,15 @@
 
         <div class="mt-8 flex flex-wrap gap-3">
           <a href="map.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Back to Map</a>
+<<<<<<< Updated upstream
+=======
+          <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Create Another Story</a>
+          <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
+          <button id="btn-report" class="hidden inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50" onclick="openReportModal()">
+            <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">flag</span>
+            Report
+          </button>
+>>>>>>> Stashed changes
         </div>
       </div>
     </article>
@@ -103,6 +113,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script src="config.js"></script>
+<script src="auth.js"></script>
 <script>
   // Initialize mini-map with arbitrary center initially
   var detailMap = L.map("detail-map", {
@@ -170,6 +181,131 @@
          document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";
       });
   }
+
+  // ─── Report functionality ───────────────────────────────────────────────────
+  var selectedReportReason = null;
+  var reportReasonsList = [
+    { value: "spam", label: "Spam or misleading" },
+    { value: "inappropriate", label: "Inappropriate content" },
+    { value: "misinformation", label: "Misinformation" },
+    { value: "harassment", label: "Harassment or hate speech" },
+    { value: "copyright", label: "Copyright violation" },
+    { value: "other", label: "Other" }
+  ];
+
+  if (isLoggedIn()) {
+    document.getElementById("btn-report").classList.remove("hidden");
+  }
+
+  function setSubmitEnabled(enabled) {
+    var btn = document.getElementById("btn-submit-report");
+    btn.disabled = !enabled;
+    btn.style.opacity = enabled ? "1" : "0.4";
+    btn.style.cursor = enabled ? "" : "not-allowed";
+  }
+
+  function openReportModal() {
+    selectedReportReason = null;
+    setSubmitEnabled(false);
+    document.getElementById("btn-submit-report").textContent = "Submit Report";
+    var container = document.getElementById("report-reasons");
+    container.innerHTML = "";
+    reportReasonsList.forEach(function(reason) {
+      var label = document.createElement("label");
+      label.className = "flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer transition-all";
+      label.innerHTML =
+        '<input type="radio" name="report-reason" value="' + reason.value + '" class="accent-primary" onchange="onReasonChange(this)">' +
+        '<span class="text-sm text-textmain">' + reason.label + '</span>';
+      container.appendChild(label);
+    });
+    document.getElementById("report-modal").classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+  }
+
+  function onReasonChange(radio) {
+    selectedReportReason = radio.value;
+    document.querySelectorAll("#report-reasons label").forEach(function(l) {
+      l.style.borderColor = "";
+      l.style.backgroundColor = "";
+    });
+    radio.closest("label").style.borderColor = "#775a19";
+    radio.closest("label").style.backgroundColor = "rgba(119,90,25,0.07)";
+    setSubmitEnabled(true);
+  }
+
+  function closeReportModal() {
+    document.getElementById("report-modal").classList.add("hidden");
+    document.body.style.overflow = "";
+    selectedReportReason = null;
+  }
+
+  async function submitReport() {
+    if (!selectedReportReason || !storyId) return;
+    var btn = document.getElementById("btn-submit-report");
+    setSubmitEnabled(false);
+    btn.textContent = "Submitting...";
+    try {
+      var res = await authFetch(API_BASE + "/stories/" + storyId + "/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: selectedReportReason })
+      });
+      closeReportModal();
+      showToast(res.ok ? "success" : "error",
+        res.ok
+          ? "Report submitted. Thank you for helping keep the community safe."
+          : "Failed to submit report. Please try again.");
+    } catch (err) {
+      closeReportModal();
+      showToast("error", "Failed to submit report. Please try again.");
+    }
+  }
+
+  var toastTimer = null;
+  function showToast(type, message) {
+    var toast = document.getElementById("toast");
+    var icon = document.getElementById("toast-icon");
+    var msg = document.getElementById("toast-message");
+    icon.textContent = type === "success" ? "check_circle" : "error";
+    icon.style.color = type === "success" ? "#10b981" : "#ef4444";
+    msg.textContent = message;
+    toast.classList.remove("hidden");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toast.classList.add("hidden"); }, 4000);
+  }
+
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeReportModal();
+  });
 </script>
+
+<!-- Report Modal -->
+<div id="report-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeReportModal()"></div>
+  <div class="relative w-full max-w-md rounded-3xl border border-border bg-surface p-8 shadow-soft">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h2 id="report-modal-title" class="font-headline text-xl font-bold text-textmain">Report Story</h2>
+        <p class="mt-1 text-sm text-textmuted">Help us keep the community safe.</p>
+      </div>
+      <button onclick="closeReportModal()" class="text-textmuted hover:text-textmain transition-colors -mt-1 -mr-1 p-1">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <p class="text-sm font-semibold text-textmain mb-3">Reason for reporting</p>
+    <div id="report-reasons" class="space-y-2"></div>
+    <div class="mt-6 flex gap-3">
+      <button onclick="closeReportModal()" class="flex-1 rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Cancel</button>
+      <button id="btn-submit-report" onclick="submitReport()" disabled class="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95" style="opacity:0.4;cursor:not-allowed;">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="hidden fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-border bg-white px-5 py-4 shadow-soft">
+  <span id="toast-icon" class="material-symbols-outlined text-xl"></span>
+  <p id="toast-message" class="text-sm font-semibold text-textmain max-w-xs"></p>
+</div>
+
 </body>
 </html>
