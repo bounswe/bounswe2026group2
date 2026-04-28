@@ -189,24 +189,28 @@
           <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
             <div class="rounded-2xl border border-dashed border-primary-light bg-[rgba(197,160,89,0.08)] px-6 py-10 text-center">
               <p class="text-base font-semibold text-primary">Drop photos, videos, or audio here</p>
-              <p class="mt-2 text-sm text-textmuted">Or click to browse files from your device</p>
+              <p class="mt-2 text-sm text-textmuted">Or capture a photo/video with your camera</p>
               <input type="file" id="media-files" multiple accept="image/*,video/*,audio/*" class="hidden" />
-              <button type="button" onclick="document.getElementById('media-files').click()" class="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
-                Choose Files
-              </button>
+              <input type="file" id="camera-image-file" accept="image/*" capture="environment" class="hidden" />
+              <input type="file" id="camera-video-file" accept="video/*" capture="environment" class="hidden" />
+              <div class="mt-5 flex flex-wrap justify-center gap-2">
+                <button type="button" onclick="document.getElementById('media-files').click()" class="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+                  Choose Files
+                </button>
+                <button type="button" onclick="document.getElementById('camera-image-file').click()" class="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+                  Take Photo
+                </button>
+                <button type="button" onclick="document.getElementById('camera-video-file').click()" class="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+                  Record Video
+                </button>
+              </div>
               <div id="file-list" class="mt-4 text-sm text-textmuted"></div>
             </div>
 
             <section class="rounded-2xl bg-[rgba(53,97,143,0.08)] p-5" aria-labelledby="recording-heading">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 id="recording-heading" class="font-headline text-xl font-bold text-textmain">Record Media</h3>
-                  <p id="recording-status" class="mt-2 text-sm leading-6 text-textmuted">Record audio in your browser, then preview it before publishing.</p>
-                </div>
-                <label class="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-2 text-xs font-semibold text-textmain">
-                  <input id="record-video-toggle" type="checkbox" class="rounded border-border text-primary focus:ring-primary" />
-                  Video
-                </label>
+              <div>
+                <h3 id="recording-heading" class="font-headline text-xl font-bold text-textmain">Record Audio</h3>
+                <p id="recording-status" class="mt-2 text-sm leading-6 text-textmuted">Record audio in your browser, then preview it before publishing.</p>
               </div>
 
               <div id="recording-live" class="mt-4 hidden items-center gap-2 rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-red-700">
@@ -216,7 +220,6 @@
 
               <div id="voice-meter" class="mt-4 hidden h-16 items-center overflow-hidden rounded-xl bg-white/80 px-3 py-3" aria-label="Live voice level"></div>
 
-              <video id="recording-video-preview" class="mt-4 hidden aspect-video w-full rounded-xl bg-textmain object-cover" muted playsinline></video>
               <audio id="recording-audio-preview" class="mt-4 hidden w-full" controls></audio>
 
               <div class="mt-4 grid gap-2 sm:grid-cols-3">
@@ -430,6 +433,7 @@
   var recordingTimerInterval = null;
   var recordingPreviewUrl = null;
   var recordingWasCanceled = false;
+  var capturedCameraFiles = [];
   var audioContext = null;
   var voiceAnalyser = null;
   var voiceAnimationFrame = null;
@@ -438,7 +442,7 @@
   function updateFileList() {
     var fileList = document.getElementById("file-list");
     var selectedFiles = Array.prototype.slice.call(document.getElementById("media-files").files || []);
-    var allFiles = selectedFiles.concat(recordedFiles);
+    var allFiles = selectedFiles.concat(capturedCameraFiles, recordedFiles);
     if (allFiles.length === 0) {
       fileList.textContent = "";
       return;
@@ -452,9 +456,19 @@
 
   // ─── File Upload Display ───
   document.getElementById("media-files").addEventListener("change", updateFileList);
+  document.getElementById("camera-image-file").addEventListener("change", function () {
+    capturedCameraFiles = capturedCameraFiles.concat(Array.prototype.slice.call(this.files || []));
+    this.value = "";
+    updateFileList();
+  });
+  document.getElementById("camera-video-file").addEventListener("change", function () {
+    capturedCameraFiles = capturedCameraFiles.concat(Array.prototype.slice.call(this.files || []));
+    this.value = "";
+    updateFileList();
+  });
 
   function getSelectedFiles() {
-    return Array.prototype.slice.call(document.getElementById("media-files").files || []).concat(recordedFiles);
+    return Array.prototype.slice.call(document.getElementById("media-files").files || []).concat(capturedCameraFiles, recordedFiles);
   }
 
   function getMediaType(file) {
@@ -503,12 +517,10 @@
     var startButton = document.getElementById("btn-start-recording");
     var stopButton = document.getElementById("btn-stop-recording");
     var cancelButton = document.getElementById("btn-cancel-recording");
-    var videoToggle = document.getElementById("record-video-toggle");
 
     startButton.disabled = isRecording;
     stopButton.disabled = !isRecording;
     cancelButton.disabled = !isRecording;
-    videoToggle.disabled = isRecording;
 
     startButton.classList.toggle("opacity-60", isRecording);
     startButton.classList.toggle("cursor-not-allowed", isRecording);
@@ -630,7 +642,6 @@
 
   function clearRecordingPreview() {
     var audioPreview = document.getElementById("recording-audio-preview");
-    var videoPreview = document.getElementById("recording-video-preview");
 
     if (recordingPreviewUrl) {
       URL.revokeObjectURL(recordingPreviewUrl);
@@ -639,33 +650,19 @@
 
     audioPreview.removeAttribute("src");
     audioPreview.classList.add("hidden");
-    videoPreview.removeAttribute("src");
-    videoPreview.srcObject = null;
-    videoPreview.classList.add("hidden");
   }
 
-  function showRecordedPreview(file, kind) {
+  function showRecordedPreview(file) {
     var audioPreview = document.getElementById("recording-audio-preview");
-    var videoPreview = document.getElementById("recording-video-preview");
 
     clearRecordingPreview();
     recordingPreviewUrl = URL.createObjectURL(file);
-
-    if (kind === "video") {
-      videoPreview.srcObject = null;
-      videoPreview.src = recordingPreviewUrl;
-      videoPreview.muted = false;
-      videoPreview.controls = true;
-      videoPreview.classList.remove("hidden");
-    } else {
-      audioPreview.src = recordingPreviewUrl;
-      audioPreview.classList.remove("hidden");
-    }
+    audioPreview.src = recordingPreviewUrl;
+    audioPreview.classList.remove("hidden");
   }
 
   async function startRecording() {
-    var wantsVideo = document.getElementById("record-video-toggle").checked;
-    var kind = wantsVideo ? "video" : "audio";
+    var kind = "audio";
 
     if (!window.RecordingUtils || !RecordingUtils.isMediaRecorderAvailable(window)) {
       setRecordingStatus("Recording is not supported by this browser.", true);
@@ -678,8 +675,7 @@
       recordingWasCanceled = false;
       setStartRecordingLabel("Start");
       recordingStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: wantsVideo
+        audio: true
       });
       startVoiceMeter(recordingStream);
 
@@ -712,20 +708,11 @@
 
         var recordedFile = RecordingUtils.buildRecordedFile(recordingChunks, kind, recorder.mimeType, new Date());
         recordedFiles = [recordedFile];
-        showRecordedPreview(recordedFile, kind);
+        showRecordedPreview(recordedFile);
         updateFileList();
         setStartRecordingLabel("Record Again");
         setRecordingStatus("Recording ready. Preview it here, then publish the story to upload it.", false);
       });
-
-      if (wantsVideo) {
-        var videoPreview = document.getElementById("recording-video-preview");
-        videoPreview.controls = false;
-        videoPreview.muted = true;
-        videoPreview.srcObject = recordingStream;
-        videoPreview.classList.remove("hidden");
-        videoPreview.play().catch(function () { /* autoplay may be blocked */ });
-      }
 
       recorder.start();
       recordingStartedAt = Date.now();
@@ -734,7 +721,7 @@
       document.getElementById("recording-live").classList.remove("hidden");
       document.getElementById("recording-live").classList.add("flex");
       setRecordingButtonState(true);
-      setRecordingStatus(wantsVideo ? "Recording video and audio..." : "Recording audio...", false);
+      setRecordingStatus("Recording audio...", false);
     } catch (error) {
       clearRecordingTimer();
       stopVoiceMeter();
