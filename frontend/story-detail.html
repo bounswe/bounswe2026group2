@@ -42,7 +42,21 @@
       background: rgba(254,249,240,0.75) !important;
       font-size: 10px;
     }
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    }
+    .save-button { transform-origin: center; }
+    .save-button[data-animating="true"] { animation: save-pop 180ms ease-out; }
+    @keyframes save-pop {
+      0% { transform: scale(1); }
+      55% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .save-button[data-animating="true"] { animation: none; }
+    }
   </style>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
 <main class="max-w-6xl mx-auto px-6 py-10 lg:px-10">
@@ -76,8 +90,15 @@
           <!-- Media injected via JS -->
         </div>
 
-        <div class="mt-8 flex flex-wrap gap-3">
+        <div class="mt-8 flex flex-wrap items-center gap-3">
           <a href="map.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Back to Map</a>
+          <button id="save-button" type="button"
+            class="save-button inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-stone-50"
+            data-animating="false" aria-pressed="false" aria-label="Save this story" disabled>
+            <span id="save-button-icon" class="material-symbols-outlined text-[18px] leading-none">bookmark</span>
+            <span id="save-button-text">Save</span>
+          </button>
+          <span id="save-status" class="hidden text-xs text-red-600"></span>
         </div>
       </div>
     </article>
@@ -103,6 +124,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="saves.js"></script>
 <script>
   // Initialize mini-map with arbitrary center initially
   var detailMap = L.map("detail-map", {
@@ -125,6 +148,10 @@
     document.getElementById('story-title').textContent = "Story not found";
     document.getElementById('story-summary').textContent = "No ID provided in the URL.";
   } else {
+    if (typeof setupSaveButton === "function") {
+      setupSaveButton(API_BASE, storyId);
+    }
+
     fetch(API_BASE + "/stories/" + storyId)
       .then(res => res.json())
       .then(story => {
