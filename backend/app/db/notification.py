@@ -42,7 +42,7 @@ class Notification(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     comment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("story_comments.id", ondelete="CASCADE"),
+        ForeignKey("story_comments.id", ondelete="SET NULL"),
         nullable=True,
     )
     event_type: Mapped[NotificationEventType] = mapped_column(

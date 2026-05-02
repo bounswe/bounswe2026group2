@@ -203,3 +203,30 @@ class TestStoryNotificationFlow:
         assert resave_resp.status_code == 200
         assert event_types.count(NotificationEventType.STORY_LIKED) == 2
         assert event_types.count(NotificationEventType.STORY_BOOKMARKED) == 2
+
+    async def test_deleting_comment_preserves_notification_history(self, client, db_session):
+        author_token = await self._register_and_login(
+            client, "notifdeleteauthor", "notifdeleteauthor@example.com", "NotifPass8!"
+        )
+        actor_token = await self._register_and_login(
+            client, "notifdeleteactor", "notifdeleteactor@example.com", "NotifPass9!"
+        )
+        story_id = await self._create_story(client, author_token, title="Delete comment history story")
+
+        comment_resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {actor_token}"},
+            json={"content": "Temporary comment"},
+        )
+        assert comment_resp.status_code == 201
+
+        delete_resp = await client.delete(
+            f"/stories/{story_id}/comments/{comment_resp.json()['id']}",
+            headers={"Authorization": f"Bearer {actor_token}"},
+        )
+        notifications = await self._get_notifications(db_session)
+
+        assert delete_resp.status_code == 204
+        assert len(notifications) == 1
+        assert notifications[0].event_type == NotificationEventType.STORY_COMMENTED
+        assert notifications[0].comment_id is None

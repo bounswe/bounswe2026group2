@@ -42,7 +42,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["actor_user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["comment_id"], ["story_comments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["comment_id"], ["story_comments.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["recipient_user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["story_id"], ["stories.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
