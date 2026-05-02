@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import settings
 from app.db.base import Base
 from app.db.media_file import MediaFile  # noqa: F401
+from app.db.notification import Notification  # noqa: F401
 from app.db.session import get_db
 from app.db.story import Story  # noqa: F401
 from app.db.story_comment import StoryComment  # noqa: F401

@@ -8,7 +8,8 @@ import pytest
 from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
-from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, MediaType, NotificationEventType, StoryStatus, StoryVisibility
+from app.db.notification import Notification
 from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdateRequest
 from app.services.story_service import (
@@ -471,10 +472,11 @@ class TestStorySaveService:
     async def test_save_story_creates_save_and_returns_saved_true(self):
         story_id = uuid.uuid4()
         current_user = _make_user()
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
         db = AsyncMock()
         db.add = MagicMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: None),
         ]
 
@@ -482,20 +484,27 @@ class TestStorySaveService:
 
         assert result.story_id == story_id
         assert result.saved is True
-        db.add.assert_called_once()
-        added_save = db.add.call_args.args[0]
+        assert db.add.call_count == 2
+        added_save = db.add.call_args_list[0].args[0]
         assert added_save.story_id == story_id
         assert added_save.user_id == current_user.id
+        added_notification = db.add.call_args_list[1].args[0]
+        assert isinstance(added_notification, Notification)
+        assert added_notification.recipient_user_id == story.user_id
+        assert added_notification.actor_user_id == current_user.id
+        assert added_notification.story_id == story_id
+        assert added_notification.event_type == NotificationEventType.STORY_BOOKMARKED
         db.commit.assert_awaited_once()
 
     async def test_save_story_is_idempotent_when_already_saved(self):
         story_id = uuid.uuid4()
         current_user = _make_user()
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
         existing_save = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
         db = AsyncMock()
         db.add = MagicMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: existing_save),
         ]
 
@@ -518,10 +527,11 @@ class TestStorySaveService:
     async def test_unsave_story_deletes_save_when_present(self):
         story_id = uuid.uuid4()
         current_user = _make_user()
+        story = _make_story(id=story_id)
         existing_save = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: existing_save),
         ]
 
@@ -535,9 +545,10 @@ class TestStorySaveService:
     async def test_unsave_story_is_idempotent_when_not_saved(self):
         story_id = uuid.uuid4()
         current_user = _make_user()
+        story = _make_story(id=story_id)
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: None),
         ]
 
@@ -585,7 +596,7 @@ class TestStoryCommentService:
 
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: _make_story(id=story_id)),
             SimpleNamespace(all=lambda: [(first_comment, first_author), (second_comment, second_author)]),
         ]
 
@@ -610,16 +621,22 @@ class TestStoryCommentService:
         story_id = uuid.uuid4()
         current_user = _make_user()
         payload = CommentCreateRequest(content="  New comment  ")
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
 
         db = AsyncMock()
         db.add = MagicMock()
-        db.execute.return_value.scalar_one_or_none = lambda: story_id
+        db.execute.return_value.scalar_one_or_none = lambda: story
 
         async def _refresh_side_effect(comment_obj):
             comment_obj.id = uuid.uuid4()
             comment_obj.created_at = datetime.now(timezone.utc)
             comment_obj.updated_at = datetime.now(timezone.utc)
 
+        async def _flush_side_effect():
+            comment_obj = db.add.call_args_list[0].args[0]
+            comment_obj.id = uuid.uuid4()
+
+        db.flush.side_effect = _flush_side_effect
         db.refresh.side_effect = _refresh_side_effect
 
         result = await create_comment_for_story(db, story_id, current_user, payload)
@@ -627,7 +644,15 @@ class TestStoryCommentService:
         assert result.story_id == story_id
         assert result.content == "New comment"
         assert result.author.username == "storyauthor"
-        db.add.assert_called_once()
+        assert db.add.call_count == 2
+        added_notification = db.add.call_args_list[1].args[0]
+        assert isinstance(added_notification, Notification)
+        assert added_notification.recipient_user_id == story.user_id
+        assert added_notification.actor_user_id == current_user.id
+        assert added_notification.story_id == story_id
+        assert added_notification.event_type == NotificationEventType.STORY_COMMENTED
+        assert added_notification.comment_id is not None
+        db.flush.assert_awaited_once()
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once()
 
@@ -648,9 +673,10 @@ class TestStoryCommentService:
         comment_id = uuid.uuid4()
         current_user = _make_user()
         comment = _make_comment(id=comment_id, story_id=story_id, user_id=current_user.id)
+        story = _make_story(id=story_id)
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: comment),
         ]
 
@@ -664,9 +690,10 @@ class TestStoryCommentService:
         comment_id = uuid.uuid4()
         current_user = _make_user()
         comment = _make_comment(id=comment_id, story_id=story_id, user_id=uuid.uuid4())
+        story = _make_story(id=story_id)
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: comment),
         ]
 
@@ -679,9 +706,10 @@ class TestStoryCommentService:
 
     async def test_delete_comment_raises_404_when_comment_missing(self):
         story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: None),
         ]
 
@@ -707,10 +735,11 @@ class TestStoryLikeService:
     async def test_like_story_creates_like_and_returns_count(self):
         story_id = uuid.uuid4()
         current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
         db = AsyncMock()
         db.add = MagicMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: None),
             SimpleNamespace(scalar_one=lambda: 1),
         ]
@@ -721,18 +750,26 @@ class TestStoryLikeService:
         assert result.liked is True
         assert result.like_count == 1
         db.commit.assert_awaited_once()
-        added_like = db.add.call_args.args[0]
+        assert db.add.call_count == 2
+        added_like = db.add.call_args_list[0].args[0]
         assert added_like.story_id == story_id
         assert added_like.user_id == current_user.id
+        added_notification = db.add.call_args_list[1].args[0]
+        assert isinstance(added_notification, Notification)
+        assert added_notification.recipient_user_id == story.user_id
+        assert added_notification.actor_user_id == current_user.id
+        assert added_notification.story_id == story_id
+        assert added_notification.event_type == NotificationEventType.STORY_LIKED
 
     async def test_like_story_is_idempotent_when_like_exists(self):
         story_id = uuid.uuid4()
         current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
         existing_like = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
         db = AsyncMock()
         db.add = MagicMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: existing_like),
             SimpleNamespace(scalar_one=lambda: 1),
         ]
@@ -758,9 +795,10 @@ class TestStoryLikeService:
         story_id = uuid.uuid4()
         current_user = SimpleNamespace(id=uuid.uuid4())
         existing_like = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        story = _make_story(id=story_id)
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: existing_like),
             SimpleNamespace(scalar_one=lambda: 0),
         ]
@@ -776,9 +814,10 @@ class TestStoryLikeService:
     async def test_unlike_story_is_idempotent_when_like_missing(self):
         story_id = uuid.uuid4()
         current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id)
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story_id),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: None),
             SimpleNamespace(scalar_one=lambda: 0),
         ]
