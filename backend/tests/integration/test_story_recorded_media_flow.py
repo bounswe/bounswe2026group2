@@ -191,17 +191,17 @@ class TestRecordedMediaStoryDetailFlow:
         data = detail_resp.json()
 
         assert len(data["media_files"]) == 2
-        media_by_order = sorted(data["media_files"], key=lambda m: m["sort_order"])
+        media_files = data["media_files"]
 
-        assert media_by_order[0]["media_type"] == "audio"
-        assert media_by_order[0]["mime_type"] == "audio/webm;codecs=opus"
-        assert media_by_order[0]["original_filename"] == "recorded-audio.webm"
-        assert media_by_order[0]["sort_order"] == 0
+        assert media_files[0]["media_type"] == "audio"
+        assert media_files[0]["mime_type"] == "audio/webm;codecs=opus"
+        assert media_files[0]["original_filename"] == "recorded-audio.webm"
+        assert media_files[0]["sort_order"] == 0
 
-        assert media_by_order[1]["media_type"] == "video"
-        assert media_by_order[1]["mime_type"] == "video/webm"
-        assert media_by_order[1]["original_filename"] == "recorded-video.webm"
-        assert media_by_order[1]["sort_order"] == 1
+        assert media_files[1]["media_type"] == "video"
+        assert media_files[1]["mime_type"] == "video/webm"
+        assert media_files[1]["original_filename"] == "recorded-video.webm"
+        assert media_files[1]["sort_order"] == 1
 
     async def test_story_detail_recorded_media_urls_are_present(self, client, monkeypatch):
         monkeypatch.setattr("app.services.story_service.upload_bytes", lambda **kwargs: None)
