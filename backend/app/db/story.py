@@ -66,6 +66,7 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     media_files: Mapped[list["MediaFile"]] = relationship(
         back_populates="story",
         cascade="all, delete-orphan",
+        order_by="MediaFile.sort_order",
     )
     saves: Mapped[list["StorySave"]] = relationship(
         back_populates="story",
