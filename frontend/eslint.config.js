@@ -3,7 +3,7 @@ const js = require("@eslint/js");
 module.exports = [
     js.configs.recommended,
     {
-        ignores: ["android/**", "node_modules/**"],
+        ignores: ["android/**", "capacitor-www/**", "dist/**", "frontend/**", "node_modules/**"],
     },
     {
         languageOptions: {
@@ -27,6 +27,9 @@ module.exports = [
                 HTMLElement: "readonly",
                 Event: "readonly",
                 URL: "readonly",
+                Blob: "readonly",
+                File: "readonly",
+                MediaRecorder: "readonly",
                 // CommonJS exports used by some source files for testing
                 module: "readonly",
                 // Libraries loaded via <script>
