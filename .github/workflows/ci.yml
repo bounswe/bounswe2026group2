@@ -196,7 +196,7 @@ jobs:
   backend-integration:
     name: Backend Integration Tests
     runs-on: ubuntu-latest
-    needs: [backend-unit]
+    needs: [backend-api]
 
     services:
       postgres:
@@ -250,7 +250,7 @@ jobs:
   backend-api:
     name: Backend API Tests
     runs-on: ubuntu-latest
-    needs: [backend-integration]
+    needs: [backend-unit]
 
     services:
       postgres:
@@ -304,7 +304,7 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [backend-api, frontend-unit]
+    needs: [backend-integration, frontend-unit]
 
     steps:
       - name: Checkout code
@@ -313,12 +313,58 @@ jobs:
       - name: Run E2E tests
         run: echo "playwright test"  # placeholder
 
-  # ── 5. DEPLOY ─────────────────────────────────────────────────────────────────
+  # ── 5. UAT TESTS ──────────────────────────────────────────────────────────────
+
+  uat:
+    name: UAT Tests
+    runs-on: ubuntu-latest
+    needs: [backend-integration, frontend-unit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Start full stack
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose up -d --build
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && break
+            sleep 3
+          done
+          curl -sf http://localhost:8000/health || exit 1
+
+      - name: Run Playwright UAT tests
+        run: |
+          if [ -d "frontend/tests/uat" ]; then
+            cd frontend && npx playwright test tests/uat/ --reporter=html,junit
+          else
+            echo "UAT placeholder — tests/uat/ not yet created (see issue #282)"
+          fi
+
+      - name: Upload UAT test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-test-reports
+          path: |
+            frontend/playwright-report/
+            frontend/uat-report.xml
+
+  # ── 6. DEPLOY ─────────────────────────────────────────────────────────────────
 
   trigger-deploy:
     name: Trigger Deployment
     runs-on: ubuntu-latest
-    needs: e2e
+    needs: [e2e, uat]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
 
     steps:
