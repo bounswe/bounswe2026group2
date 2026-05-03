@@ -40,9 +40,7 @@ class TestStoryTimeOverlapFlow:
         )
         assert create_resp.status_code == 201
 
-        list_resp = await client.get(
-            "/stories?query_start=2025-08-01&query_end=2025-08-31&query_precision=date"
-        )
+        list_resp = await client.get("/stories?query_start=2025-08-01&query_end=2025-08-31&query_precision=date")
 
         assert list_resp.status_code == 200
         payload = list_resp.json()

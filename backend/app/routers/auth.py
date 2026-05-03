@@ -14,6 +14,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
     "/register",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Register a new user",
+    description="Create a new user account. Returns the created user profile on success.",
     responses={
         409: {"description": "Email or username already taken"},
         422: {"description": "Validation error (weak password, invalid email, etc.)"},
@@ -29,8 +31,11 @@ async def register(
 @router.post(
     "/login",
     response_model=TokenResponse,
+    summary="Login and obtain a JWT",
+    description="Authenticate with email and password. Returns a Bearer JWT valid for 30 minutes.",
     responses={
         401: {"description": "Invalid email or password"},
+        422: {"description": "Validation error (missing or malformed fields)"},
     },
 )
 async def login(
@@ -43,6 +48,8 @@ async def login(
 @router.get(
     "/me",
     response_model=UserResponse,
+    summary="Get current user profile",
+    description="Return the profile of the authenticated user. Requires a valid Bearer token.",
     responses={
         401: {"description": "Missing, invalid, or expired token"},
     },
