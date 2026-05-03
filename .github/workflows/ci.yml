@@ -355,6 +355,7 @@ jobs:
             curl -sf http://localhost:8000/health && break
             sleep 3
           done
+          curl -sf http://localhost:8000/health || exit 1
 
       - name: Run Playwright UAT tests
         run: |
