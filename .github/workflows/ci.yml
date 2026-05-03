@@ -331,23 +331,8 @@ jobs:
 
       - name: Start full stack
         run: |
-          cat > .env <<'EOF'
-          DATABASE_URL=postgresql://postgres:postgres@db:5432/localhistory
-          JWT_SECRET_KEY=ci-test-secret
-          JWT_ALGORITHM=HS256
-          JWT_EXPIRE_MINUTES=30
-          CORS_ORIGINS=http://localhost:3002
-          STORAGE_ENDPOINT=http://minio:9000
-          STORAGE_ACCESS_KEY=minioadmin
-          STORAGE_SECRET_KEY=minioadmin
-          STORAGE_REGION=us-east-1
-          STORAGE_PUBLIC_URL=http://localhost:9001
-          STORAGE_BUCKET_IMAGES=images
-          STORAGE_BUCKET_AUDIO=audio
-          STORAGE_BUCKET_VIDEOS=videos
-          LOG_SQL=false
-          EOF
-          docker compose -f docker-compose.yml up -d --build
+          cp backend/.env.example backend/.env
+          docker compose up -d --build
 
       - name: Wait for backend health
         run: |
