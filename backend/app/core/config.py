@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     STORAGE_BUCKET_AUDIO: str = "audio"
     STORAGE_BUCKET_VIDEOS: str = "videos"
 
+    # ── Google OAuth ───────────────────────────────────────────────────────────
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+
     # ── Speech-to-Text ───────────────────────────────────────────────────────
     TRANSCRIPTION_MODEL: str = "base"
     TRANSCRIPTION_DEVICE: str = "cpu"
