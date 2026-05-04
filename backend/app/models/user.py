@@ -25,16 +25,13 @@ class UserRegisterRequest(BaseModel):
         if not any(c in "!@#$%^&*()-_=+[]{}|;:',.<>?/`~" for c in v):
             errors.append("one special character")
         if errors:
-            raise ValueError(
-                "Password must contain at least: " + ", ".join(errors)
-            )
+            raise ValueError("Password must contain at least: " + ", ".join(errors))
         return v
 
 
 class UserLoginRequest(BaseModel):
     email: EmailStr
     password: str
-
 
 
 class UserResponse(BaseModel):
@@ -51,4 +48,3 @@ class UserResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-

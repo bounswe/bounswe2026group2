@@ -19,8 +19,23 @@ async function loadProfile() {
             joinedEl.innerHTML = '<span class="material-symbols-outlined text-[18px]">calendar_month</span> Joined ' + date.toLocaleDateString('en-US', options);
         }
         await loadUserStories(data.username);
+        await loadSavedCount();
     } catch (err) {
         console.error("Error loading profile:", err);
+    }
+}
+
+async function loadSavedCount() {
+    var el = document.getElementById("stat-saved");
+    if (!el) return;
+    try {
+        var res = await authFetch(API_BASE + "/stories/saved");
+        if (!res.ok) return;
+        var data = await res.json();
+        var n = ((data && data.stories) || []).length;
+        el.textContent = String(n);
+    } catch (err) {
+        console.error("Error loading saved count:", err);
     }
 }
 

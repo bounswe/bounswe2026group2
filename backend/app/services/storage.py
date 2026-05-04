@@ -1,6 +1,7 @@
+from urllib.parse import quote
+
 import boto3
 from botocore.config import Config
-from urllib.parse import quote
 
 from app.core.config import settings
 from app.db.enums import MediaType

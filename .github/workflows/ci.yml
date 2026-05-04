@@ -5,7 +5,54 @@ on:
   pull_request:
 
 jobs:
-  # ── 0. HEALTH CHECK ──────────────────────────────────────────────────────────
+  # ── 0a. LINT & FORMAT ───────────────────────────────────────────────────────
+
+  backend-lint:
+    name: Backend Lint & Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff linter
+        working-directory: backend
+        run: ruff check .
+
+      - name: Run ruff format check
+        working-directory: backend
+        run: ruff format --check .
+
+  frontend-lint:
+    name: Frontend Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+
+  # ── 0b. HEALTH CHECK ────────────────────────────────────────────────────────
 
   backend-health:
     name: Backend Health Check
@@ -83,7 +130,7 @@ jobs:
   backend-unit:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
-    needs: [backend-health]
+    needs: [backend-health, backend-lint]
 
     steps:
       - name: Checkout code
@@ -102,11 +149,21 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/localhistory
-        run: pytest tests/unit/ -v
+        run: pytest tests/unit/ -v --html=unit-report.html --self-contained-html --junitxml=unit-report.xml
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-unit-test-reports
+          path: |
+            backend/unit-report.html
+            backend/unit-report.xml
 
   frontend-unit:
     name: Frontend Unit Tests
     runs-on: ubuntu-latest
+    needs: [frontend-lint]
 
     steps:
       - name: Checkout code
@@ -115,17 +172,31 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
 
       - name: Run frontend unit tests
-        run: echo "test"  # placeholder
+        working-directory: frontend
+        run: npm test
+
+      - name: Upload frontend test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-unit-test-reports
+          path: |
+            frontend/test-report.html
+            frontend/test-report.xml
 
   # ── 2. INTEGRATION TESTS ─────────────────────────────────────────────────────
 
   backend-integration:
     name: Backend Integration Tests
     runs-on: ubuntu-latest
-    needs: [backend-unit]
+    needs: [backend-api]
 
     services:
       postgres:
@@ -163,14 +234,23 @@ jobs:
           STORAGE_ACCESS_KEY: minioadmin
           STORAGE_SECRET_KEY: minioadmin
           STORAGE_REGION: us-east-1
-        run: pytest tests/integration/ -v
+        run: pytest tests/integration/ -v --html=integration-report.html --self-contained-html --junitxml=integration-report.xml
+
+      - name: Upload integration test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integration-test-reports
+          path: |
+            backend/integration-report.html
+            backend/integration-report.xml
 
   # ── 3. API TESTS ─────────────────────────────────────────────────────────────
 
   backend-api:
     name: Backend API Tests
     runs-on: ubuntu-latest
-    needs: [backend-integration]
+    needs: [backend-unit]
 
     services:
       postgres:
@@ -208,14 +288,23 @@ jobs:
           STORAGE_ACCESS_KEY: minioadmin
           STORAGE_SECRET_KEY: minioadmin
           STORAGE_REGION: us-east-1
-        run: pytest tests/api/ -v
+        run: pytest tests/api/ -v --html=api-report.html --self-contained-html --junitxml=api-report.xml
+
+      - name: Upload API test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-api-test-reports
+          path: |
+            backend/api-report.html
+            backend/api-report.xml
 
   # ── 4. E2E TESTS ─────────────────────────────────────────────────────────────
 
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [backend-api, frontend-unit]
+    needs: [backend-integration, frontend-unit]
 
     steps:
       - name: Checkout code
@@ -224,12 +313,58 @@ jobs:
       - name: Run E2E tests
         run: echo "playwright test"  # placeholder
 
-  # ── 5. DEPLOY ─────────────────────────────────────────────────────────────────
+  # ── 5. UAT TESTS ──────────────────────────────────────────────────────────────
+
+  uat:
+    name: UAT Tests
+    runs-on: ubuntu-latest
+    needs: [backend-integration, frontend-unit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Start full stack
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose up -d --build
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && break
+            sleep 3
+          done
+          curl -sf http://localhost:8000/health || exit 1
+
+      - name: Run Playwright UAT tests
+        run: |
+          if [ -d "frontend/tests/uat" ]; then
+            cd frontend && npx playwright test tests/uat/ --reporter=html,junit
+          else
+            echo "UAT placeholder — tests/uat/ not yet created (see issue #282)"
+          fi
+
+      - name: Upload UAT test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-test-reports
+          path: |
+            frontend/playwright-report/
+            frontend/uat-report.xml
+
+  # ── 6. DEPLOY ─────────────────────────────────────────────────────────────────
 
   trigger-deploy:
     name: Trigger Deployment
     runs-on: ubuntu-latest
-    needs: e2e
+    needs: [e2e, uat]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
 
     steps:

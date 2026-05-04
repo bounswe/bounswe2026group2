@@ -8,13 +8,24 @@ import pytest
 from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
-from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, MediaType, NotificationEventType, StoryStatus, StoryVisibility
+from app.db.notification import Notification
+from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdateRequest
 from app.services.story_service import (
+    create_comment_for_story,
     create_story_with_location,
+    delete_comment_for_story,
+    get_nearby_stories,
     get_story_detail_by_id,
+    like_story,
     list_available_stories,
+    list_comments_for_story,
+    list_saved_stories_for_user,
+    save_story_for_user,
     search_available_stories_by_place,
+    unlike_story,
+    unsave_story_for_user,
     update_story_with_location_and_dates,
     upload_media_for_story,
 )
@@ -35,6 +46,7 @@ def _make_story(**overrides):
         "status": StoryStatus.PUBLISHED,
         "visibility": StoryVisibility.PUBLIC,
         "created_at": datetime.now(timezone.utc),
+        "story_likes": [],
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -62,6 +74,29 @@ def _make_media_file(**overrides):
         "alt_text": None,
         "caption": None,
         "created_at": datetime.now(timezone.utc),
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _make_user(**overrides):
+    base = {
+        "id": uuid.uuid4(),
+        "username": "storyauthor",
+        "display_name": "Story Author",
+    }
+    base.update(overrides)
+    return SimpleNamespace(**base)
+
+
+def _make_comment(**overrides):
+    base = {
+        "id": uuid.uuid4(),
+        "story_id": uuid.uuid4(),
+        "user_id": uuid.uuid4(),
+        "content": "Comment content",
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -256,6 +291,114 @@ class TestUploadMediaForStoryService:
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once()
 
+    async def test_upload_accepts_audio_webm(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm;codecs=opus")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.mime_type == "audio/webm;codecs=opus"
+        assert result.media.media_type == MediaType.AUDIO
+
+    async def test_upload_accepts_audio_webm_mixed_case(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.webm", b"audio-bytes", "Audio/WebM;codecs=opus")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.media_type == MediaType.AUDIO
+
+    async def test_upload_accepts_video_webm(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.VIDEO)
+        file = _make_upload_file("recording.webm", b"video-bytes", "video/webm;codecs=vp8,opus")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.mime_type == "video/webm;codecs=vp8,opus"
+        assert result.media.media_type == MediaType.VIDEO
+
+    async def test_upload_accepts_video_webm_mixed_case(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.VIDEO)
+        file = _make_upload_file("recording.webm", b"video-bytes", "Video/WebM;codecs=vp9")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.media_type == MediaType.VIDEO
+
+    async def test_upload_rejects_video_webm_as_wrong_media_type(self):
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("clip.webm", b"video-bytes", "video/webm;codecs=vp8,opus")
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, uuid.uuid4(), file, payload)
+
+        assert exc_info.value.status_code == 422
+        assert "video/webm" in exc_info.value.detail
+        mock_upload.assert_not_called()
+
+    async def test_upload_strips_mime_params_for_validation(self):
+        payload = MediaUploadRequest(media_type=MediaType.IMAGE)
+        file = _make_upload_file("clip.webm", b"audio-bytes", "audio/webm;codecs=opus")
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, uuid.uuid4(), file, payload)
+
+        assert exc_info.value.status_code == 422
+        assert "audio/webm" in exc_info.value.detail
+        mock_upload.assert_not_called()
+
     async def test_upload_rejects_unsupported_mime_type(self):
         payload = MediaUploadRequest(media_type=MediaType.IMAGE)
         file = _make_upload_file("clip.mp4", b"video-bytes", "video/mp4")
@@ -295,7 +438,10 @@ class TestGetStoryDetailByIdService:
         story = _make_story(id=story_id, media_files=[media_1, media_2])
 
         db = AsyncMock()
-        db.execute.return_value.one_or_none = lambda: (story, "storyauthor")
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 2),
+        ]
 
         result = await get_story_detail_by_id(db, story_id)
 
@@ -307,7 +453,8 @@ class TestGetStoryDetailByIdService:
         assert result.media_files[1].original_filename == "photo2.png"
         assert result.media_files[0].media_url.endswith("/images/stories/key.png")
         assert result.media_files[1].media_url.endswith("/images/stories/key.png")
-        db.execute.assert_awaited_once()
+        assert result.like_count == 2
+        assert db.execute.await_count == 2
 
     async def test_raises_404_when_story_not_found(self):
         db = AsyncMock()
@@ -318,6 +465,369 @@ class TestGetStoryDetailByIdService:
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStorySaveService:
+    async def test_save_story_creates_save_and_returns_saved_true(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+
+        result = await save_story_for_user(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.saved is True
+        assert db.add.call_count == 2
+        added_save = db.add.call_args_list[0].args[0]
+        assert added_save.story_id == story_id
+        assert added_save.user_id == current_user.id
+        added_notification = db.add.call_args_list[1].args[0]
+        assert isinstance(added_notification, Notification)
+        assert added_notification.recipient_user_id == story.user_id
+        assert added_notification.actor_user_id == current_user.id
+        assert added_notification.story_id == story_id
+        assert added_notification.event_type == NotificationEventType.STORY_BOOKMARKED
+        db.commit.assert_awaited_once()
+
+    async def test_save_story_is_idempotent_when_already_saved(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
+        existing_save = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_save),
+        ]
+
+        result = await save_story_for_user(db, story_id, current_user)
+
+        assert result.saved is True
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
+    async def test_save_story_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await save_story_for_user(db, uuid.uuid4(), _make_user())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_unsave_story_deletes_save_when_present(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        story = _make_story(id=story_id)
+        existing_save = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_save),
+        ]
+
+        result = await unsave_story_for_user(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.saved is False
+        db.delete.assert_awaited_once_with(existing_save)
+        db.commit.assert_awaited_once()
+
+    async def test_unsave_story_is_idempotent_when_not_saved(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        story = _make_story(id=story_id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+
+        result = await unsave_story_for_user(db, story_id, current_user)
+
+        assert result.saved is False
+        db.delete.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
+    async def test_list_saved_stories_returns_story_list(self):
+        current_user = _make_user()
+        saved_story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(saved_story, "storyauthor")]
+
+        result = await list_saved_stories_for_user(db, current_user)
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+        assert result.stories[0].id == saved_story.id
+        assert result.stories[0].author == "storyauthor"
+
+    async def test_list_saved_stories_query_filters_to_public_published(self):
+        current_user = _make_user()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await list_saved_stories_for_user(db, current_user)
+
+        stmt = db.execute.await_args.args[0]
+        where_clause = str(stmt.whereclause)
+        assert "story_saves.user_id" in where_clause
+        assert "stories.status" in where_clause
+        assert "stories.visibility" in where_clause
+
+
+@pytest.mark.asyncio
+class TestStoryCommentService:
+    async def test_list_comments_returns_comments_in_order(self):
+        story_id = uuid.uuid4()
+        first_author = _make_user()
+        second_author = _make_user(username="otherauthor", display_name="Other Author")
+        first_comment = _make_comment(story_id=story_id, content="First")
+        second_comment = _make_comment(story_id=story_id, content="Second")
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: _make_story(id=story_id)),
+            SimpleNamespace(all=lambda: [(first_comment, first_author), (second_comment, second_author)]),
+        ]
+
+        result = await list_comments_for_story(db, story_id)
+
+        assert result.total == 2
+        assert [comment.content for comment in result.comments] == ["First", "Second"]
+        assert result.comments[0].author.username == "storyauthor"
+        assert result.comments[1].author.username == "otherauthor"
+
+    async def test_list_comments_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await list_comments_for_story(db, uuid.uuid4())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_create_comment_success(self):
+        story_id = uuid.uuid4()
+        current_user = _make_user()
+        payload = CommentCreateRequest(content="  New comment  ")
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(comment_obj):
+            comment_obj.id = uuid.uuid4()
+            comment_obj.created_at = datetime.now(timezone.utc)
+            comment_obj.updated_at = datetime.now(timezone.utc)
+
+        async def _flush_side_effect():
+            comment_obj = db.add.call_args_list[0].args[0]
+            comment_obj.id = uuid.uuid4()
+
+        db.flush.side_effect = _flush_side_effect
+        db.refresh.side_effect = _refresh_side_effect
+
+        result = await create_comment_for_story(db, story_id, current_user, payload)
+
+        assert result.story_id == story_id
+        assert result.content == "New comment"
+        assert result.author.username == "storyauthor"
+        assert db.add.call_count == 2
+        added_notification = db.add.call_args_list[1].args[0]
+        assert isinstance(added_notification, Notification)
+        assert added_notification.recipient_user_id == story.user_id
+        assert added_notification.actor_user_id == current_user.id
+        assert added_notification.story_id == story_id
+        assert added_notification.event_type == NotificationEventType.STORY_COMMENTED
+        assert added_notification.comment_id is not None
+        db.flush.assert_awaited_once()
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once()
+
+    async def test_create_comment_raises_404_when_story_missing(self):
+        current_user = _make_user()
+        payload = CommentCreateRequest(content="Hello")
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_comment_for_story(db, uuid.uuid4(), current_user, payload)
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_delete_comment_success_for_owner(self):
+        story_id = uuid.uuid4()
+        comment_id = uuid.uuid4()
+        current_user = _make_user()
+        comment = _make_comment(id=comment_id, story_id=story_id, user_id=current_user.id)
+        story = _make_story(id=story_id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: comment),
+        ]
+
+        await delete_comment_for_story(db, story_id, comment_id, current_user)
+
+        db.delete.assert_awaited_once_with(comment)
+        db.commit.assert_awaited_once()
+
+    async def test_delete_comment_raises_403_for_non_owner(self):
+        story_id = uuid.uuid4()
+        comment_id = uuid.uuid4()
+        current_user = _make_user()
+        comment = _make_comment(id=comment_id, story_id=story_id, user_id=uuid.uuid4())
+        story = _make_story(id=story_id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: comment),
+        ]
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_comment_for_story(db, story_id, comment_id, current_user)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Not allowed to delete this comment"
+        db.delete.assert_not_awaited()
+
+    async def test_delete_comment_raises_404_when_comment_missing(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+        ]
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_comment_for_story(db, story_id, uuid.uuid4(), _make_user())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Comment not found"
+
+    async def test_delete_comment_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await delete_comment_for_story(db, uuid.uuid4(), uuid.uuid4(), _make_user())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStoryLikeService:
+    async def test_like_story_creates_like_and_returns_count(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+            SimpleNamespace(scalar_one=lambda: 1),
+        ]
+
+        result = await like_story(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.liked is True
+        assert result.like_count == 1
+        db.commit.assert_awaited_once()
+        assert db.add.call_count == 2
+        added_like = db.add.call_args_list[0].args[0]
+        assert added_like.story_id == story_id
+        assert added_like.user_id == current_user.id
+        added_notification = db.add.call_args_list[1].args[0]
+        assert isinstance(added_notification, Notification)
+        assert added_notification.recipient_user_id == story.user_id
+        assert added_notification.actor_user_id == current_user.id
+        assert added_notification.story_id == story_id
+        assert added_notification.event_type == NotificationEventType.STORY_LIKED
+
+    async def test_like_story_is_idempotent_when_like_exists(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id, user_id=uuid.uuid4())
+        existing_like = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_like),
+            SimpleNamespace(scalar_one=lambda: 1),
+        ]
+
+        result = await like_story(db, story_id, current_user)
+
+        assert result.liked is True
+        assert result.like_count == 1
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
+    async def test_like_story_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await like_story(db, uuid.uuid4(), SimpleNamespace(id=uuid.uuid4()))
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+
+    async def test_unlike_story_deletes_like_and_returns_zero_count(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        existing_like = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        story = _make_story(id=story_id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_like),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await unlike_story(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.liked is False
+        assert result.like_count == 0
+        db.delete.assert_awaited_once_with(existing_like)
+        db.commit.assert_awaited_once()
+
+    async def test_unlike_story_is_idempotent_when_like_missing(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await unlike_story(db, story_id, current_user)
+
+        assert result.liked is False
+        assert result.like_count == 0
+        db.delete.assert_not_awaited()
+        db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -345,6 +855,7 @@ class TestCreateStoryWithLocationService:
             story_obj.visibility = StoryVisibility.PUBLIC
 
         db.refresh.side_effect = _refresh_side_effect
+        db.execute.return_value.scalar_one = lambda: 0
 
         result = await create_story_with_location(db, current_user, payload)
 
@@ -359,6 +870,7 @@ class TestCreateStoryWithLocationService:
         assert result.status == StoryStatus.PUBLISHED
         assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
+        assert result.like_count == 0
         db.add.assert_called_once()
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once()
@@ -402,7 +914,10 @@ class TestUpdateStoryWithLocationAndDatesService:
         current_user = SimpleNamespace(id=story.user_id, username="authoruser")
 
         db = AsyncMock()
-        db.execute.return_value.scalar_one_or_none = lambda: story
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one=lambda: 4),
+        ]
 
         result = await update_story_with_location_and_dates(db, story_id, current_user, payload)
 
@@ -417,6 +932,7 @@ class TestUpdateStoryWithLocationAndDatesService:
         assert result.date_end == date(1923, 12, 31)
         assert result.date_precision == DatePrecision.YEAR
         assert result.date_label == "1920 - 1923"
+        assert result.like_count == 4
         assert result.media_files == []
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once_with(story)
@@ -467,3 +983,85 @@ class TestUpdateStoryWithLocationAndDatesService:
         assert exc_info.value.status_code == 422
         assert "place_name is required" in exc_info.value.detail
         db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestGetNearbyStoriesService:
+    async def test_returns_nearby_stories_and_total(self):
+        story = _make_story()
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "storyauthor")]
+
+        result = await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+        item = result.stories[0]
+        assert item.id == story.id
+        assert item.title == "Story Title"
+        assert item.author == "storyauthor"
+        assert item.latitude == 41.0082
+        assert item.longitude == 28.9784
+        db.execute.assert_awaited_once()
+
+    async def test_returns_empty_response_when_no_stories_in_radius(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await get_nearby_stories(db, center_lat=0.0, center_lng=0.0, radius_km=1.0)
+
+        assert result.total == 0
+        assert result.stories == []
+        db.execute.assert_awaited_once()
+
+    async def test_query_uses_haversine_formula(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "asin" in sql
+        assert "sqrt" in sql
+        assert "sin" in sql
+        assert "cos" in sql
+        assert "radians" in sql
+
+    async def test_query_filters_null_coordinates(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.latitude IS NOT NULL" in sql
+        assert "stories.longitude IS NOT NULL" in sql
+
+    async def test_query_filters_published_public_stories_only(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.status" in sql
+        assert "stories.visibility" in sql
+
+    async def test_query_orders_by_distance_ascending(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(db, center_lat=41.0082, center_lng=28.9784)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "ORDER BY" in sql
+        assert "DESC" not in sql
