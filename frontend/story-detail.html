@@ -152,7 +152,40 @@
 
       <section class="rounded-3xl border border-border bg-surface p-6">
         <h2 class="font-headline text-2xl font-bold text-textmain">Comments</h2>
-        <p class="mt-5 text-sm text-textmuted">No comments yet.</p>
+        <p id="comments-status" class="mt-4 hidden text-sm text-textmuted" role="status" aria-live="polite"></p>
+
+        <div id="comments-login-prompt" class="mt-4 hidden rounded-2xl border border-border bg-background px-4 py-3 text-sm text-textmuted">
+          Please login to comment.
+          <a href="index.html" class="font-semibold text-primary hover:underline">Go to login →</a>
+        </div>
+
+        <form id="comment-form" class="mt-4 hidden space-y-3">
+          <label for="comment-input" class="text-sm font-semibold text-textmain">Add a comment</label>
+          <textarea
+            id="comment-input"
+            name="comment"
+            rows="3"
+            class="w-full resize-none rounded-2xl border border-border bg-white px-4 py-3 text-sm text-textmain shadow-sm focus:border-primary focus:ring-primary"
+            placeholder="Share your thoughts about this story..."
+            maxlength="2000"
+            required
+          ></textarea>
+          <div class="flex items-center justify-between gap-3">
+            <p id="comment-error" class="hidden text-sm font-semibold text-red-600"></p>
+            <button
+              id="comment-submit"
+              type="submit"
+              class="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Post
+            </button>
+          </div>
+        </form>
+
+        <div class="mt-5">
+          <ul id="comments-list" class="space-y-4" aria-label="Comments"></ul>
+          <p id="comments-empty" class="mt-4 text-sm text-textmuted">No comments yet.</p>
+        </div>
       </section>
     </aside>
   </section>
@@ -164,6 +197,7 @@
 <script src="auth.js"></script>
 <script src="likes.js"></script>
 <script src="config.js"></script>
+<script src="comments.js"></script>
 <script src="auth.js"></script>
 <script src="saves.js"></script>
 <script>
@@ -231,6 +265,7 @@
              document.getElementById('story-media').innerHTML = mediaHtml;
           }
 
+          setupComments(API_BASE, String(story.id || storyId));
           setupLikes(API_BASE, String(story.id || storyId));
       })
       .catch(err => {
