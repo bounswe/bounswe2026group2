@@ -64,6 +64,22 @@
     }
     #location-search-results::-webkit-scrollbar { width: 4px; }
     #location-search-results::-webkit-scrollbar-thumb { background: #c5a059; border-radius: 4px; }
+    .recording-dot {
+      width: 0.7rem;
+      height: 0.7rem;
+      border-radius: 9999px;
+      background: #b91c1c;
+      animation: recording-pulse 1s infinite;
+    }
+    @keyframes recording-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.86); }
+    }
+    .voice-meter-bar {
+      transform-origin: bottom;
+      flex: 0 0 4px;
+      transition: height 80ms linear, opacity 160ms linear;
+    }
   </style>
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
@@ -170,14 +186,54 @@
 
         <div>
           <label class="mb-2 block text-sm font-semibold text-textmain">Media Upload</label>
-          <div class="rounded-2xl border border-dashed border-primary-light bg-[rgba(197,160,89,0.08)] px-6 py-10 text-center">
-            <p class="text-base font-semibold text-primary">Drop photos, videos, or audio here</p>
-            <p class="mt-2 text-sm text-textmuted">Or click to browse files from your device</p>
-            <input type="file" id="media-files" multiple accept="image/*,video/*,audio/*" class="hidden" />
-            <button type="button" onclick="document.getElementById('media-files').click()" class="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
-              Choose Files
-            </button>
-            <div id="file-list" class="mt-4 text-sm text-textmuted"></div>
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+            <div class="rounded-2xl border border-dashed border-primary-light bg-[rgba(197,160,89,0.08)] px-6 py-10 text-center">
+              <p class="text-base font-semibold text-primary">Drop photos, videos, or audio here</p>
+              <p class="mt-2 text-sm text-textmuted">Or capture a photo/video with your camera</p>
+              <input type="file" id="media-files" multiple accept="image/*,video/*,audio/*" class="hidden" />
+              <input type="file" id="camera-image-file" accept="image/*" capture="environment" class="hidden" />
+              <input type="file" id="camera-video-file" accept="video/*" capture="environment" class="hidden" />
+              <div class="mt-5 flex flex-wrap justify-center gap-2">
+                <button type="button" onclick="document.getElementById('media-files').click()" class="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+                  Choose Files
+                </button>
+                <button type="button" onclick="document.getElementById('camera-image-file').click()" class="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+                  Take Photo
+                </button>
+                <button type="button" onclick="document.getElementById('camera-video-file').click()" class="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+                  Record Video
+                </button>
+              </div>
+              <div id="file-list" class="mt-4 text-sm text-textmuted"></div>
+            </div>
+
+            <section class="rounded-2xl bg-[rgba(53,97,143,0.08)] p-5" aria-labelledby="recording-heading">
+              <div>
+                <h3 id="recording-heading" class="font-headline text-xl font-bold text-textmain">Record Audio</h3>
+                <p id="recording-status" class="mt-2 text-sm leading-6 text-textmuted">Record audio in your browser, then preview it before publishing.</p>
+              </div>
+
+              <div id="recording-live" class="mt-4 hidden items-center gap-2 rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-red-700">
+                <span class="recording-dot" aria-hidden="true"></span>
+                <span id="recording-timer">00:00</span>
+              </div>
+
+              <div id="voice-meter" class="mt-4 hidden h-16 items-center overflow-hidden rounded-xl bg-white/80 px-3 py-3" aria-label="Live voice level"></div>
+
+              <audio id="recording-audio-preview" class="mt-4 hidden w-full" controls></audio>
+
+              <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                <button type="button" id="btn-start-recording" class="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+                  Start
+                </button>
+                <button type="button" id="btn-stop-recording" disabled class="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-textmain opacity-60 transition hover:bg-stone-50">
+                  Stop
+                </button>
+                <button type="button" id="btn-cancel-recording" disabled class="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-textmain opacity-60 transition hover:bg-stone-50">
+                  Cancel
+                </button>
+              </div>
+            </section>
           </div>
         </div>
 
@@ -211,6 +267,7 @@
 <!-- Auth -->
 <script src="config.js"></script>
 <script src="auth.js"></script>
+<script src="recording.js"></script>
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -368,22 +425,50 @@
     updateChecklist();
   });
 
-  // ─── File Upload Display ───
-  document.getElementById("media-files").addEventListener("change", function () {
+  var recordedFiles = [];
+  var recorder = null;
+  var recordingStream = null;
+  var recordingChunks = [];
+  var recordingStartedAt = 0;
+  var recordingTimerInterval = null;
+  var recordingPreviewUrl = null;
+  var recordingWasCanceled = false;
+  var capturedCameraFiles = [];
+  var audioContext = null;
+  var voiceAnalyser = null;
+  var voiceAnimationFrame = null;
+  var lastVoiceBarAt = 0;
+
+  function updateFileList() {
     var fileList = document.getElementById("file-list");
-    if (this.files.length === 0) {
+    var selectedFiles = Array.prototype.slice.call(document.getElementById("media-files").files || []);
+    var allFiles = selectedFiles.concat(capturedCameraFiles, recordedFiles);
+    if (allFiles.length === 0) {
       fileList.textContent = "";
       return;
     }
     var names = [];
-    for (var i = 0; i < this.files.length; i++) {
-      names.push(this.files[i].name);
+    for (var i = 0; i < allFiles.length; i++) {
+      names.push(allFiles[i].name);
     }
-    fileList.textContent = names.length + " file(s) selected: " + names.join(", ");
+    fileList.textContent = names.length + " file(s) ready: " + names.join(", ");
+  }
+
+  // ─── File Upload Display ───
+  document.getElementById("media-files").addEventListener("change", updateFileList);
+  document.getElementById("camera-image-file").addEventListener("change", function () {
+    capturedCameraFiles = capturedCameraFiles.concat(Array.prototype.slice.call(this.files || []));
+    this.value = "";
+    updateFileList();
+  });
+  document.getElementById("camera-video-file").addEventListener("change", function () {
+    capturedCameraFiles = capturedCameraFiles.concat(Array.prototype.slice.call(this.files || []));
+    this.value = "";
+    updateFileList();
   });
 
   function getSelectedFiles() {
-    return Array.prototype.slice.call(document.getElementById("media-files").files || []);
+    return Array.prototype.slice.call(document.getElementById("media-files").files || []).concat(capturedCameraFiles, recordedFiles);
   }
 
   function getMediaType(file) {
@@ -427,6 +512,250 @@
     draftButton.classList.toggle("opacity-70", isSubmitting);
     draftButton.classList.toggle("cursor-not-allowed", isSubmitting);
   }
+
+  function setRecordingButtonState(isRecording) {
+    var startButton = document.getElementById("btn-start-recording");
+    var stopButton = document.getElementById("btn-stop-recording");
+    var cancelButton = document.getElementById("btn-cancel-recording");
+
+    startButton.disabled = isRecording;
+    stopButton.disabled = !isRecording;
+    cancelButton.disabled = !isRecording;
+
+    startButton.classList.toggle("opacity-60", isRecording);
+    startButton.classList.toggle("cursor-not-allowed", isRecording);
+    stopButton.classList.toggle("opacity-60", !isRecording);
+    stopButton.classList.toggle("cursor-not-allowed", !isRecording);
+    cancelButton.classList.toggle("opacity-60", !isRecording);
+    cancelButton.classList.toggle("cursor-not-allowed", !isRecording);
+  }
+
+  function setStartRecordingLabel(label) {
+    document.getElementById("btn-start-recording").textContent = label;
+  }
+
+  function setRecordingStatus(message, isError) {
+    var statusEl = document.getElementById("recording-status");
+    statusEl.textContent = message;
+    statusEl.classList.toggle("text-red-700", !!isError);
+    statusEl.classList.toggle("text-textmuted", !isError);
+  }
+
+  function clearRecordingTimer() {
+    if (recordingTimerInterval) {
+      clearInterval(recordingTimerInterval);
+      recordingTimerInterval = null;
+    }
+    document.getElementById("recording-live").classList.add("hidden");
+    document.getElementById("recording-live").classList.remove("flex");
+    document.getElementById("recording-timer").textContent = "00:00";
+  }
+
+  function resetVoiceMeter() {
+    document.getElementById("voice-meter").innerHTML = "";
+  }
+
+  function stopVoiceMeter() {
+    if (voiceAnimationFrame) {
+      cancelAnimationFrame(voiceAnimationFrame);
+      voiceAnimationFrame = null;
+    }
+    if (audioContext) {
+      audioContext.close().catch(function () { /* audio context may already be closing */ });
+      audioContext = null;
+    }
+    voiceAnalyser = null;
+    document.getElementById("voice-meter").classList.add("hidden");
+    document.getElementById("voice-meter").classList.remove("flex");
+    resetVoiceMeter();
+  }
+
+  function startVoiceMeter(stream) {
+    var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    stopVoiceMeter();
+    audioContext = new AudioContextClass();
+    voiceAnalyser = audioContext.createAnalyser();
+    voiceAnalyser.fftSize = 256;
+
+    var source = audioContext.createMediaStreamSource(stream);
+    source.connect(voiceAnalyser);
+
+    document.getElementById("voice-meter").classList.remove("hidden");
+    document.getElementById("voice-meter").classList.add("flex");
+
+    var data = new Uint8Array(voiceAnalyser.frequencyBinCount);
+    lastVoiceBarAt = 0;
+
+    function appendVoiceBar(level) {
+      var meter = document.getElementById("voice-meter");
+      var bar = document.createElement("span");
+      var height = Math.max(8, Math.round(8 + (level * 48)));
+
+      bar.className = "voice-meter-bar rounded-full bg-primary";
+      bar.style.height = height + "px";
+      bar.style.opacity = String(Math.max(0.35, Math.min(1, 0.45 + level)));
+      meter.appendChild(bar);
+
+      while (meter.children.length > 48) {
+        meter.removeChild(meter.firstElementChild);
+      }
+    }
+
+    function renderVoiceLevel() {
+      if (!voiceAnalyser) return;
+
+      voiceAnalyser.getByteFrequencyData(data);
+      var total = 0;
+      for (var i = 0; i < data.length; i++) {
+        total += data[i];
+      }
+      var level = Math.min(1, total / data.length / 120);
+
+      if (Date.now() - lastVoiceBarAt > 90) {
+        appendVoiceBar(level);
+        lastVoiceBarAt = Date.now();
+      }
+
+      voiceAnimationFrame = requestAnimationFrame(renderVoiceLevel);
+    }
+
+    renderVoiceLevel();
+  }
+
+  function updateRecordingTimer() {
+    var elapsed = Math.floor((Date.now() - recordingStartedAt) / 1000);
+    var minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    var seconds = String(elapsed % 60).padStart(2, "0");
+    document.getElementById("recording-timer").textContent = minutes + ":" + seconds;
+  }
+
+  function stopRecordingStream() {
+    if (recordingStream) {
+      recordingStream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+      recordingStream = null;
+    }
+  }
+
+  function clearRecordingPreview() {
+    var audioPreview = document.getElementById("recording-audio-preview");
+
+    if (recordingPreviewUrl) {
+      URL.revokeObjectURL(recordingPreviewUrl);
+      recordingPreviewUrl = null;
+    }
+
+    audioPreview.removeAttribute("src");
+    audioPreview.classList.add("hidden");
+  }
+
+  function showRecordedPreview(file) {
+    var audioPreview = document.getElementById("recording-audio-preview");
+
+    clearRecordingPreview();
+    recordingPreviewUrl = URL.createObjectURL(file);
+    audioPreview.src = recordingPreviewUrl;
+    audioPreview.classList.remove("hidden");
+  }
+
+  async function startRecording() {
+    var kind = "audio";
+
+    if (!window.RecordingUtils || !RecordingUtils.isMediaRecorderAvailable(window)) {
+      setRecordingStatus("Recording is not supported by this browser.", true);
+      return;
+    }
+
+    try {
+      clearRecordingPreview();
+      recordingChunks = [];
+      recordingWasCanceled = false;
+      setStartRecordingLabel("Start");
+      recordingStream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+      startVoiceMeter(recordingStream);
+
+      var mimeType = RecordingUtils.getSupportedRecordingMimeType(kind, window.MediaRecorder);
+      recorder = mimeType
+        ? new MediaRecorder(recordingStream, { mimeType: mimeType })
+        : new MediaRecorder(recordingStream);
+
+      recorder.addEventListener("dataavailable", function (event) {
+        if (event.data && event.data.size > 0) {
+          recordingChunks.push(event.data);
+        }
+      });
+
+      recorder.addEventListener("stop", function () {
+        clearRecordingTimer();
+        stopVoiceMeter();
+        stopRecordingStream();
+        setRecordingButtonState(false);
+
+        if (recordingWasCanceled) {
+          setRecordingStatus("Recording canceled. Start again when ready.", false);
+          return;
+        }
+
+        if (recordingChunks.length === 0) {
+          setRecordingStatus("No recording data was captured. Try again.", true);
+          return;
+        }
+
+        var recordedFile = RecordingUtils.buildRecordedFile(recordingChunks, kind, recorder.mimeType, new Date());
+        recordedFiles = [recordedFile];
+        showRecordedPreview(recordedFile);
+        updateFileList();
+        setStartRecordingLabel("Record Again");
+        setRecordingStatus("Recording ready. Preview it here, then publish the story to upload it.", false);
+      });
+
+      recorder.start();
+      recordingStartedAt = Date.now();
+      updateRecordingTimer();
+      recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
+      document.getElementById("recording-live").classList.remove("hidden");
+      document.getElementById("recording-live").classList.add("flex");
+      setRecordingButtonState(true);
+      setRecordingStatus("Recording audio...", false);
+    } catch (error) {
+      clearRecordingTimer();
+      stopVoiceMeter();
+      stopRecordingStream();
+      setRecordingButtonState(false);
+      var denied = error && (error.name === "NotAllowedError" || error.name === "PermissionDeniedError");
+      setRecordingStatus(denied ? "Microphone or camera permission was denied." : "Could not start recording. Check your device permissions.", true);
+    }
+  }
+
+  function stopRecording() {
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  }
+
+  function cancelRecording() {
+    recordingWasCanceled = true;
+    recordingChunks = [];
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    clearRecordingTimer();
+    stopVoiceMeter();
+    stopRecordingStream();
+    clearRecordingPreview();
+    setRecordingButtonState(false);
+    setStartRecordingLabel(recordedFiles.length > 0 ? "Record Again" : "Start");
+    setRecordingStatus("Recording canceled. Start again when ready.", false);
+  }
+
+  document.getElementById("btn-start-recording").addEventListener("click", startRecording);
+  document.getElementById("btn-stop-recording").addEventListener("click", stopRecording);
+  document.getElementById("btn-cancel-recording").addEventListener("click", cancelRecording);
 
   // ─── Checklist Updates ───
   function updateChecklist() {

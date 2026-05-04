@@ -1,33 +1,33 @@
 # Local History Story Map
 
-## Prerequisites
+A collaborative platform for sharing and discovering local history stories tied to real geographic locations and historical dates. Users can attach photos, audio recordings, and video; explore an interactive map; search by place and date; like, comment, and bookmark stories; and record media directly in the browser.
 
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+## Tech Stack
 
-## Setup
+| Layer | Technology |
+|-------|-----------|
+| Backend | Python 3.11, FastAPI, PostgreSQL 16 |
+| Frontend | Vanilla HTML/JS, Leaflet, Nginx |
+| Mobile | Capacitor + Android |
+| Infrastructure | Docker Compose, GitHub Actions, Render |
 
-1. Clone the repository
-   ```bash
-   git clone https://github.com/bounswe/bounswe2026group2.git
-   cd bounswe2026group2
-   ```
-
-## Running Locally
+## Quick Start
 
 ```bash
+git clone https://github.com/bounswe/bounswe2026group2.git
+cd bounswe2026group2
 ./localrun.sh
 ```
 
-This builds and starts all services via Docker Compose.
+`localrun.sh` checks prerequisites, detects port conflicts, and starts all services. Press **Ctrl-C** to stop cleanly.
 
-| Service  | URL                   |
-|----------|-----------------------|
-| Backend  | http://localhost:8000 |
-| API Docs | http://localhost:8000/docs |
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/docs |
+| MinIO Console | http://localhost:9001 |
 
-## Stopping
+## Team
 
-```bash
-docker compose down
-```
+Bogazici University — CMPE354 Software Engineering Project, Group 2 (2026)

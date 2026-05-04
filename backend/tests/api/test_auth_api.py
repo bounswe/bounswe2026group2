@@ -73,24 +73,33 @@ class TestRegistrationAPI:
 
     async def test_register_missing_fields(self, client):
         # Missing username
-        resp = await client.post("/auth/register", json={
-            "email": "missing@example.com",
-            "password": "ApiPass1!",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json={
+                "email": "missing@example.com",
+                "password": "ApiPass1!",
+            },
+        )
         assert resp.status_code == 422
 
         # Missing email
-        resp = await client.post("/auth/register", json={
-            "username": "missingmail",
-            "password": "ApiPass1!",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json={
+                "username": "missingmail",
+                "password": "ApiPass1!",
+            },
+        )
         assert resp.status_code == 422
 
         # Missing password
-        resp = await client.post("/auth/register", json={
-            "username": "misspwd",
-            "email": "misspwd@example.com",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json={
+                "username": "misspwd",
+                "email": "misspwd@example.com",
+            },
+        )
         assert resp.status_code == 422
 
 
@@ -143,15 +152,21 @@ class TestLoginAPI:
 
     async def test_login_missing_fields(self, client):
         # Missing email
-        resp = await client.post("/auth/login", json={
-            "password": "AnyPass1!",
-        })
+        resp = await client.post(
+            "/auth/login",
+            json={
+                "password": "AnyPass1!",
+            },
+        )
         assert resp.status_code == 422
 
         # Missing password
-        resp = await client.post("/auth/login", json={
-            "email": "some@example.com",
-        })
+        resp = await client.post(
+            "/auth/login",
+            json={
+                "email": "some@example.com",
+            },
+        )
         assert resp.status_code == 422
 
 
@@ -175,9 +190,7 @@ class TestTokenVerificationAPI:
         )
         token = login_resp.json()["access_token"]
 
-        resp = await client.get(
-            "/auth/me", headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["username"] == "meuser"
@@ -188,14 +201,14 @@ class TestTokenVerificationAPI:
         assert resp.status_code == 401 or resp.status_code == 403
 
     async def test_me_with_invalid_token(self, client):
-        resp = await client.get(
-            "/auth/me", headers={"Authorization": "Bearer invalid.token.here"}
-        )
+        resp = await client.get("/auth/me", headers={"Authorization": "Bearer invalid.token.here"})
         assert resp.status_code == 401
 
     async def test_me_with_expired_token(self, client):
-        import jwt
         from datetime import datetime, timedelta, timezone
+
+        import jwt
+
         from app.core.config import settings
 
         expired_payload = {
@@ -204,10 +217,6 @@ class TestTokenVerificationAPI:
             "role": "user",
             "exp": datetime.now(timezone.utc) - timedelta(hours=1),
         }
-        expired_token = jwt.encode(
-            expired_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-        )
-        resp = await client.get(
-            "/auth/me", headers={"Authorization": f"Bearer {expired_token}"}
-        )
+        expired_token = jwt.encode(expired_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+        resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {expired_token}"})
         assert resp.status_code == 401

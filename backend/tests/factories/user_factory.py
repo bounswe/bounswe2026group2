@@ -2,7 +2,6 @@ from app.db.enums import UserRole
 from app.db.user import User
 from app.services.auth_service import hash_password
 
-
 DEFAULT_USERNAME = "testuser"
 DEFAULT_EMAIL = "test@example.com"
 DEFAULT_PASSWORD = "ValidPass1!"
