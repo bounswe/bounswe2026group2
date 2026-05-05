@@ -39,13 +39,33 @@ class TestStoryLikeFlow:
         liker_token = await self._register_and_login(client, "likeruser", "liker@example.com", "LikeUser1!")
         story_id = await self._create_story(client, author_token)
 
+        initial_summary_resp = await client.get(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
         like_resp = await client.post(
             f"/stories/{story_id}/like",
             headers={"Authorization": f"Bearer {liker_token}"},
         )
+        updated_summary_resp = await client.get(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
 
+        assert initial_summary_resp.status_code == 200
+        assert initial_summary_resp.json() == {
+            "story_id": story_id,
+            "liked": False,
+            "like_count": 0,
+        }
         assert like_resp.status_code == 200
         assert like_resp.json() == {
+            "story_id": story_id,
+            "liked": True,
+            "like_count": 1,
+        }
+        assert updated_summary_resp.status_code == 200
+        assert updated_summary_resp.json() == {
             "story_id": story_id,
             "liked": True,
             "like_count": 1,

@@ -430,6 +430,71 @@ class TestStoryLikeAPI:
             "like_count": 1,
         }
 
+    async def test_get_like_summary_returns_unliked_state(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi6", "likeauthorapi6@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi6", "likerapi6@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "API Like Summary Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Bursa",
+                "latitude": 40.195,
+                "longitude": 29.06,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        resp = await client.get(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "story_id": story_id,
+            "liked": False,
+            "like_count": 0,
+        }
+
+    async def test_get_like_summary_returns_liked_state(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi7", "likeauthorapi7@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi7", "likerapi7@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "API Like Summary Liked Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Eskisehir",
+                "latitude": 39.7667,
+                "longitude": 30.5256,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        resp = await client.get(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "story_id": story_id,
+            "liked": True,
+            "like_count": 1,
+        }
+
     async def test_duplicate_like_is_idempotent_and_persists_once(self, client, db_session):
         author_token = await self._create_user_and_token(client, "likeauthorapi2", "likeauthorapi2@example.com")
         liker_token = await self._create_user_and_token(client, "likerapi2", "likerapi2@example.com")
@@ -530,8 +595,24 @@ class TestStoryLikeAPI:
         assert resp.status_code == 404
         assert resp.json()["detail"] == "Story not found"
 
+    async def test_get_like_summary_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi8", "likerapi8@example.com")
+
+        resp = await client.get(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
     async def test_like_story_requires_authentication(self, client):
         resp = await client.post(f"/stories/{uuid.uuid4()}/like")
+
+        assert resp.status_code == 401
+
+    async def test_get_like_summary_requires_authentication(self, client):
+        resp = await client.get(f"/stories/{uuid.uuid4()}/like")
 
         assert resp.status_code == 401
 
