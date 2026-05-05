@@ -96,6 +96,29 @@ async def _get_story_like_count(db: AsyncSession, story_id: uuid.UUID) -> int:
     return result.scalar_one()
 
 
+async def get_story_like_summary(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+) -> StoryLikeResponse:
+    await _get_story_or_404(db, story_id)
+
+    existing_like_result = await db.execute(
+        select(StoryLike).where(
+            StoryLike.story_id == story_id,
+            StoryLike.user_id == current_user.id,
+        )
+    )
+    existing_like = existing_like_result.scalar_one_or_none()
+    like_count = await _get_story_like_count(db, story_id)
+
+    return StoryLikeResponse(
+        story_id=story_id,
+        liked=existing_like is not None,
+        like_count=like_count,
+    )
+
+
 def _map_comment_row(comment: StoryComment, author: User) -> CommentResponse:
     return CommentResponse(
         id=comment.id,
@@ -538,12 +561,7 @@ async def like_story(
         except IntegrityError:
             await db.rollback()
 
-    like_count = await _get_story_like_count(db, story_id)
-    return StoryLikeResponse(
-        story_id=story_id,
-        liked=True,
-        like_count=like_count,
-    )
+    return await get_story_like_summary(db, story_id, current_user)
 
 
 async def unlike_story(
@@ -565,12 +583,7 @@ async def unlike_story(
         await db.delete(existing_like)
         await db.commit()
 
-    like_count = await _get_story_like_count(db, story_id)
-    return StoryLikeResponse(
-        story_id=story_id,
-        liked=False,
-        like_count=like_count,
-    )
+    return await get_story_like_summary(db, story_id, current_user)
 
 
 async def upload_media_for_story(

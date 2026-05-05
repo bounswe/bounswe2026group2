@@ -18,6 +18,7 @@ from app.services.story_service import (
     delete_comment_for_story,
     get_nearby_stories,
     get_story_detail_by_id,
+    get_story_like_summary,
     like_story,
     list_available_stories,
     list_comments_for_story,
@@ -732,6 +733,41 @@ class TestStoryCommentService:
 
 @pytest.mark.asyncio
 class TestStoryLikeService:
+    async def test_get_story_like_summary_returns_unliked_state(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await get_story_like_summary(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.liked is False
+        assert result.like_count == 0
+
+    async def test_get_story_like_summary_returns_liked_state(self):
+        story_id = uuid.uuid4()
+        current_user = SimpleNamespace(id=uuid.uuid4())
+        story = _make_story(id=story_id)
+        existing_like = SimpleNamespace(id=uuid.uuid4(), story_id=story_id, user_id=current_user.id)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_like),
+            SimpleNamespace(scalar_one=lambda: 2),
+        ]
+
+        result = await get_story_like_summary(db, story_id, current_user)
+
+        assert result.story_id == story_id
+        assert result.liked is True
+        assert result.like_count == 2
+
     async def test_like_story_creates_like_and_returns_count(self):
         story_id = uuid.uuid4()
         current_user = SimpleNamespace(id=uuid.uuid4())
@@ -741,6 +777,8 @@ class TestStoryLikeService:
         db.execute.side_effect = [
             SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: None),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: SimpleNamespace(user_id=current_user.id)),
             SimpleNamespace(scalar_one=lambda: 1),
         ]
 
@@ -769,6 +807,8 @@ class TestStoryLikeService:
         db = AsyncMock()
         db.add = MagicMock()
         db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: existing_like),
             SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: existing_like),
             SimpleNamespace(scalar_one=lambda: 1),
@@ -800,6 +840,8 @@ class TestStoryLikeService:
         db.execute.side_effect = [
             SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: existing_like),
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
             SimpleNamespace(scalar_one=lambda: 0),
         ]
 
@@ -817,6 +859,8 @@ class TestStoryLikeService:
         story = _make_story(id=story_id)
         db = AsyncMock()
         db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one_or_none=lambda: None),
             SimpleNamespace(scalar_one_or_none=lambda: story),
             SimpleNamespace(scalar_one_or_none=lambda: None),
             SimpleNamespace(scalar_one=lambda: 0),

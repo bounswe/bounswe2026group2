@@ -27,6 +27,7 @@ from app.services.story_service import (
     delete_comment_for_story,
     get_nearby_stories,
     get_story_detail_by_id,
+    get_story_like_summary,
     like_story,
     list_available_stories,
     list_comments_for_story,
@@ -284,6 +285,24 @@ async def delete_story_comment(
     db: AsyncSession = Depends(get_db),
 ):
     await delete_comment_for_story(db, story_id, comment_id, current_user)
+
+
+@router.get(
+    "/{story_id}/like",
+    response_model=StoryLikeResponse,
+    summary="Get story like summary",
+    description="Return whether the authenticated user has liked the story and the story's current like count.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+    },
+)
+async def get_story_like_by_id(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_story_like_summary(db, story_id, current_user)
 
 
 @router.post(
