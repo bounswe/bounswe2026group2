@@ -69,12 +69,26 @@ module.exports = [
         },
     },
     {
-        files: ["eslint.config.js"],
+        files: ["eslint.config.js", "playwright.config.js"],
         languageOptions: {
             sourceType: "commonjs",
             globals: {
                 module: "readonly",
                 require: "readonly",
+                process: "readonly",
+            },
+        },
+    },
+    {
+        files: ["tests/uat/**/*.spec.js"],
+        languageOptions: {
+            sourceType: "commonjs",
+            globals: {
+                require: "readonly",
+                process: "readonly",
+                test: "readonly",
+                expect: "readonly",
+                describe: "readonly",
             },
         },
     },
