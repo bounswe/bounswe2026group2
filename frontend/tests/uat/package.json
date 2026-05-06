@@ -1,0 +1,10 @@
+{
+  "name": "local-history-uat",
+  "private": true,
+  "description": "Playwright UAT tests for Local History Story Map. Run against a live stack started with ./localrun.sh.",
+  "scripts": {
+    "test": "cd ../.. && npx playwright test tests/uat/",
+    "test:headed": "cd ../.. && npx playwright test tests/uat/ --headed"
+  },
+  "devDependencies": {}
+}
