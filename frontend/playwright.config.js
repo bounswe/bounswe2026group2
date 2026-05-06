@@ -12,7 +12,6 @@
 // Plain object export — no require('@playwright/test') needed so the CI UAT
 // job can load this config without running npm ci first.
 module.exports = {
-  testDir: './tests/uat',
   timeout: 30_000,
   retries: 0,
 
