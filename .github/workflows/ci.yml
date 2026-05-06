@@ -329,6 +329,14 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
       - name: Start full stack
         run: |
           cp backend/.env.example backend/.env
