@@ -100,10 +100,10 @@
             <p class="mt-2 text-textmuted">Sign in to access your map, stories, and saved archives.</p>
           </div>
 
-          <form id="login-form" class="space-y-5">
+          <form id="login-form" data-testid="login-form" class="space-y-5">
             <div>
               <label for="email" class="block text-sm font-semibold mb-2 text-textmain">Email</label>
-              <input id="email" type="email" placeholder="you@example.com"
+              <input id="email" data-testid="login-email" type="email" placeholder="you@example.com"
                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
                 required />
             </div>
@@ -113,7 +113,7 @@
                 <label for="password" class="block text-sm font-semibold text-textmain">Password</label>
                 <a href="forgot-password.html" class="text-sm font-medium text-tertiary hover:underline">Forgot password?</a>
               </div>
-              <input id="password" type="password" placeholder="Enter your password"
+              <input id="password" data-testid="login-password" type="password" placeholder="Enter your password"
                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
                 required />
             </div>
@@ -126,7 +126,7 @@
             <div id="login-error" class="hidden rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">
             </div>
 
-            <button type="submit"
+            <button type="submit" data-testid="login-submit"
               class="w-full rounded-xl bg-primary px-4 py-3 text-white font-semibold hover:opacity-95 transition">
               Sign In
             </button>
