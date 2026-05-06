@@ -480,11 +480,16 @@ jobs:
       - name: Generate combined summary
         run: |
           python3 << 'PYEOF'
-          import xml.etree.ElementTree as ET, os
+          import xml.etree.ElementTree as ET, os, glob
 
-          def parse(path):
+          def parse(filename):
+              # upload-artifact strips the common path prefix (LCA), so search by filename
+              matches = glob.glob(f'reports/**/{filename}', recursive=True) + \
+                        glob.glob(f'reports/{filename}')
+              if not matches:
+                  return None
               try:
-                  root = ET.parse(path).getroot()
+                  root = ET.parse(matches[0]).getroot()
                   ss = list(root) if root.tag == 'testsuites' else [root]
                   t  = sum(int(x.get('tests',    0)) for x in ss)
                   f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
@@ -494,16 +499,16 @@ jobs:
                   return None
 
           suites = [
-              ('Backend Unit',        'reports/backend/unit-report.xml'),
-              ('Backend API',         'reports/backend/api-report.xml'),
-              ('Backend Integration', 'reports/backend/integration-report.xml'),
-              ('Frontend Unit',       'reports/frontend/test-report.xml'),
-              ('UAT',                 'reports/frontend/uat-report.xml'),
+              ('Backend Unit',        'unit-report.xml'),
+              ('Backend API',         'api-report.xml'),
+              ('Backend Integration', 'integration-report.xml'),
+              ('Frontend Unit',       'test-report.xml'),
+              ('UAT',                 'uat-report.xml'),
           ]
 
           rows, totals = [], [0, 0, 0, 0]
-          for name, path in suites:
-              r = parse(path)
+          for name, filename in suites:
+              r = parse(filename)
               if r:
                   t, p, f, sk = r
                   for i, v in enumerate(r): totals[i] += v
