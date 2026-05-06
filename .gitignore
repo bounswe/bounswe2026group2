@@ -40,3 +40,8 @@ android-sdk/
 
 # APK artifacts
 *.apk
+
+# Playwright
+playwright-report/
+test-results/
+uat-report.xml
