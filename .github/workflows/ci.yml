@@ -160,6 +160,25 @@ jobs:
             backend/unit-report.html
             backend/unit-report.xml
 
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('backend/unit-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Backend Unit Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
+
   frontend-unit:
     name: Frontend Unit Tests
     runs-on: ubuntu-latest
@@ -190,6 +209,25 @@ jobs:
           path: |
             frontend/test-report.html
             frontend/test-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('frontend/test-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Frontend Unit Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
 
   # ── 2. INTEGRATION TESTS ─────────────────────────────────────────────────────
 
@@ -245,6 +283,25 @@ jobs:
             backend/integration-report.html
             backend/integration-report.xml
 
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('backend/integration-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Backend Integration Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
+
   # ── 3. API TESTS ─────────────────────────────────────────────────────────────
 
   backend-api:
@@ -298,6 +355,25 @@ jobs:
           path: |
             backend/api-report.html
             backend/api-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('backend/api-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Backend API Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
 
   # ── 4. E2E TESTS ─────────────────────────────────────────────────────────────
 
@@ -367,7 +443,86 @@ jobs:
             frontend/playwright-report/
             frontend/uat-report.xml
 
-  # ── 6. DEPLOY ─────────────────────────────────────────────────────────────────
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('frontend/uat-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **UAT Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
+
+  # ── 6. TEST SUMMARY ───────────────────────────────────────────────────────────
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [e2e, uat]
+    if: always()
+
+    steps:
+      - name: Download all test reports
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: reports
+
+      - name: Generate combined summary
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+
+          def parse(path):
+              try:
+                  root = ET.parse(path).getroot()
+                  ss = list(root) if root.tag == 'testsuites' else [root]
+                  t  = sum(int(x.get('tests',    0)) for x in ss)
+                  f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+                  sk = sum(int(x.get('skipped',  0)) for x in ss)
+                  return t, t - f - sk, f, sk
+              except:
+                  return None
+
+          suites = [
+              ('Backend Unit',        'reports/backend/unit-report.xml'),
+              ('Backend API',         'reports/backend/api-report.xml'),
+              ('Backend Integration', 'reports/backend/integration-report.xml'),
+              ('Frontend Unit',       'reports/frontend/test-report.xml'),
+              ('UAT',                 'reports/frontend/uat-report.xml'),
+          ]
+
+          rows, totals = [], [0, 0, 0, 0]
+          for name, path in suites:
+              r = parse(path)
+              if r:
+                  t, p, f, sk = r
+                  for i, v in enumerate(r): totals[i] += v
+                  icon = '✅' if f == 0 else '❌'
+                  rows.append(f'| {icon} {name} | {t} | {p} | {f} | {sk} |')
+              else:
+                  rows.append(f'| ⚠️ {name} | — | — | — | — |')
+
+          overall = '✅ All tests passed' if totals[2] == 0 else f'❌ {totals[2]} test(s) failed'
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+              gh.write(f'## {overall}\n\n')
+              gh.write('| Suite | Tests | ✅ Passed | ❌ Failed | Skipped |\n')
+              gh.write('|-------|------:|--------:|--------:|-------:|\n')
+              for row in rows:
+                  gh.write(row + '\n')
+              gh.write(f'| **Total** | **{totals[0]}** | **{totals[1]}** | **{totals[2]}** | **{totals[3]}** |\n')
+          PYEOF
+
+  # ── 7. DEPLOY ─────────────────────────────────────────────────────────────────
 
   trigger-deploy:
     name: Trigger Deployment
