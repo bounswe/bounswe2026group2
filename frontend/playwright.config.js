@@ -9,9 +9,9 @@
 // CI runs:
 //   cd frontend && npx playwright test tests/uat/ --reporter=html,junit
 
-const { defineConfig, devices } = require('@playwright/test');
-
-module.exports = defineConfig({
+// Plain object export — no require('@playwright/test') needed so the CI UAT
+// job can load this config without running npm ci first.
+module.exports = {
   testDir: './tests/uat',
   timeout: 30_000,
   retries: 0,
@@ -24,14 +24,8 @@ module.exports = defineConfig({
   use: {
     baseURL: process.env.UAT_BASE_URL || 'http://localhost:3000',
     headless: true,
+    browserName: 'chromium',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
-
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-  ],
-});
+};
