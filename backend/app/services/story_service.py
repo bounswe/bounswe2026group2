@@ -8,12 +8,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.enums import NotificationEventType, StoryStatus, StoryVisibility
+from app.db.enums import NotificationEventType, ReportReason, ReportStatus, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.notification import Notification
 from app.db.story import Story
 from app.db.story_comment import StoryComment
 from app.db.story_like import StoryLike
+from app.db.story_report import StoryReport
 from app.db.story_save import StorySave
 from app.db.user import User
 from app.models.comment import CommentAuthorResponse, CommentCreateRequest, CommentListResponse, CommentResponse
@@ -25,6 +26,8 @@ from app.models.story import (
     StoryDetailResponse,
     StoryLikeResponse,
     StoryListResponse,
+    StoryReportRequest,
+    StoryReportResponse,
     StoryResponse,
     StorySaveResponse,
     StoryUpdateRequest,
@@ -700,3 +703,41 @@ async def get_nearby_stories(
     rows = result.all()
 
     return _map_story_rows(rows)
+
+
+async def create_report_for_story(
+    db: AsyncSession,
+    story_id: uuid.UUID,
+    current_user: User,
+    payload: StoryReportRequest,
+) -> StoryReportResponse:
+    # Check if story exists
+    story_result = await db.execute(select(Story).where(Story.id == story_id))
+    story = story_result.scalar_one_or_none()
+    if story is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Story not found",
+        )
+
+    # Create report
+    report = StoryReport(
+        story_id=story_id,
+        user_id=current_user.id,
+        reason=payload.reason,
+        description=payload.description,
+    )
+
+    db.add(report)
+    
+    try:
+        await db.commit()
+        await db.refresh(report)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You have already reported this story",
+        )
+
+    return StoryReportResponse.model_validate(report)
