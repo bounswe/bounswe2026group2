@@ -8,7 +8,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
-from app.db.enums import DatePrecision, MediaType, NotificationEventType, StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, MediaType, NotificationEventType, ReportStatus, StoryStatus, StoryVisibility
 from app.db.notification import Notification
 from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdateRequest
@@ -25,6 +25,7 @@ from app.services.story_service import (
     list_saved_stories_for_user,
     save_story_for_user,
     search_available_stories_by_place,
+    remove_story_as_admin,
     unlike_story,
     unsave_story_for_user,
     update_story_with_location_and_dates,
@@ -1109,3 +1110,42 @@ class TestGetNearbyStoriesService:
 
         assert "ORDER BY" in sql
         assert "DESC" not in sql
+
+
+@pytest.mark.asyncio
+class TestAdminRemoveStoryService:
+    async def test_soft_deletes_story_and_resolves_pending_reports(self):
+        story_id = uuid.uuid4()
+        admin_id = uuid.uuid4()
+        story = _make_story(id=story_id, deleted_at=None, deleted_by=None)
+        current_user = SimpleNamespace(id=admin_id)
+
+        pending_report_1 = SimpleNamespace(status=ReportStatus.PENDING)
+        pending_report_2 = SimpleNamespace(status=ReportStatus.PENDING)
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [pending_report_1, pending_report_2])),
+        ]
+
+        await remove_story_as_admin(db, story_id, current_user)
+
+        assert story.deleted_at is not None
+        assert story.deleted_by == admin_id
+        assert pending_report_1.status == ReportStatus.RESOLVED
+        assert pending_report_2.status == ReportStatus.RESOLVED
+        db.commit.assert_awaited_once()
+        assert db.add.call_count == 3
+
+    async def test_remove_story_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value.scalar_one_or_none = lambda: None
+
+        with pytest.raises(HTTPException) as exc_info:
+            await remove_story_as_admin(db, uuid.uuid4(), SimpleNamespace(id=uuid.uuid4()))
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+        db.commit.assert_not_awaited()
