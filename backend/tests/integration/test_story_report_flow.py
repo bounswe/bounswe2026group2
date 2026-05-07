@@ -50,7 +50,7 @@ class TestStoryReportFlow:
             f"/stories/{story_id}/report",
             headers={"Authorization": f"Bearer {reporter_token}"},
             json={
-                "reason": ReportReason.INAPPROPRIATE.value,
+                "reason": ReportReason.INAPPROPRIATE_CONTENT.value,
                 "description": "This story contains inappropriate content",
             },
         )
@@ -58,7 +58,7 @@ class TestStoryReportFlow:
         assert report_resp.status_code == 201
         report_data = report_resp.json()
         assert report_data["story_id"] == str(story_id)
-        assert report_data["reason"] == ReportReason.INAPPROPRIATE.value
+        assert report_data["reason"] == ReportReason.INAPPROPRIATE_CONTENT.value
         assert report_data["status"] == ReportStatus.PENDING.value
         assert report_data["description"] == "This story contains inappropriate content"
 
@@ -68,9 +68,8 @@ class TestStoryReportFlow:
             client, "reportauthor2", "reportauthor2@example.com", "AuthPass2!"
         )
         reporter_token = await self._register_and_login(client, "reporter2", "reporter2@example.com", "ReporterPass2!")
-        story_id = await self._create_story(client, author_token)
-
         for reason in [r.value for r in ReportReason]:
+            story_id = await self._create_story(client, author_token)
             report_resp = await client.post(
                 f"/stories/{story_id}/report",
                 headers={"Authorization": f"Bearer {reporter_token}"},
@@ -91,7 +90,7 @@ class TestStoryReportFlow:
             f"/stories/{story_id}/report",
             headers={"Authorization": f"Bearer {reporter_token}"},
             json={
-                "reason": ReportReason.SPAM.value,
+                "reason": ReportReason.MISINFORMATION.value,
                 "description": "This is spam",
             },
         )
@@ -102,7 +101,7 @@ class TestStoryReportFlow:
             f"/stories/{story_id}/report",
             headers={"Authorization": f"Bearer {reporter_token}"},
             json={
-                "reason": ReportReason.SPAM.value,
+                "reason": ReportReason.MISINFORMATION.value,
                 "description": "This is spam again",
             },
         )
@@ -117,7 +116,7 @@ class TestStoryReportFlow:
             f"/stories/{nonexistent_story_id}/report",
             headers={"Authorization": f"Bearer {token}"},
             json={
-                "reason": ReportReason.HATE_SPEECH.value,
+                "reason": ReportReason.OFFENSIVE_LANGUAGE.value,
                 "description": "Report for non-existent story",
             },
         )
@@ -134,7 +133,7 @@ class TestStoryReportFlow:
         report_resp = await client.post(
             f"/stories/{story_id}/report",
             json={
-                "reason": ReportReason.INAPPROPRIATE.value,
+                "reason": ReportReason.INAPPROPRIATE_CONTENT.value,
                 "description": "Unauthenticated report attempt",
             },
         )
@@ -152,7 +151,7 @@ class TestStoryReportFlow:
         report_resp = await client.post(
             f"/stories/{story_id}/report",
             headers={"Authorization": f"Bearer {reporter_token}"},
-            json={"reason": ReportReason.SPAM.value},
+            json={"reason": ReportReason.MISINFORMATION.value},
         )
 
         assert report_resp.status_code == 201
@@ -172,7 +171,7 @@ class TestStoryReportFlow:
             f"/stories/{story_id}/report",
             headers={"Authorization": f"Bearer {reporter_token}"},
             json={
-                "reason": ReportReason.INAPPROPRIATE.value,
+                "reason": ReportReason.INAPPROPRIATE_CONTENT.value,
                 "description": long_description,
             },
         )
