@@ -40,6 +40,7 @@ from app.services.story_service import (
     list_available_stories,
     list_comments_for_story,
     list_saved_stories_for_user,
+    remove_story_as_admin,
     save_story_for_user,
     search_available_stories_by_place,
     unlike_story,
@@ -544,3 +545,26 @@ async def update_report_status(
     await db.refresh(report)
 
     return report
+
+
+@router.delete(
+    "/admin/stories/{story_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["admin"],
+    summary="Remove story (admin only)",
+    description="Soft-delete a story and auto-resolve pending reports. Admin access required.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "User is not an admin"},
+        404: {"description": "Story not found"},
+    },
+)
+async def admin_remove_story(
+    story_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    await remove_story_as_admin(db, story_id, current_user)
