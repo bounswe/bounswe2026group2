@@ -4,7 +4,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
+from app.db.enums import DatePrecision, MediaType, ReportReason, ReportStatus, StoryStatus, StoryVisibility
 
 
 class StoryDateInput(BaseModel):
@@ -236,3 +236,20 @@ class StoryLikeResponse(BaseModel):
 class StoryDetailResponse(StoryResponse):
     media_files: list[MediaFileResponse] = Field(default_factory=list)
     like_count: int = Field(default=0, ge=0)
+
+
+class StoryReportRequest(BaseModel):
+    reason: ReportReason
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class StoryReportResponse(BaseModel):
+    id: uuid.UUID
+    story_id: uuid.UUID
+    user_id: uuid.UUID
+    reason: ReportReason
+    description: str | None
+    status: ReportStatus
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
