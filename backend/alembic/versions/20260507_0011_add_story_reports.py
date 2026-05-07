@@ -23,7 +23,7 @@ def upgrade() -> None:
     # Create enums
     report_reason_enum = sa.Enum("INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False)
     report_reason_enum.create(op.get_bind(), checkfirst=True)
-    
+
     report_status_enum = sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False)
     report_status_enum.create(op.get_bind(), checkfirst=True)
 
@@ -62,7 +62,7 @@ def downgrade() -> None:
     op.drop_index("ix_story_reports_user_id", table_name="story_reports")
     op.drop_index("ix_story_reports_story_id", table_name="story_reports")
     op.drop_table("story_reports")
-    
+
     # Drop enums
     sa.Enum("INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False).drop(op.get_bind(), checkfirst=True)
     sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False).drop(op.get_bind(), checkfirst=True)

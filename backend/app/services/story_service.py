@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.enums import NotificationEventType, ReportReason, ReportStatus, StoryStatus, StoryVisibility
+from app.db.enums import NotificationEventType, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.notification import Notification
 from app.db.story import Story
@@ -729,7 +729,7 @@ async def create_report_for_story(
     )
 
     db.add(report)
-    
+
     try:
         await db.commit()
         await db.refresh(report)
