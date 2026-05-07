@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.enums import NotificationEventType, StoryStatus, StoryVisibility
+from app.db.enums import NotificationEventType, ReportStatus, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.notification import Notification
 from app.db.story import Story
@@ -727,6 +727,11 @@ async def create_report_for_story(
         reason=payload.reason,
         description=payload.description,
     )
+
+    # Ensure report fields are populated correctly
+    report.id = uuid.uuid4()
+    report.status = ReportStatus.PENDING
+    report.created_at = datetime.now(timezone.utc)
 
     db.add(report)
 
