@@ -1,4 +1,4 @@
-const { setupLikes, setLikeUi } = require("./likes");
+const { setupLikes, setLikeUi, normalizeLikeSummary } = require("./likes");
 
 describe("likes UI", () => {
     let assignMock;
@@ -54,7 +54,20 @@ describe("likes UI", () => {
         expect(document.getElementById("like-count").textContent).toBe("2");
     });
 
-    test("setupLikes shows backend pending message when GET /likes fails", async () => {
+    test("normalizeLikeSummary maps API shape to UI shape", () => {
+        expect(normalizeLikeSummary({ story_id: "s1", liked: true, like_count: 7 }, "fallback"))
+            .toEqual({ story_id: "s1", liked_by_me: true, likes_count: 7 });
+
+        // Tolerates the older UI shape used by some legacy mocks.
+        expect(normalizeLikeSummary({ liked_by_me: false, likes_count: 2 }, "fallback"))
+            .toEqual({ story_id: "fallback", liked_by_me: false, likes_count: 2 });
+
+        expect(normalizeLikeSummary(null, "fallback"))
+            .toEqual({ story_id: "fallback", liked_by_me: false, likes_count: 0 });
+    });
+
+    test("setupLikes shows backend pending message when GET /like fails", async () => {
+        global.isLoggedIn.mockReturnValue(true);
         global.authFetch.mockResolvedValueOnce({ ok: false, status: 404, json: () => Promise.resolve({}) });
 
         setupLikes("http://api", "story-1");
@@ -66,18 +79,30 @@ describe("likes UI", () => {
         expect(status.textContent).toContain("backend pending");
     });
 
+    test("setupLikes uses seed.like_count for anonymous viewers and skips GET", async () => {
+        global.isLoggedIn.mockReturnValue(false);
+
+        setupLikes("http://api", "story-1", { like_count: 12 });
+
+        await flushMicrotasks();
+
+        expect(global.authFetch).not.toHaveBeenCalled();
+        expect(document.getElementById("like-count").textContent).toBe("12");
+        expect(document.getElementById("like-status").classList.contains("hidden")).toBe(true);
+    });
+
     test("click optimistically increments count and sets animating flag", async () => {
         jest.useFakeTimers();
         global.authFetch
-            // initial GET /likes
+            // initial GET /like
             .mockResolvedValueOnce({
                 ok: true,
-                json: () => Promise.resolve({ story_id: "story-1", likes_count: 10, liked_by_me: false })
+                json: () => Promise.resolve({ story_id: "story-1", like_count: 10, liked: false })
             })
-            // POST /likes
+            // POST /like
             .mockResolvedValueOnce({
                 ok: true,
-                json: () => Promise.resolve({ story_id: "story-1", likes_count: 11, liked_by_me: true })
+                json: () => Promise.resolve({ story_id: "story-1", like_count: 11, liked: true })
             });
 
         global.isLoggedIn.mockReturnValue(true);
@@ -102,13 +127,12 @@ describe("likes UI", () => {
         await flushMicrotasks();
 
         expect(document.getElementById("like-button-text").textContent).toBe("Liked");
-        expect(global.authFetch).toHaveBeenCalledWith("http://api/stories/story-1/likes");
-        expect(global.authFetch).toHaveBeenCalledWith("http://api/stories/story-1/likes", { method: "POST" });
+        expect(global.authFetch).toHaveBeenCalledWith("http://api/stories/story-1/like");
+        expect(global.authFetch).toHaveBeenCalledWith("http://api/stories/story-1/like", { method: "POST" });
         jest.useRealTimers();
     });
 
     test("click redirects to index when not logged in", async () => {
-        global.authFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ likes_count: 0, liked_by_me: false }) });
         global.isLoggedIn.mockReturnValue(false);
 
         setupLikes("http://api", "story-1");

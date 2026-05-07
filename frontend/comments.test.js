@@ -46,6 +46,21 @@ describe("comments UI", () => {
         );
     });
 
+    test("normalizeComment resolves nested author object from backend", () => {
+        // Real backend shape: author = { id, username, display_name }.
+        expect(normalizeComment({
+            id: "c1",
+            content: "Hi",
+            author: { id: "u1", username: "alice", display_name: "Alice A." }
+        })).toEqual(expect.objectContaining({ id: "c1", author: "Alice A.", content: "Hi" }));
+
+        // Fall back to username when display_name is missing.
+        expect(normalizeComment({
+            content: "Hi",
+            author: { id: "u2", username: "bob", display_name: null }
+        })).toEqual(expect.objectContaining({ author: "bob" }));
+    });
+
     test("shows login prompt when logged out", async () => {
         global.isLoggedIn.mockReturnValue(false);
         global.fetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve([]) });

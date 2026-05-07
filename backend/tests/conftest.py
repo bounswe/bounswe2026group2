@@ -12,13 +12,15 @@ from app.db.session import get_db
 from app.db.story import Story  # noqa: F401
 from app.db.story_comment import StoryComment  # noqa: F401
 from app.db.story_like import StoryLike  # noqa: F401
+from app.db.story_report import StoryReport  # noqa: F401
 from app.db.story_save import StorySave  # noqa: F401
 
 # Import all models so Base.metadata knows about them
 from app.db.user import User  # noqa: F401
 
 # Build the async DB URL
-_url = settings.DATABASE_URL
+# For tests, replace 'db' hostname with 'localhost' for local development
+_url = settings.DATABASE_URL.replace("@db:", "@localhost:")
 if _url.startswith("postgresql://"):
     _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
 elif _url.startswith("postgres://"):
