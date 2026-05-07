@@ -266,7 +266,8 @@
           }
 
           setupComments(API_BASE, String(story.id || storyId));
-          setupLikes(API_BASE, String(story.id || storyId));
+          var likeSeed = { like_count: typeof story.like_count === "number" ? story.like_count : 0 };
+          setupLikes(API_BASE, String(story.id || storyId), likeSeed);
       })
       .catch(err => {
          console.error("Error loading story details:", err);
