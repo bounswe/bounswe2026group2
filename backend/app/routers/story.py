@@ -5,11 +5,15 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.db.enums import MediaType, ReportStatus
+from app.db.enums import MediaType, ReportStatus, UserRole
 from app.db.session import get_db
+from app.db.story import Story
+from app.db.story_report import StoryReport
 from app.db.user import User
 from app.models.comment import CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
+    AdminReportListItem,
+    AdminReportsListResponse,
     MediaUploadRequest,
     MediaUploadResponse,
     StoryBoundsFilter,
@@ -22,6 +26,7 @@ from app.models.story import (
     StoryReportResponse,
     StorySaveResponse,
     StoryUpdateRequest,
+    UpdateReportStatusRequest,
 )
 from app.services.story_service import (
     create_comment_for_story,
@@ -438,15 +443,104 @@ async def report_story(
 
 @router.get(
     "/admin/reports",
+    response_model=AdminReportsListResponse,
     tags=["admin"],
-    summary="Get reported stories",
+    summary="Get reported stories (admin only)",
+    description="Retrieve all reported stories with filtering options. Admin access required.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "User is not an admin"},
+    },
 )
-def get_reported_stories(
+async def get_admin_reports(
     status: ReportStatus | None = Query(None, description="Filter by report status"),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = db.query(StoryReport)
+    # Admin check
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Build query with joins to get related data
+    from sqlalchemy import select
+
+    query = (
+        select(
+            StoryReport.id,
+            StoryReport.story_id,
+            StoryReport.user_id,
+            StoryReport.reason,
+            StoryReport.description,
+            StoryReport.status,
+            StoryReport.created_at,
+            Story.title.label("story_title"),
+            User.username.label("reporter_username"),
+        )
+        .join(Story, StoryReport.story_id == Story.id)
+        .join(User, StoryReport.user_id == User.id)
+    )
+
     if status:
-        query = query.filter(StoryReport.status == status)
-    reports = query.all()
-    return reports
+        query = query.where(StoryReport.status == status)
+
+    result = await db.execute(query)
+    rows = result.fetchall()
+
+    reports = [
+        AdminReportListItem(
+            id=row.id,
+            story_id=row.story_id,
+            user_id=row.user_id,
+            reason=row.reason,
+            description=row.description,
+            status=row.status,
+            created_at=row.created_at,
+            story_title=row.story_title,
+            reporter_username=row.reporter_username,
+            story_author_username=None,  # Will be fetched if needed
+        )
+        for row in rows
+    ]
+
+    return AdminReportsListResponse(total=len(reports), reports=reports)
+
+
+@router.put(
+    "/admin/reports/{report_id}",
+    response_model=StoryReportResponse,
+    tags=["admin"],
+    summary="Update report status (admin only)",
+    description="Update the status of a reported story. Admin access required.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "User is not an admin"},
+        404: {"description": "Report not found"},
+    },
+)
+async def update_report_status(
+    report_id: uuid.UUID,
+    payload: UpdateReportStatusRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Admin check
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Fetch the report
+    from sqlalchemy import select
+
+    query = select(StoryReport).where(StoryReport.id == report_id)
+    result = await db.execute(query)
+    report = result.scalars().first()
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Update status
+    report.status = payload.status
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+
+    return report
