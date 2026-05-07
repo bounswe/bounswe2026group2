@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.db.enums import MediaType
+from app.db.enums import MediaType, ReportStatus
 from app.db.session import get_db
 from app.db.user import User
 from app.models.comment import CommentCreateRequest, CommentListResponse, CommentResponse
@@ -434,3 +434,19 @@ async def report_story(
     db: AsyncSession = Depends(get_db),
 ):
     return await create_report_for_story(db, story_id, current_user, payload)
+
+
+@router.get(
+    "/admin/reports",
+    tags=["admin"],
+    summary="Get reported stories",
+)
+def get_reported_stories(
+    status: ReportStatus | None = Query(None, description="Filter by report status"),
+    db: AsyncSession = Depends(get_db),
+):
+    query = db.query(StoryReport)
+    if status:
+        query = query.filter(StoryReport.status == status)
+    reports = query.all()
+    return reports
