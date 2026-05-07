@@ -18,11 +18,14 @@ from app.models.story import (
     StoryDetailResponse,
     StoryLikeResponse,
     StoryListResponse,
+    StoryReportRequest,
+    StoryReportResponse,
     StorySaveResponse,
     StoryUpdateRequest,
 )
 from app.services.story_service import (
     create_comment_for_story,
+    create_report_for_story,
     create_story_with_location,
     delete_comment_for_story,
     get_nearby_stories,
@@ -409,3 +412,25 @@ async def upload_story_media(
         sort_order=sort_order,
     )
     return await upload_media_for_story(db, story_id, file, payload)
+
+
+@router.post(
+    "/{story_id}/report",
+    response_model=StoryReportResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Report a story",
+    description="Report a story as inappropriate or problematic. Duplicate reports from the same user are rejected.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        404: {"description": "Story not found"},
+        409: {"description": "User has already reported this story"},
+        422: {"description": "Validation error for report payload"},
+    },
+)
+async def report_story(
+    story_id: uuid.UUID,
+    payload: StoryReportRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await create_report_for_story(db, story_id, current_user, payload)

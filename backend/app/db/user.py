@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.db.story import Story
     from app.db.story_comment import StoryComment
     from app.db.story_like import StoryLike
+    from app.db.story_report import StoryReport
     from app.db.story_save import StorySave
 
 
@@ -64,4 +65,8 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     triggered_notifications: Mapped[list["Notification"]] = relationship(
         back_populates="actor_user",
         foreign_keys="Notification.actor_user_id",
+    )
+    reports: Mapped[list["StoryReport"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
     )

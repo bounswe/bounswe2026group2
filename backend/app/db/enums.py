@@ -34,3 +34,14 @@ class NotificationEventType(str, Enum):
     STORY_LIKED = "story_liked"
     STORY_COMMENTED = "story_commented"
     STORY_BOOKMARKED = "story_bookmarked"
+
+
+class ReportReason(str, Enum):
+    INAPPROPRIATE_CONTENT = "inappropriate_content"
+    MISINFORMATION = "misinformation"
+    OFFENSIVE_LANGUAGE = "offensive_language"
+
+
+class ReportStatus(str, Enum):
+    PENDING = "pending"
+    RESOLVED = "resolved"
