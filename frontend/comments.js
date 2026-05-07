@@ -25,8 +25,15 @@ function setCommentError(message) {
 }
 
 function normalizeComment(raw) {
-    // Backend is not implemented yet; tolerate common response shapes.
-    var author = raw.author || raw.username || raw.user || "Anonymous";
+    // Backend returns `author: { id, username, display_name }`.
+    // Older mocks/tests pass `author` as a plain string or use `username`/`user`.
+    var rawAuthor = raw.author;
+    var author;
+    if (rawAuthor && typeof rawAuthor === "object") {
+        author = rawAuthor.display_name || rawAuthor.username || "Anonymous";
+    } else {
+        author = rawAuthor || raw.username || raw.user || "Anonymous";
+    }
     var content = raw.content || raw.text || raw.message || "";
     var createdAt = raw.created_at || raw.createdAt || raw.created || null;
     return {
