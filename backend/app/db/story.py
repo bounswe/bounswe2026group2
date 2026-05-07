@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, Date, Enum, Float, ForeignKey, Index, String, Text, text
@@ -26,6 +26,7 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_stories_user_id", "user_id"),
         Index("ix_stories_status", "status"),
         Index("ix_stories_visibility", "visibility"),
+        Index("ix_stories_deleted_at", "deleted_at"),
         CheckConstraint(
             "date_end IS NULL OR date_start IS NULL OR date_end >= date_start",
             name="ck_stories_date_range_valid",
@@ -62,8 +63,15 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(DatePrecision, name="date_precision", native_enum=False),
         nullable=True,
     )
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    delete_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="stories")
+    user: Mapped["User"] = relationship(back_populates="stories", foreign_keys=[user_id])
     media_files: Mapped[list["MediaFile"]] = relationship(
         back_populates="story",
         cascade="all, delete-orphan",

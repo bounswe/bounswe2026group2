@@ -168,7 +168,7 @@ async def _get_story_or_404(
     db: AsyncSession,
     story_id: uuid.UUID,
 ) -> Story:
-    story_result = await db.execute(select(Story).where(Story.id == story_id))
+    story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))
     story = story_result.scalar_one_or_none()
     if story is None:
         raise HTTPException(
@@ -217,6 +217,7 @@ async def list_available_stories(
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
+            Story.deleted_at.is_(None),
         )
         .order_by(Story.created_at.desc())
     )
@@ -257,6 +258,7 @@ async def search_available_stories_by_place(
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
+            Story.deleted_at.is_(None),
             Story.place_name.ilike(f"%{place_name}%"),
         )
         .order_by(Story.created_at.desc())
@@ -283,7 +285,7 @@ async def get_story_detail_by_id(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
-        .where(Story.id == story_id)
+        .where(Story.id == story_id, Story.deleted_at.is_(None))
         .options(selectinload(Story.media_files))
     )
 
@@ -443,6 +445,7 @@ async def list_saved_stories_for_user(
             StorySave.user_id == current_user.id,
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
+            Story.deleted_at.is_(None),
         )
         .order_by(StorySave.created_at.desc())
     )
@@ -496,7 +499,13 @@ async def update_story_with_location_and_dates(
     current_user: User,
     payload: StoryUpdateRequest,
 ) -> StoryDetailResponse:
-    story_result = await db.execute(select(Story).where(Story.id == story_id, Story.user_id == current_user.id))
+    story_result = await db.execute(
+        select(Story).where(
+            Story.id == story_id,
+            Story.user_id == current_user.id,
+            Story.deleted_at.is_(None),
+        )
+    )
     story = story_result.scalar_one_or_none()
     if story is None:
         raise HTTPException(
@@ -597,7 +606,7 @@ async def upload_media_for_story(
 ) -> MediaUploadResponse:
     _validate_media_upload(file, payload)
 
-    story_result = await db.execute(select(Story).where(Story.id == story_id))
+    story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))
     story = story_result.scalar_one_or_none()
     if story is None:
         raise HTTPException(
@@ -692,6 +701,7 @@ async def get_nearby_stories(
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
+            Story.deleted_at.is_(None),
             Story.latitude.is_not(None),
             Story.longitude.is_not(None),
             distance_km <= radius_km,
@@ -712,7 +722,7 @@ async def create_report_for_story(
     payload: StoryReportRequest,
 ) -> StoryReportResponse:
     # Check if story exists
-    story_result = await db.execute(select(Story).where(Story.id == story_id))
+    story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))
     story = story_result.scalar_one_or_none()
     if story is None:
         raise HTTPException(
