@@ -21,7 +21,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Create enums
-    report_reason_enum = sa.Enum("INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False)
+    report_reason_enum = sa.Enum(
+        "INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False
+    )
     report_reason_enum.create(op.get_bind(), checkfirst=True)
 
     report_status_enum = sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False)
@@ -31,9 +33,20 @@ def upgrade() -> None:
         "story_reports",
         sa.Column("story_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column("reason", sa.Enum("INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False), nullable=False),
+        sa.Column(
+            "reason",
+            sa.Enum(
+                "INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False
+            ),
+            nullable=False,
+        ),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("status", sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False), nullable=False, server_default="PENDING"),
+        sa.Column(
+            "status",
+            sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False),
+            nullable=False,
+            server_default="PENDING",
+        ),
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "created_at",
@@ -64,5 +77,7 @@ def downgrade() -> None:
     op.drop_table("story_reports")
 
     # Drop enums
-    sa.Enum("INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False).drop(op.get_bind(), checkfirst=True)
+    sa.Enum(
+        "INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False
+    ).drop(op.get_bind(), checkfirst=True)
     sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False).drop(op.get_bind(), checkfirst=True)
