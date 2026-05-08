@@ -371,6 +371,54 @@ class TestStoryDetailAPI:
         assert media_item["media_type"] == "image"
         assert media_item["file_size_bytes"] == 777
         assert media_item["media_url"].endswith("/images/stories/test/photo.png")
+        assert media_item["transcript"] is None
+
+    async def test_get_story_detail_includes_audio_transcript_when_present(self, client, db_session):
+        author = User(
+            username="detailaudioauthor",
+            email="detailaudioauthor@example.com",
+            password_hash="hashed-password",
+        )
+        db_session.add(author)
+        await db_session.flush()
+
+        story = Story(
+            user_id=author.id,
+            title="Audio Detail Story",
+            summary="Audio summary",
+            content="Audio content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=date(1923, 1, 1),
+            date_end=date(1923, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add(story)
+        await db_session.flush()
+
+        media = MediaFile(
+            story_id=story.id,
+            bucket_name="audio",
+            storage_key="stories/test/audio.webm",
+            original_filename="audio.webm",
+            mime_type="audio/webm",
+            media_type=MediaType.AUDIO,
+            file_size_bytes=321,
+            sort_order=0,
+            transcript="Transcribed local history narration",
+        )
+        db_session.add(media)
+        await db_session.commit()
+
+        resp = await client.get(f"/stories/{story.id}")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["media_files"]) == 1
+        assert data["media_files"][0]["transcript"] == "Transcribed local history narration"
 
     async def test_get_story_detail_not_found(self, client):
         resp = await client.get(f"/stories/{uuid.uuid4()}")

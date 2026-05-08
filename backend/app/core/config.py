@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     STORAGE_BUCKET_AUDIO: str = "audio"
     STORAGE_BUCKET_VIDEOS: str = "videos"
 
+    # ── Speech-to-Text ───────────────────────────────────────────────────────
+    TRANSCRIPTION_MODEL: str = "base"
+    TRANSCRIPTION_DEVICE: str = "cpu"
+    TRANSCRIPTION_COMPUTE_TYPE: str = "int8"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
