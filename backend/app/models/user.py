@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.db.enums import UserRole
+from app.models.story import StoryResponse
 
 
 class UserRegisterRequest(BaseModel):
@@ -48,3 +49,25 @@ class UserResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class UserStoryListResponse(BaseModel):
+    stories: list[StoryResponse]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+
+
+class UserEngagementStatsResponse(BaseModel):
+    total_stories: int = Field(ge=0)
+    total_likes_received: int = Field(ge=0)
+    total_comments_received: int = Field(ge=0)
+    total_saves_received: int = Field(ge=0)
+
+
+class UserDashboardResponse(BaseModel):
+    stories_count: int = Field(ge=0)
+    saved_count: int = Field(ge=0)
+    total_likes_received: int = Field(ge=0)
+    total_comments_received: int = Field(ge=0)
+    total_saves_received: int = Field(ge=0)
