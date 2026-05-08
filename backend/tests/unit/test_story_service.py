@@ -1114,7 +1114,7 @@ class TestGetNearbyStoriesService:
 
 @pytest.mark.asyncio
 class TestAdminRemoveStoryService:
-    async def test_soft_deletes_story_and_resolves_pending_reports(self):
+    async def test_soft_deletes_story_and_marks_pending_reports_removed(self):
         story_id = uuid.uuid4()
         admin_id = uuid.uuid4()
         story = _make_story(id=story_id, deleted_at=None, deleted_by=None)
@@ -1134,8 +1134,8 @@ class TestAdminRemoveStoryService:
 
         assert story.deleted_at is not None
         assert story.deleted_by == admin_id
-        assert pending_report_1.status == ReportStatus.RESOLVED
-        assert pending_report_2.status == ReportStatus.RESOLVED
+        assert pending_report_1.status == ReportStatus.REMOVED
+        assert pending_report_2.status == ReportStatus.REMOVED
         db.commit.assert_awaited_once()
         assert db.add.call_count == 3
 

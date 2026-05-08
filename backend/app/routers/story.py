@@ -462,8 +462,12 @@ async def get_admin_reports(
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Build query with joins to get related data
+    # Build query with joins to get related data for both the reporter and story author.
     from sqlalchemy import select
+    from sqlalchemy.orm import aliased
+
+    story_author = aliased(User)
+    reporter = aliased(User)
 
     query = (
         select(
@@ -475,14 +479,18 @@ async def get_admin_reports(
             StoryReport.status,
             StoryReport.created_at,
             Story.title.label("story_title"),
-            User.username.label("reporter_username"),
+            story_author.username.label("story_author_username"),
+            reporter.username.label("reporter_username"),
         )
         .join(Story, StoryReport.story_id == Story.id)
-        .join(User, StoryReport.user_id == User.id)
+        .join(story_author, Story.user_id == story_author.id)
+        .join(reporter, StoryReport.user_id == reporter.id)
     )
 
     if status:
         query = query.where(StoryReport.status == status)
+
+    query = query.order_by(StoryReport.created_at.desc())
 
     result = await db.execute(query)
     rows = result.fetchall()
@@ -498,7 +506,7 @@ async def get_admin_reports(
             created_at=row.created_at,
             story_title=row.story_title,
             reporter_username=row.reporter_username,
-            story_author_username=None,  # Will be fetched if needed
+            story_author_username=row.story_author_username,
         )
         for row in rows
     ]
@@ -511,11 +519,13 @@ async def get_admin_reports(
     response_model=StoryReportResponse,
     tags=["admin"],
     summary="Update report status (admin only)",
-    description="Update the status of a reported story. Admin access required.",
+    description="Mark a reported story as reviewed. Story removal is handled by the admin remove-story endpoint.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
+        400: {"description": "Invalid report status transition"},
         403: {"description": "User is not an admin"},
         404: {"description": "Report not found"},
+        409: {"description": "Report can no longer be updated"},
     },
 )
 async def update_report_status(
@@ -538,7 +548,19 @@ async def update_report_status(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # Update status
+    if payload.status == ReportStatus.REMOVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Use the admin remove story endpoint to mark reports as removed",
+        )
+
+    if report.status == ReportStatus.REMOVED:
+        raise HTTPException(
+            status_code=409,
+            detail="Removed reports cannot be updated",
+        )
+
+    # MVP moderation flow: this endpoint is only for acknowledging a report as reviewed.
     report.status = payload.status
     db.add(report)
     await db.commit()
@@ -552,7 +574,7 @@ async def update_report_status(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["admin"],
     summary="Remove story (admin only)",
-    description="Soft-delete a story and auto-resolve pending reports. Admin access required.",
+    description="Soft-delete a story and mark its pending reports as removed. Admin access required.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
         403: {"description": "User is not an admin"},

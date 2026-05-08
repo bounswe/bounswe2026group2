@@ -783,7 +783,7 @@ async def remove_story_as_admin(
     )
     pending_reports = reports_result.scalars().all()
     for report in pending_reports:
-        report.status = ReportStatus.RESOLVED
+        report.status = ReportStatus.REMOVED
         db.add(report)
 
     await db.commit()
