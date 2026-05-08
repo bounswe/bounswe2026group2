@@ -574,7 +574,7 @@ async def update_report_status(
     status_code=status.HTTP_204_NO_CONTENT,
     tags=["admin"],
     summary="Remove story (admin only)",
-    description="Soft-delete a story and auto-resolve pending reports. Admin access required.",
+    description="Soft-delete a story and mark its pending reports as removed. Admin access required.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
         403: {"description": "User is not an admin"},

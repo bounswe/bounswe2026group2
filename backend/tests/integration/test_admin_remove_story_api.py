@@ -86,7 +86,7 @@ class TestAdminRemoveStoryAPI:
 
         report_result = await db_session.execute(select(StoryReport).where(StoryReport.id == uuid.UUID(report_id)))
         report = report_result.scalar_one()
-        assert report.status == ReportStatus.RESOLVED
+        assert report.status == ReportStatus.REMOVED
 
     async def test_non_admin_cannot_remove_story(self, client):
         author_token = await self._register_and_login(client, "rm_author2", "rm_author2@example.com", "AuthorPass2!")

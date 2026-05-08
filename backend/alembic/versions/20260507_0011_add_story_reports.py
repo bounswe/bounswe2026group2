@@ -26,7 +26,7 @@ def upgrade() -> None:
     )
     report_reason_enum.create(op.get_bind(), checkfirst=True)
 
-    report_status_enum = sa.Enum("PENDING", "REVIEWED", "REMOVED", name="report_status", native_enum=False)
+    report_status_enum = sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False)
     report_status_enum.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
@@ -43,7 +43,7 @@ def upgrade() -> None:
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column(
             "status",
-            sa.Enum("PENDING", "REVIEWED", "REMOVED", name="report_status", native_enum=False),
+            sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False),
             nullable=False,
             server_default="PENDING",
         ),
@@ -80,6 +80,4 @@ def downgrade() -> None:
     sa.Enum(
         "INAPPROPRIATE_CONTENT", "MISINFORMATION", "OFFENSIVE_LANGUAGE", name="report_reason", native_enum=False
     ).drop(op.get_bind(), checkfirst=True)
-    sa.Enum("PENDING", "REVIEWED", "REMOVED", name="report_status", native_enum=False).drop(
-        op.get_bind(), checkfirst=True
-    )
+    sa.Enum("PENDING", "RESOLVED", name="report_status", native_enum=False).drop(op.get_bind(), checkfirst=True)
