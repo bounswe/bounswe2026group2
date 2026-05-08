@@ -462,8 +462,12 @@ async def get_admin_reports(
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Build query with joins to get related data
+    # Build query with joins to get related data for both the reporter and story author.
     from sqlalchemy import select
+    from sqlalchemy.orm import aliased
+
+    story_author = aliased(User)
+    reporter = aliased(User)
 
     query = (
         select(
@@ -475,14 +479,18 @@ async def get_admin_reports(
             StoryReport.status,
             StoryReport.created_at,
             Story.title.label("story_title"),
-            User.username.label("reporter_username"),
+            story_author.username.label("story_author_username"),
+            reporter.username.label("reporter_username"),
         )
         .join(Story, StoryReport.story_id == Story.id)
-        .join(User, StoryReport.user_id == User.id)
+        .join(story_author, Story.user_id == story_author.id)
+        .join(reporter, StoryReport.user_id == reporter.id)
     )
 
     if status:
         query = query.where(StoryReport.status == status)
+
+    query = query.order_by(StoryReport.created_at.desc())
 
     result = await db.execute(query)
     rows = result.fetchall()
@@ -498,7 +506,7 @@ async def get_admin_reports(
             created_at=row.created_at,
             story_title=row.story_title,
             reporter_username=row.reporter_username,
-            story_author_username=None,  # Will be fetched if needed
+            story_author_username=row.story_author_username,
         )
         for row in rows
     ]

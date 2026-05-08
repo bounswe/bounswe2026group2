@@ -108,6 +108,9 @@ class TestAdminReportsAPI:
         )
 
         assert filter_resp.status_code == 200
+        data = filter_resp.json()
+        assert data["total"] == 1
+        assert data["reports"][0]["status"] == ReportStatus.PENDING.value
 
     async def test_admin_can_update_report_status(self, seeded_db, client):
         """Test that admin can update report status."""
@@ -187,3 +190,9 @@ class TestAdminReportsAPI:
             assert "reason" in report
             assert "status" in report
             assert "created_at" in report
+            assert "story_title" in report
+            assert "story_author_username" in report
+            assert "reporter_username" in report
+            assert report["story_title"] == "Test Story for Admin Review"
+            assert report["story_author_username"] == "author4"
+            assert report["reporter_username"] == "reporter4"
