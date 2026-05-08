@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.db.enums import ReportStatus
+from app.db.enums import ReportReason, ReportStatus
 from app.db.story import Story
 from app.db.story_report import StoryReport
 
@@ -111,3 +111,43 @@ class TestAdminRemoveStoryAPI:
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert delete_resp.status_code == 404
+
+    async def test_remove_story_marks_all_pending_reports_removed(self, seeded_db, client, db_session):
+        author_token = await self._register_and_login(client, "rm_author3", "rm_author3@example.com", "AuthorPass3!")
+        reporter_token_1 = await self._register_and_login(
+            client, "rm_reporter3a", "rm_reporter3a@example.com", "ReporterPass3!"
+        )
+        reporter_token_2 = await self._register_and_login(
+            client, "rm_reporter3b", "rm_reporter3b@example.com", "ReporterPass3!"
+        )
+        admin_token = await self._register_and_login(client, "seed_admin", "seed_admin@example.com", "ValidPass1!")
+
+        story_id = await self._create_story(client, author_token, title="Multi Report Story")
+        report_1 = await self._report_story(client, reporter_token_1, story_id)
+
+        report_resp_2 = await client.post(
+            f"/stories/{story_id}/report",
+            headers={"Authorization": f"Bearer {reporter_token_2}"},
+            json={
+                "reason": ReportReason.OFFENSIVE_LANGUAGE.value,
+                "description": "Second report",
+            },
+        )
+        assert report_resp_2.status_code == 201
+        report_2 = report_resp_2.json()["id"]
+
+        delete_resp = await client.delete(
+            f"/stories/admin/stories/{story_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert delete_resp.status_code == 204
+
+        reports_result = await db_session.execute(
+            select(StoryReport).where(
+                StoryReport.id.in_([uuid.UUID(report_1), uuid.UUID(report_2)]),
+            )
+        )
+        reports = reports_result.scalars().all()
+
+        assert len(reports) == 2
+        assert all(report.status == ReportStatus.REMOVED for report in reports)

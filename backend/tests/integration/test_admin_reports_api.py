@@ -132,6 +132,33 @@ class TestAdminReportsAPI:
         assert update_resp.status_code == 200
         assert update_resp.json()["status"] == ReportStatus.REVIEWED.value
 
+    async def test_admin_can_filter_reviewed_reports(self, seeded_db, client):
+        """Reviewed reports should be returned by the status filter."""
+        author_token = await self._register_and_login(client, "author6", "author6@example.com", "AuthPass6!")
+        reporter_token = await self._register_and_login(client, "reporter6", "reporter6@example.com", "ReporterPass6!")
+        admin_token = await self._register_and_login(client, "seed_admin", "seed_admin@example.com", "ValidPass1!")
+
+        story_id = await self._create_story(client, author_token)
+        report_id = await self._create_report(client, reporter_token, story_id)
+
+        update_resp = await client.put(
+            f"/stories/admin/reports/{report_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"status": ReportStatus.REVIEWED.value},
+        )
+        assert update_resp.status_code == 200
+
+        filter_resp = await client.get(
+            f"/stories/admin/reports?status={ReportStatus.REVIEWED.value}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+
+        assert filter_resp.status_code == 200
+        data = filter_resp.json()
+        assert data["total"] == 1
+        assert data["reports"][0]["id"] == report_id
+        assert data["reports"][0]["status"] == ReportStatus.REVIEWED.value
+
     async def test_admin_cannot_mark_report_removed_from_update_endpoint(self, seeded_db, client):
         """Removed status must be driven by the story removal flow."""
         author_token = await self._register_and_login(client, "author5", "author5@example.com", "AuthPass5!")
@@ -149,6 +176,30 @@ class TestAdminReportsAPI:
 
         assert update_resp.status_code == 400
         assert "remove story" in update_resp.json()["detail"].lower()
+
+    async def test_removed_report_cannot_be_updated(self, seeded_db, client):
+        """Once a story is removed, its reports can no longer transition back to reviewed."""
+        author_token = await self._register_and_login(client, "author7", "author7@example.com", "AuthPass7!")
+        reporter_token = await self._register_and_login(client, "reporter7", "reporter7@example.com", "ReporterPass7!")
+        admin_token = await self._register_and_login(client, "seed_admin", "seed_admin@example.com", "ValidPass1!")
+
+        story_id = await self._create_story(client, author_token)
+        report_id = await self._create_report(client, reporter_token, story_id)
+
+        delete_resp = await client.delete(
+            f"/stories/admin/stories/{story_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert delete_resp.status_code == 204
+
+        update_resp = await client.put(
+            f"/stories/admin/reports/{report_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"status": ReportStatus.REVIEWED.value},
+        )
+
+        assert update_resp.status_code == 409
+        assert "cannot be updated" in update_resp.json()["detail"].lower()
 
     async def test_non_admin_cannot_update_report_status(self, client):
         """Test that non-admin users get 403 when updating report status."""
@@ -214,3 +265,29 @@ class TestAdminReportsAPI:
             assert report["story_title"] == "Test Story for Admin Review"
             assert report["story_author_username"] == "author4"
             assert report["reporter_username"] == "reporter4"
+
+    async def test_admin_can_filter_removed_reports(self, seeded_db, client):
+        """Removed reports should be discoverable from the admin list."""
+        author_token = await self._register_and_login(client, "author8", "author8@example.com", "AuthPass8!")
+        reporter_token = await self._register_and_login(client, "reporter8", "reporter8@example.com", "ReporterPass8!")
+        admin_token = await self._register_and_login(client, "seed_admin", "seed_admin@example.com", "ValidPass1!")
+
+        story_id = await self._create_story(client, author_token)
+        report_id = await self._create_report(client, reporter_token, story_id)
+
+        delete_resp = await client.delete(
+            f"/stories/admin/stories/{story_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert delete_resp.status_code == 204
+
+        filter_resp = await client.get(
+            f"/stories/admin/reports?status={ReportStatus.REMOVED.value}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+
+        assert filter_resp.status_code == 200
+        data = filter_resp.json()
+        assert data["total"] == 1
+        assert data["reports"][0]["id"] == report_id
+        assert data["reports"][0]["status"] == ReportStatus.REMOVED.value
