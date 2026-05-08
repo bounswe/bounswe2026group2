@@ -43,6 +43,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     stories: Mapped[list["Story"]] = relationship(
         back_populates="user",
+        foreign_keys="Story.user_id",
         cascade="all, delete-orphan",
     )
     saved_stories: Mapped[list["StorySave"]] = relationship(
