@@ -44,4 +44,6 @@ class ReportReason(str, Enum):
 
 class ReportStatus(str, Enum):
     PENDING = "pending"
-    RESOLVED = "resolved"
+    REVIEWED = "reviewed"
+    REMOVED = "removed"
+    RESOLVED = "reviewed"

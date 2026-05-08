@@ -150,14 +150,14 @@ class TestReportService:
         assert before <= result.created_at <= after
 
 
-@pytest.mark.asyncio
 class TestReportStatus:
     """Unit tests for report status management."""
 
     def test_report_status_enum_values(self):
         """Test that all report status enum values are correct."""
         assert ReportStatus.PENDING.value == "pending"
-        assert ReportStatus.RESOLVED.value == "resolved"
+        assert ReportStatus.REVIEWED.value == "reviewed"
+        assert ReportStatus.REMOVED.value == "removed"
 
     def test_report_reason_enum_values(self):
         """Test that all report reason enum values are correct."""
@@ -167,5 +167,6 @@ class TestReportStatus:
 
     def test_report_status_transitions_valid(self):
         """Test valid report status transitions."""
-        # Reports can transition from PENDING to RESOLVED
-        assert ReportStatus.PENDING != ReportStatus.RESOLVED
+        # New reports always start pending, then admins either review or remove.
+        assert ReportStatus.PENDING != ReportStatus.REVIEWED
+        assert ReportStatus.PENDING != ReportStatus.REMOVED
