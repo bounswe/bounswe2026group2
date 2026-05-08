@@ -139,21 +139,15 @@
 
 
 var REASON_LABELS = {
-  spam: "Spam or misleading",
-  inappropriate: "Inappropriate content",
-  misinformation: "Misinformation",
-  harassment: "Harassment or hate speech",
-  copyright: "Copyright violation",
-  other: "Other"
+  inappropriate_content: "Inappropriate content",
+  misinformation:        "Misinformation",
+  offensive_language:    "Offensive language"
 };
 
 var REASON_COLORS = {
-  spam:          "bg-yellow-100 text-yellow-800",
-  inappropriate: "bg-red-100 text-red-700",
-  misinformation:"bg-orange-100 text-orange-700",
-  harassment:    "bg-red-100 text-red-800",
-  copyright:     "bg-purple-100 text-purple-700",
-  other:         "bg-stone-100 text-stone-600"
+  inappropriate_content: "bg-red-100 text-red-700",
+  misinformation:        "bg-orange-100 text-orange-700",
+  offensive_language:    "bg-red-100 text-red-800"
 };
 
 // ── Admin check ────────────────────────────────────────────────────────────
@@ -185,21 +179,24 @@ function loadReports() {
   hide("reports-list");
   hide("reports-empty");
 
-  authFetch(API_BASE + "/admin/reports")
+  authFetch(API_BASE + "/stories/admin/reports")
     .then(function(res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
       return res.json();
     })
-    .then(renderReports)
+    .then(function(data) {
+      var active = data.reports.filter(function(r) { return r.status !== "removed"; });
+      renderReports(active, data.total);
+    })
     .catch(function(err) {
       hide("reports-loading");
       showToast("error", "Failed to load reports: " + err.message);
     });
 }
 
-function renderReports(reports) {
+function renderReports(reports, total) {
   hide("reports-loading");
-  updateStats(reports);
+  updateStats(reports, total);
 
   if (!reports || reports.length === 0) {
     show("reports-empty");
@@ -212,9 +209,10 @@ function renderReports(reports) {
   show("reports-list");
 }
 
-function updateStats(reports) {
-  document.getElementById("stat-total").textContent = reports.length;
-  document.getElementById("stat-pending").textContent = reports.length;
+function updateStats(reports, total) {
+  var pending = reports.filter(function(r) { return r.status === "pending"; }).length;
+  document.getElementById("stat-total").textContent = total || reports.length;
+  document.getElementById("stat-pending").textContent = pending;
   document.getElementById("stat-resolved").textContent = resolvedCount;
 }
 
@@ -289,10 +287,11 @@ function confirmRestrictUser(reportId, userId, username) {
 }
 
 function doRemovePost(reportId, storyId) {
-  authFetch(API_BASE + "/stories/" + storyId, { method: "DELETE" })
+  authFetch(API_BASE + "/stories/admin/stories/" + storyId, { method: "DELETE" })
     .then(function(res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
-      return dismissReport(reportId, true);
+      removeCard(reportId);
+      showToast("success", "Story removed successfully.");
     })
     .catch(function(err) {
       showToast("error", "Failed to remove post: " + err.message);
@@ -311,7 +310,11 @@ function doRestrictUser(reportId, userId) {
 }
 
 function dismissReport(reportId, silent) {
-  return authFetch(API_BASE + "/admin/reports/" + reportId, { method: "DELETE" })
+  return authFetch(API_BASE + "/stories/admin/reports/" + reportId, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "reviewed" })
+  })
     .then(function(res) {
       if (!res.ok) throw new Error("HTTP " + res.status);
       removeCard(reportId);

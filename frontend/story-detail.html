@@ -279,12 +279,9 @@
   // ─── Report functionality ───────────────────────────────────────────────────
   var selectedReportReason = null;
   var reportReasonsList = [
-    { value: "spam", label: "Spam or misleading" },
-    { value: "inappropriate", label: "Inappropriate content" },
+    { value: "inappropriate_content", label: "Inappropriate content" },
     { value: "misinformation", label: "Misinformation" },
-    { value: "harassment", label: "Harassment or hate speech" },
-    { value: "copyright", label: "Copyright violation" },
-    { value: "other", label: "Other" }
+    { value: "offensive_language", label: "Offensive language" }
   ];
 
   if (isLoggedIn()) {
@@ -339,7 +336,7 @@
     setSubmitEnabled(false);
     btn.textContent = "Submitting...";
     try {
-      var res = await authFetch(API_BASE + "/stories/" + storyId + "/reports", {
+      var res = await authFetch(API_BASE + "/stories/" + storyId + "/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: selectedReportReason })

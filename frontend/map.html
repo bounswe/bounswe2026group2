@@ -933,12 +933,9 @@
         var reportModalStoryId = null;
         var reportSelectedReason = null;
         var reportReasonsList = [
-            { value: "spam", label: "Spam or misleading" },
-            { value: "inappropriate", label: "Inappropriate content" },
+            { value: "inappropriate_content", label: "Inappropriate content" },
             { value: "misinformation", label: "Misinformation" },
-            { value: "harassment", label: "Harassment or hate speech" },
-            { value: "copyright", label: "Copyright violation" },
-            { value: "other", label: "Other" }
+            { value: "offensive_language", label: "Offensive language" }
         ];
 
         function setReportSubmitEnabled(enabled) {
@@ -990,7 +987,7 @@
             setReportSubmitEnabled(false);
             document.getElementById("btn-submit-report").textContent = "Submitting...";
             try {
-                var res = await authFetch(API_BASE + "/stories/" + reportModalStoryId + "/reports", {
+                var res = await authFetch(API_BASE + "/stories/" + reportModalStoryId + "/report", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ reason: reportSelectedReason })
