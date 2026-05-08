@@ -519,11 +519,13 @@ async def get_admin_reports(
     response_model=StoryReportResponse,
     tags=["admin"],
     summary="Update report status (admin only)",
-    description="Update the status of a reported story. Admin access required.",
+    description="Mark a reported story as reviewed. Story removal is handled by the admin remove-story endpoint.",
     responses={
         401: {"description": "Missing or invalid authentication token"},
+        400: {"description": "Invalid report status transition"},
         403: {"description": "User is not an admin"},
         404: {"description": "Report not found"},
+        409: {"description": "Report can no longer be updated"},
     },
 )
 async def update_report_status(
@@ -546,7 +548,19 @@ async def update_report_status(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # Update status
+    if payload.status == ReportStatus.REMOVED:
+        raise HTTPException(
+            status_code=400,
+            detail="Use the admin remove story endpoint to mark reports as removed",
+        )
+
+    if report.status == ReportStatus.REMOVED:
+        raise HTTPException(
+            status_code=409,
+            detail="Removed reports cannot be updated",
+        )
+
+    # MVP moderation flow: this endpoint is only for acknowledging a report as reviewed.
     report.status = payload.status
     db.add(report)
     await db.commit()

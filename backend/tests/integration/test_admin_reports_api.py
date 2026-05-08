@@ -126,11 +126,29 @@ class TestAdminReportsAPI:
         update_resp = await client.put(
             f"/stories/admin/reports/{report_id}",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"status": ReportStatus.RESOLVED.value},
+            json={"status": ReportStatus.REVIEWED.value},
         )
 
         assert update_resp.status_code == 200
-        assert update_resp.json()["status"] == ReportStatus.RESOLVED.value
+        assert update_resp.json()["status"] == ReportStatus.REVIEWED.value
+
+    async def test_admin_cannot_mark_report_removed_from_update_endpoint(self, seeded_db, client):
+        """Removed status must be driven by the story removal flow."""
+        author_token = await self._register_and_login(client, "author5", "author5@example.com", "AuthPass5!")
+        reporter_token = await self._register_and_login(client, "reporter5", "reporter5@example.com", "ReporterPass5!")
+        admin_token = await self._register_and_login(client, "seed_admin", "seed_admin@example.com", "ValidPass1!")
+
+        story_id = await self._create_story(client, author_token)
+        report_id = await self._create_report(client, reporter_token, story_id)
+
+        update_resp = await client.put(
+            f"/stories/admin/reports/{report_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"status": ReportStatus.REMOVED.value},
+        )
+
+        assert update_resp.status_code == 400
+        assert "remove story" in update_resp.json()["detail"].lower()
 
     async def test_non_admin_cannot_update_report_status(self, client):
         """Test that non-admin users get 403 when updating report status."""
@@ -140,7 +158,7 @@ class TestAdminReportsAPI:
         update_resp = await client.put(
             f"/stories/admin/reports/{report_id}",
             headers={"Authorization": f"Bearer {user_token}"},
-            json={"status": ReportStatus.RESOLVED.value},
+            json={"status": ReportStatus.REVIEWED.value},
         )
 
         assert update_resp.status_code == 403
@@ -154,7 +172,7 @@ class TestAdminReportsAPI:
         update_resp = await client.put(
             f"/stories/admin/reports/{nonexistent_report_id}",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"status": ReportStatus.RESOLVED.value},
+            json={"status": ReportStatus.REVIEWED.value},
         )
 
         assert update_resp.status_code == 404
