@@ -347,9 +347,7 @@ def _patch_google_settings(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client-id")
-    monkeypatch.setattr(
-        settings, "GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback"
-    )
+    monkeypatch.setattr(settings, "GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
 
 
 class TestBuildGoogleAuthUrl:
