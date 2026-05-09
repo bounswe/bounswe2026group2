@@ -98,31 +98,38 @@ async def get_current_user_engagement_stats(
         Story.deleted_at.is_(None),
     )
 
-    total_stories_result = await db.execute(select(func.count(Story.id)).where(*story_filters))
-    total_likes_result = await db.execute(
-        select(func.count(StoryLike.id))
-        .select_from(StoryLike)
-        .join(Story, StoryLike.story_id == Story.id)
-        .where(*story_filters)
-    )
-    total_comments_result = await db.execute(
-        select(func.count(StoryComment.id))
-        .select_from(StoryComment)
-        .join(Story, StoryComment.story_id == Story.id)
-        .where(*story_filters)
-    )
-    total_saves_result = await db.execute(
-        select(func.count(StorySave.id))
-        .select_from(StorySave)
-        .join(Story, StorySave.story_id == Story.id)
-        .where(*story_filters)
-    )
+    row = (
+        await db.execute(
+            select(
+                select(func.count(Story.id)).where(*story_filters).scalar_subquery().label("total_stories"),
+                select(func.count(StoryLike.id))
+                .select_from(StoryLike)
+                .join(Story, StoryLike.story_id == Story.id)
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_likes_received"),
+                select(func.count(StoryComment.id))
+                .select_from(StoryComment)
+                .join(Story, StoryComment.story_id == Story.id)
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_comments_received"),
+                select(func.count(StorySave.id))
+                .select_from(StorySave)
+                .join(Story, StorySave.story_id == Story.id)
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_saves_received"),
+            )
+        )
+    ).one()
+    values = row._mapping
 
     return UserEngagementStatsResponse(
-        total_stories=total_stories_result.scalar_one(),
-        total_likes_received=total_likes_result.scalar_one(),
-        total_comments_received=total_comments_result.scalar_one(),
-        total_saves_received=total_saves_result.scalar_one(),
+        total_stories=values["total_stories"],
+        total_likes_received=values["total_likes_received"],
+        total_comments_received=values["total_comments_received"],
+        total_saves_received=values["total_saves_received"],
     )
 
 
@@ -130,25 +137,54 @@ async def get_current_user_dashboard(
     db: AsyncSession,
     current_user: User,
 ) -> UserDashboardResponse:
-    stats = await get_current_user_engagement_stats(db, current_user)
-
-    saved_count_result = await db.execute(
-        select(func.count(Story.id))
-        .select_from(Story)
-        .join(StorySave, StorySave.story_id == Story.id)
-        .where(
-            StorySave.user_id == current_user.id,
-            Story.status == StoryStatus.PUBLISHED,
-            Story.visibility == StoryVisibility.PUBLIC,
-            Story.deleted_at.is_(None),
-        )
+    story_filters = (
+        Story.user_id == current_user.id,
+        Story.deleted_at.is_(None),
     )
-    saved_count = saved_count_result.scalar_one()
+    saved_filters = (
+        StorySave.user_id == current_user.id,
+        Story.status == StoryStatus.PUBLISHED,
+        Story.visibility == StoryVisibility.PUBLIC,
+        Story.deleted_at.is_(None),
+    )
+
+    row = (
+        await db.execute(
+            select(
+                select(func.count(Story.id)).where(*story_filters).scalar_subquery().label("stories_count"),
+                select(func.count(Story.id))
+                .select_from(Story)
+                .join(StorySave, StorySave.story_id == Story.id)
+                .where(*saved_filters)
+                .scalar_subquery()
+                .label("saved_count"),
+                select(func.count(StoryLike.id))
+                .select_from(StoryLike)
+                .join(Story, StoryLike.story_id == Story.id)
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_likes_received"),
+                select(func.count(StoryComment.id))
+                .select_from(StoryComment)
+                .join(Story, StoryComment.story_id == Story.id)
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_comments_received"),
+                select(func.count(StorySave.id))
+                .select_from(StorySave)
+                .join(Story, StorySave.story_id == Story.id)
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_saves_received"),
+            )
+        )
+    ).one()
+    values = row._mapping
 
     return UserDashboardResponse(
-        stories_count=stats.total_stories,
-        saved_count=saved_count,
-        total_likes_received=stats.total_likes_received,
-        total_comments_received=stats.total_comments_received,
-        total_saves_received=stats.total_saves_received,
+        stories_count=values["stories_count"],
+        saved_count=values["saved_count"],
+        total_likes_received=values["total_likes_received"],
+        total_comments_received=values["total_comments_received"],
+        total_saves_received=values["total_saves_received"],
     )
