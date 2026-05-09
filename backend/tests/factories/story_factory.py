@@ -34,6 +34,7 @@ def make_story_payload(
     longitude: float = DEFAULT_LONGITUDE,
     date_start: int | None = DEFAULT_DATE_START,
     date_end: int | None = DEFAULT_DATE_END,
+    is_anonymous: bool = False,
     suffix: int | str | None = None,
 ) -> dict:
     """Return a dict that matches StoryCreateRequest, for use in API-level tests."""
@@ -46,6 +47,7 @@ def make_story_payload(
         "place_name": place_name,
         "latitude": latitude,
         "longitude": longitude,
+        "is_anonymous": is_anonymous,
     }
     if summary is not None:
         payload["summary"] = summary
@@ -98,6 +100,7 @@ def make_story_entity(
     date_precision: DatePrecision | None = DatePrecision.YEAR,
     status: StoryStatus = StoryStatus.PUBLISHED,
     visibility: StoryVisibility = StoryVisibility.PUBLIC,
+    is_anonymous: bool = False,
     suffix: int | str | None = None,
 ) -> Story:
     """Return a Story ORM object for direct insertion into a test DB session.
@@ -124,4 +127,5 @@ def make_story_entity(
         date_precision=date_precision,
         status=status,
         visibility=visibility,
+        is_anonymous=is_anonymous,
     )
