@@ -342,19 +342,29 @@ class TestChangeUserPassword:
         db.commit.assert_not_awaited()
 
 
+@pytest.fixture()
+def _patch_google_settings(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(
+        settings, "GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback"
+    )
+
+
 class TestBuildGoogleAuthUrl:
-    def test_includes_state_param(self):
+    def test_includes_state_param(self, _patch_google_settings):
         url = build_google_auth_url("my-state-token")
         qs = parse_qs(urlparse(url).query)
         assert qs["state"] == ["my-state-token"]
 
-    def test_redirect_uri_is_encoded(self):
+    def test_redirect_uri_is_encoded(self, _patch_google_settings):
         url = build_google_auth_url("s")
         parsed = urlparse(url)
         qs = parse_qs(parsed.query)
         assert "redirect_uri" in qs
 
-    def test_required_params_present(self):
+    def test_required_params_present(self, _patch_google_settings):
         url = build_google_auth_url("s")
         qs = parse_qs(urlparse(url).query)
         for key in ("client_id", "redirect_uri", "response_type", "scope", "state"):
