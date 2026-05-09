@@ -24,4 +24,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_constraint("uq_users_google_sub", "users", type_="unique")
     op.drop_column("users", "google_sub")
-    op.alter_column("users", "password_hash", nullable=False)
+    # password_hash was NOT NULL before this migration, but Google-only users created
+    # after upgrade will have password_hash = NULL. Restoring NOT NULL would fail for
+    # those rows, so the nullable change is intentionally left in place on downgrade.
