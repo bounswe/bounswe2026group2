@@ -226,6 +226,7 @@ class TestTokenVerificationAPI:
 
 
 @pytest.mark.asyncio
+<<<<<<< HEAD
 class TestProfileUpdateAPI:
     async def test_patch_me_updates_profile_fields(self, client):
         await client.post(
@@ -425,3 +426,26 @@ class TestPasswordChangeAPI:
         )
 
         assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+class TestGoogleOAuthCallbackAPI:
+    """API-level tests for OAuth state (CSRF) validation on the callback endpoint."""
+
+    async def test_callback_rejects_missing_state_cookie(self, client):
+        resp = await client.get("/auth/google/callback?code=fake-code&state=some-state")
+        assert resp.status_code == 400
+
+    async def test_callback_rejects_mismatched_state(self, client):
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code&state=attacker-state",
+            cookies={"oauth_state": "real-state"},
+        )
+        assert resp.status_code == 400
+
+    async def test_callback_rejects_missing_state_query_param(self, client):
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code",
+            cookies={"oauth_state": "real-state"},
+        )
+        assert resp.status_code == 422
