@@ -542,6 +542,7 @@ async def create_story_with_location(
         date_start=normalized_date_start,
         date_end=normalized_date_end,
         date_precision=normalized_date_precision,
+        is_anonymous=payload.is_anonymous,
     )
 
     db.add(story)
@@ -591,6 +592,7 @@ async def update_story_with_location_and_dates(
     story.date_start = normalized_date_start
     story.date_end = normalized_date_end
     story.date_precision = normalized_date_precision
+    story.is_anonymous = payload.is_anonymous
 
     await db.commit()
     await db.refresh(story)

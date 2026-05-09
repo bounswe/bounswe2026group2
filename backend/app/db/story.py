@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Enum, Float, ForeignKey, Index, String, Text, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Enum, Float, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -62,6 +62,12 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     date_precision: Mapped[DatePrecision | None] = mapped_column(
         Enum(DatePrecision, name="date_precision", native_enum=False),
         nullable=True,
+    )
+    is_anonymous: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_by: Mapped[uuid.UUID | None] = mapped_column(
