@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -403,6 +403,7 @@ async def unsave_story(
 )
 async def upload_story_media(
     story_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     media_type: MediaType = Form(...),
     alt_text: str | None = Form(default=None),
@@ -417,7 +418,13 @@ async def upload_story_media(
         caption=caption,
         sort_order=sort_order,
     )
-    return await upload_media_for_story(db, story_id, file, payload)
+    return await upload_media_for_story(
+        db,
+        story_id,
+        file,
+        payload,
+        background_tasks=background_tasks,
+    )
 
 
 @router.post(

@@ -78,7 +78,7 @@ class TestRecordedMediaUploadFlow:
         assert resp.status_code == 201
         media = resp.json()["media"]
         assert media["media_type"] == "audio"
-        assert media["mime_type"] == "audio/webm;codecs=opus"
+        assert media["mime_type"] == "audio/webm"
 
     async def test_upload_recorded_audio_webm_mixed_case_mime_is_accepted(self, client, monkeypatch):
         monkeypatch.setattr("app.services.story_service.upload_bytes", lambda **kwargs: None)
@@ -131,7 +131,7 @@ class TestRecordedMediaUploadFlow:
         assert resp.status_code == 201
         media = resp.json()["media"]
         assert media["media_type"] == "video"
-        assert media["mime_type"] == "video/webm;codecs=vp8,opus"
+        assert media["mime_type"] == "video/webm"
 
 
 @pytest.mark.asyncio
@@ -194,7 +194,7 @@ class TestRecordedMediaStoryDetailFlow:
         media_files = data["media_files"]
 
         assert media_files[0]["media_type"] == "audio"
-        assert media_files[0]["mime_type"] == "audio/webm;codecs=opus"
+        assert media_files[0]["mime_type"] == "audio/webm"
         assert media_files[0]["original_filename"] == "recorded-audio.webm"
         assert media_files[0]["sort_order"] == 0
 

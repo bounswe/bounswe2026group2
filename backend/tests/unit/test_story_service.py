@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from starlette.datastructures import Headers, UploadFile
 
 from app.db.enums import DatePrecision, MediaType, NotificationEventType, ReportStatus, StoryStatus, StoryVisibility
@@ -75,6 +75,7 @@ def _make_media_file(**overrides):
         "sort_order": 0,
         "alt_text": None,
         "caption": None,
+        "transcript": None,
         "created_at": datetime.now(timezone.utc),
     }
     base.update(overrides)
@@ -311,8 +312,71 @@ class TestUploadMediaForStoryService:
         with patch("app.services.story_service.upload_bytes"):
             result = await upload_media_for_story(db, story_id, file, payload)
 
-        assert result.media.mime_type == "audio/webm;codecs=opus"
+        assert result.media.mime_type == "audio/webm"
         assert result.media.media_type == MediaType.AUDIO
+
+    async def test_upload_audio_queues_background_transcription(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm")
+        background_tasks = BackgroundTasks()
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(
+                db,
+                story_id,
+                file,
+                payload,
+                background_tasks=background_tasks,
+            )
+
+        assert result.media.media_type == MediaType.AUDIO
+        assert len(background_tasks.tasks) == 1
+        task = background_tasks.tasks[0]
+        assert task.func.__name__ == "transcribe_media_file"
+        assert task.kwargs["media_file_id"] == result.media.id
+        assert task.kwargs["filename"] == "recording.webm"
+        assert task.kwargs["content"] == b"audio-bytes"
+        assert task.kwargs["mime_type"] == "audio/webm"
+
+    async def test_upload_image_does_not_queue_background_transcription(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.IMAGE)
+        file = _make_upload_file("photo.png", b"fake-image-bytes", "image/png")
+        background_tasks = BackgroundTasks()
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            await upload_media_for_story(
+                db,
+                story_id,
+                file,
+                payload,
+                background_tasks=background_tasks,
+            )
+
+        assert background_tasks.tasks == []
 
     async def test_upload_accepts_audio_webm_mixed_case(self):
         story_id = uuid.uuid4()
@@ -334,6 +398,61 @@ class TestUploadMediaForStoryService:
 
         assert result.media.media_type == MediaType.AUDIO
 
+    async def test_upload_accepts_audio_x_m4a_alias(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.m4a", b"audio-bytes", "audio/x-m4a")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.mime_type == "audio/mp4"
+        assert result.media.media_type == MediaType.AUDIO
+
+    async def test_upload_accepts_audio_octet_stream_when_extension_is_m4a(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.m4a", b"audio-bytes", "application/octet-stream")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            result = await upload_media_for_story(db, story_id, file, payload)
+
+        assert result.media.mime_type == "audio/mp4"
+        assert mock_upload.call_args.kwargs["content_type"] == "audio/mp4"
+
+    async def test_upload_rejects_audio_octet_stream_without_supported_extension(self):
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO)
+        file = _make_upload_file("recording.bin", b"audio-bytes", "application/octet-stream")
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, uuid.uuid4(), file, payload)
+
+        assert exc_info.value.status_code == 422
+        assert "application/octet-stream" in exc_info.value.detail
+        mock_upload.assert_not_called()
+
     async def test_upload_accepts_video_webm(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id)
@@ -352,7 +471,7 @@ class TestUploadMediaForStoryService:
         with patch("app.services.story_service.upload_bytes"):
             result = await upload_media_for_story(db, story_id, file, payload)
 
-        assert result.media.mime_type == "video/webm;codecs=vp8,opus"
+        assert result.media.mime_type == "video/webm"
         assert result.media.media_type == MediaType.VIDEO
 
     async def test_upload_accepts_video_webm_mixed_case(self):

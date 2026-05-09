@@ -213,6 +213,7 @@ class MediaFileResponse(BaseModel):
     sort_order: int
     alt_text: str | None
     caption: str | None
+    transcript: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
