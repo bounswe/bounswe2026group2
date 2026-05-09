@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_call:
 
 jobs:
   # ── 0a. LINT & FORMAT ───────────────────────────────────────────────────────
@@ -345,7 +346,7 @@ jobs:
       - name: Run Playwright UAT tests
         run: |
           if [ -d "frontend/tests/uat" ]; then
-            cd frontend && npx playwright test tests/uat/ --reporter=html,junit
+            cd frontend && npx playwright test tests/uat/
           else
             echo "UAT placeholder — tests/uat/ not yet created (see issue #282)"
           fi
