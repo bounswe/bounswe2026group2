@@ -2,6 +2,7 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlencode
 
 import httpx
 import jwt
@@ -155,7 +156,7 @@ _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
-def build_google_auth_url() -> str:
+def build_google_auth_url(state: str) -> str:
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_REDIRECT_URI,
@@ -163,9 +164,9 @@ def build_google_auth_url() -> str:
         "scope": "openid email profile",
         "access_type": "offline",
         "prompt": "select_account",
+        "state": state,
     }
-    query = "&".join(f"{k}={v}" for k, v in params.items())
-    return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
 
 async def _exchange_code(code: str) -> dict:
