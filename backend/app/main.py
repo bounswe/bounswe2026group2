@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.db.session import engine
 from app.routers.auth import router as auth_router
 from app.routers.story import router as story_router
+from app.routers.users import router as users_router
 from app.services.storage import check_connection
 
 
@@ -42,6 +43,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(story_router)
+app.include_router(users_router)
 
 
 @app.get("/")
