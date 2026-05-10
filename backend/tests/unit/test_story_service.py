@@ -1261,9 +1261,24 @@ class TestTagNormalizationHelpers:
     def test_build_tag_slug_replaces_spaces_and_symbols(self):
         assert build_tag_slug("  Bogazici Universitesi!  ") == "bogazici-universitesi"
 
+    def test_normalize_tag_name_rejects_values_longer_than_max_length(self):
+        with pytest.raises(HTTPException) as exc_info:
+            normalize_tag_name("a" * 101)
+
+        assert exc_info.value.status_code == 422
+        assert "at most 100 characters" in exc_info.value.detail
+
 
 @pytest.mark.asyncio
 class TestAiTagPersistenceHelpers:
+    async def test_get_or_create_tags_returns_empty_without_hitting_db_for_empty_input(self):
+        db = AsyncMock()
+
+        tags = await get_or_create_tags(db, None)
+
+        assert tags == []
+        db.execute.assert_not_awaited()
+
     async def test_get_or_create_tags_reuses_existing_and_creates_missing(self):
         existing_tag = Tag(name="bogazici", slug="bogazici")
         db = AsyncMock()
@@ -1290,6 +1305,15 @@ class TestAiTagPersistenceHelpers:
 
         assert [tag.name for tag in story.tags] == ["bogazici", "turkiye"]
 
+    async def test_attach_tags_to_story_keeps_existing_tag_only_once(self):
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        existing_tag.id = uuid.uuid4()
+        story = _make_story(tags=[existing_tag])
+
+        attach_tags_to_story(story, [existing_tag])
+
+        assert [tag.name for tag in story.tags] == ["bogazici"]
+
     async def test_apply_ai_tags_to_story_attaches_tags_and_commits(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id, tags=[])
@@ -1311,6 +1335,17 @@ class TestAiTagPersistenceHelpers:
         assert [tag.name for tag in story.tags] == ["bogazici", "turkiye"]
         db.commit.assert_awaited_once()
         db.refresh.assert_awaited_once_with(story, attribute_names=["tags"])
+
+    async def test_apply_ai_tags_to_story_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await apply_ai_tags_to_story(db, uuid.uuid4(), ["bogazici"])
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+        db.commit.assert_not_awaited()
 
 
 @pytest.mark.asyncio
