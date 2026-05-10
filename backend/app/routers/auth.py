@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+import secrets
+
+from fastapi import APIRouter, Cookie, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
@@ -14,8 +17,10 @@ from app.models.user import (
     UserResponse,
 )
 from app.services.auth_service import (
+    build_google_auth_url,
     change_user_password,
     get_user_profile,
+    google_oauth_login,
     login_user,
     register_user,
     update_user_profile,
@@ -58,6 +63,47 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     return await login_user(db, payload)
+
+
+@router.get(
+    "/google/login",
+    summary="Initiate Google OAuth login",
+    description="Redirects the user to Google's consent screen to begin the OAuth2 flow.",
+    status_code=status.HTTP_302_FOUND,
+    include_in_schema=True,
+)
+async def google_login(response: Response):
+    state = secrets.token_urlsafe(32)
+    redirect = RedirectResponse(url=build_google_auth_url(state))
+    redirect.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        samesite="lax",
+        max_age=300,
+    )
+    return redirect
+
+
+@router.get(
+    "/google/callback",
+    response_model=TokenResponse,
+    summary="Google OAuth callback",
+    description="Exchanges the authorization code from Google for a JWT. Creates a new account if the Google email is not yet registered.",
+    responses={
+        400: {"description": "Missing or mismatched OAuth state (CSRF check failed)"},
+        401: {"description": "Code exchange or userinfo fetch failed"},
+    },
+)
+async def google_callback(
+    code: str = Query(..., description="Authorization code from Google"),
+    state: str = Query(..., description="CSRF state token returned by Google"),
+    oauth_state: str | None = Cookie(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if not oauth_state or state != oauth_state:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state")
+    return await google_oauth_login(db, code)
 
 
 @router.get(

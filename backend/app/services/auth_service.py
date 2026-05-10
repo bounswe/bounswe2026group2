@@ -1,7 +1,10 @@
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlencode
 
+import httpx
 import jwt
 from fastapi import HTTPException, UploadFile, status
 from passlib.context import CryptContext
@@ -149,13 +152,105 @@ async def register_user(db: AsyncSession, payload: UserRegisterRequest) -> UserR
     return UserResponse.model_validate(user)
 
 
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+_GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
+
+
+def build_google_auth_url(state: str) -> str:
+    params = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+        "state": state,
+    }
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+
+async def _exchange_code(code: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            _GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            },
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token exchange failed")
+    return resp.json()
+
+
+async def _get_google_userinfo(access_token: str) -> dict:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            _GOOGLE_USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Failed to fetch Google user info")
+    return resp.json()
+
+
+async def _derive_username(db: AsyncSession, email: str) -> str:
+    base = re.sub(r"[^a-zA-Z0-9_]", "", email.split("@")[0])[:40] or "user"
+    candidate = base
+    suffix = 1
+    while True:
+        result = await db.execute(select(User).where(User.username == candidate))
+        if result.scalar_one_or_none() is None:
+            return candidate
+        candidate = f"{base}{suffix}"
+        suffix += 1
+
+
+async def google_oauth_login(db: AsyncSession, code: str) -> TokenResponse:
+    tokens = await _exchange_code(code)
+    userinfo = await _get_google_userinfo(tokens["access_token"])
+
+    google_sub: str = userinfo["id"]
+    email: str = userinfo["email"].strip().lower()
+    name: str | None = userinfo.get("name")
+
+    # Look up by google_sub first, then by email (link existing account)
+    result = await db.execute(select(User).where(User.google_sub == google_sub))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+
+    if user is None:
+        username = await _derive_username(db, email)
+        user = User(
+            username=username,
+            email=email,
+            password_hash=None,
+            display_name=name,
+            google_sub=google_sub,
+        )
+        db.add(user)
+    elif user.google_sub is None:
+        user.google_sub = google_sub
+
+    await db.commit()
+    await db.refresh(user)
+
+    return TokenResponse(access_token=create_access_token(user))
+
+
 async def login_user(db: AsyncSession, payload: UserLoginRequest) -> TokenResponse:
     email = payload.email.strip().lower()
 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if user is None or user.password_hash is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
