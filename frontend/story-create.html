@@ -751,6 +751,7 @@
     var audioPreview = document.getElementById("recording-audio-preview");
 
     transcriptionPreviewSeq++;
+    transcriptionPreviewSeq++;
     if (recordingPreviewUrl) {
       URL.revokeObjectURL(recordingPreviewUrl);
       recordingPreviewUrl = null;
@@ -758,6 +759,15 @@
 
     audioPreview.removeAttribute("src");
     audioPreview.classList.add("hidden");
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptPanel) transcriptPanel.classList.add("hidden");
+    if (transcriptDraft) {
+      transcriptDraft.value = "";
+      transcriptDraft.disabled = false;
+    }
+    setRecordingTranscriptStatus("", null);
 
     var transcriptPanel = document.getElementById("recording-transcript-panel");
     var transcriptDraft = document.getElementById("recording-transcript-draft");
@@ -835,6 +845,7 @@
         updateFileList();
         setStartRecordingLabel("Record Again");
         setRecordingStatus("Recording ready. Preview it here, then publish the story to upload it.", false);
+        void fetchTranscriptionPreviewForRecordedFile(recordedFile);
         void fetchTranscriptionPreviewForRecordedFile(recordedFile);
       });
 
