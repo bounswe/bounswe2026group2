@@ -592,7 +592,8 @@ async def update_story_with_location_and_dates(
     story.date_start = normalized_date_start
     story.date_end = normalized_date_end
     story.date_precision = normalized_date_precision
-    story.is_anonymous = payload.is_anonymous
+    if payload.is_anonymous is not None:
+        story.is_anonymous = payload.is_anonymous
 
     await db.commit()
     await db.refresh(story)

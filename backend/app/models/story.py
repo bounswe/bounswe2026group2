@@ -92,7 +92,7 @@ class StoryUpdateRequest(StoryDateInput):
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
-    is_anonymous: bool = False
+    is_anonymous: bool | None = None
 
 
 class StoryBoundsFilter(BaseModel):

@@ -47,6 +47,7 @@ def _make_story(**overrides):
         "date_precision": DatePrecision.YEAR,
         "status": StoryStatus.PUBLISHED,
         "visibility": StoryVisibility.PUBLIC,
+        "is_anonymous": False,
         "created_at": datetime.now(timezone.utc),
         "story_likes": [],
     }
@@ -1346,4 +1347,31 @@ class TestAnonymousStoryService:
         assert result.is_anonymous is True
         assert result.author is None
         assert story.is_anonymous is True
+        db.commit.assert_awaited_once()
+
+    async def test_update_story_omitting_is_anonymous_preserves_existing_value(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, user_id=uuid.uuid4(), is_anonymous=True)
+        current_user = SimpleNamespace(id=story.user_id, username="realauthor")
+
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            # is_anonymous intentionally omitted
+        )
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await update_story_with_location_and_dates(db, story_id, current_user, payload)
+
+        assert story.is_anonymous is True
+        assert result.author is None
         db.commit.assert_awaited_once()
