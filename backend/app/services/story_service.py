@@ -273,6 +273,7 @@ async def list_available_stories(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
@@ -314,6 +315,7 @@ async def search_available_stories_by_place(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
@@ -345,7 +347,7 @@ async def get_story_detail_by_id(
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
         .where(Story.id == story_id, Story.deleted_at.is_(None))
-        .options(selectinload(Story.media_files))
+        .options(selectinload(Story.media_files), selectinload(Story.tags))
     )
 
     result = await db.execute(stmt)
@@ -500,6 +502,7 @@ async def list_saved_stories_for_user(
         select(Story, User.username)
         .join(StorySave, StorySave.story_id == Story.id)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             StorySave.user_id == current_user.id,
             Story.status == StoryStatus.PUBLISHED,
@@ -770,6 +773,7 @@ async def get_nearby_stories(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
