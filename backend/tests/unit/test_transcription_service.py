@@ -1,11 +1,18 @@
 import uuid
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import HTTPException
+from starlette.datastructures import Headers, UploadFile
 
 from app.db.enums import MediaType
-from app.services.transcription_service import transcribe_audio_content, transcribe_media_file
+from app.services.transcription_service import (
+    preview_audio_transcription,
+    transcribe_audio_content,
+    transcribe_media_file,
+)
 
 
 class _SessionContextManager:
@@ -117,3 +124,39 @@ class TestTranscribeMediaFile:
 
         assert media.transcript is None
         db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestPreviewAudioTranscription:
+    async def test_transcribes_valid_audio_upload(self):
+        upload = UploadFile(
+            file=BytesIO(b"audio-bytes"),
+            filename="audio.webm",
+            headers=Headers({"content-type": "audio/webm;codecs=opus"}),
+        )
+
+        with patch(
+            "app.services.transcription_service.transcribe_audio_content",
+            new=AsyncMock(return_value="Preview transcript"),
+        ) as mock_transcribe:
+            result = await preview_audio_transcription(upload)
+
+        assert result == "Preview transcript"
+        mock_transcribe.assert_awaited_once_with(
+            filename="audio.webm",
+            content=b"audio-bytes",
+            mime_type="audio/webm",
+        )
+
+    async def test_rejects_invalid_upload_type_with_400(self):
+        upload = UploadFile(
+            file=BytesIO(b"png-bytes"),
+            filename="photo.png",
+            headers=Headers({"content-type": "image/png"}),
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await preview_audio_transcription(upload)
+
+        assert exc_info.value.status_code == 400
+        assert "Unsupported mime type" in exc_info.value.detail

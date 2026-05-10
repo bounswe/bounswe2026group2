@@ -32,6 +32,7 @@ from app.models.story import (
     StorySaveResponse,
     StoryUpdateRequest,
 )
+from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 from app.services.storage import (
     build_public_object_url,
     delete_object,
@@ -39,63 +40,6 @@ from app.services.storage import (
     upload_bytes,
 )
 from app.services.transcription_service import transcribe_media_file
-
-MAX_MEDIA_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
-
-ALLOWED_MIME_TYPES = {
-    "image": {"image/jpeg", "image/png", "image/webp", "image/gif"},
-    "audio": {"audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4", "audio/webm"},
-    "video": {"video/mp4", "video/webm", "video/quicktime"},
-    "document": {
-        "application/pdf",
-        "text/plain",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
-}
-
-MIME_TYPE_ALIASES = {
-    "image/jpg": "image/jpeg",
-    "audio/x-wav": "audio/wav",
-    "audio/wave": "audio/wav",
-    "audio/vnd.wave": "audio/wav",
-    "audio/x-m4a": "audio/mp4",
-    "audio/m4a": "audio/mp4",
-    "video/x-m4v": "video/mp4",
-    "application/x-pdf": "application/pdf",
-}
-
-GENERIC_BINARY_MIME_TYPES = {"application/octet-stream", "binary/octet-stream"}
-
-MIME_TYPE_FALLBACKS_BY_EXTENSION = {
-    "image": {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-        ".gif": "image/gif",
-    },
-    "audio": {
-        ".mp3": "audio/mpeg",
-        ".wav": "audio/wav",
-        ".ogg": "audio/ogg",
-        ".m4a": "audio/mp4",
-        ".mp4": "audio/mp4",
-        ".webm": "audio/webm",
-    },
-    "video": {
-        ".mp4": "video/mp4",
-        ".m4v": "video/mp4",
-        ".webm": "video/webm",
-        ".mov": "video/quicktime",
-    },
-    "document": {
-        ".pdf": "application/pdf",
-        ".txt": "text/plain",
-        ".doc": "application/msword",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
-}
 
 
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
@@ -180,43 +124,6 @@ def _map_comment_row(comment: StoryComment, author: User) -> CommentResponse:
         created_at=comment.created_at,
         updated_at=comment.updated_at,
     )
-
-
-def _normalize_media_content_type(file: UploadFile, payload: MediaUploadRequest) -> str:
-    raw_content_type = (file.content_type or "").split(";")[0].strip().lower()
-    normalized_content_type = MIME_TYPE_ALIASES.get(raw_content_type, raw_content_type)
-
-    if normalized_content_type in GENERIC_BINARY_MIME_TYPES:
-        extension = Path(file.filename or "").suffix.lower()
-        fallback_content_type = MIME_TYPE_FALLBACKS_BY_EXTENSION[payload.media_type.value].get(extension)
-        if fallback_content_type:
-            return fallback_content_type
-
-    return normalized_content_type
-
-
-def _validate_media_upload(file: UploadFile, payload: MediaUploadRequest) -> str:
-    if not file.filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Filename is required",
-        )
-
-    if not file.content_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Content type is required",
-        )
-
-    allowed_for_type = ALLOWED_MIME_TYPES[payload.media_type.value]
-    normalized_content_type = _normalize_media_content_type(file, payload)
-    if normalized_content_type not in allowed_for_type:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(f"Unsupported mime type '{normalized_content_type}' for media type '{payload.media_type.value}'"),
-        )
-
-    return normalized_content_type
 
 
 def _build_media_storage_key(story_id: uuid.UUID, filename: str) -> str:
@@ -671,7 +578,7 @@ async def upload_media_for_story(
     payload: MediaUploadRequest,
     background_tasks: BackgroundTasks | None = None,
 ) -> MediaUploadResponse:
-    normalized_content_type = _validate_media_upload(file, payload)
+    normalized_content_type = validate_media_upload(file, payload.media_type)
 
     story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))
     story = story_result.scalar_one_or_none()
@@ -681,19 +588,8 @@ async def upload_media_for_story(
             detail="Story not found",
         )
 
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is empty",
-        )
-
+    file_bytes = await read_uploaded_file_content(file)
     file_size = len(file_bytes)
-    if file_size > MAX_MEDIA_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size exceeds {MAX_MEDIA_UPLOAD_BYTES} bytes",
-        )
 
     bucket_name = get_bucket_for_media_type(payload.media_type)
     storage_key = _build_media_storage_key(story_id, file.filename)
