@@ -23,6 +23,8 @@ from app.services.story_service import (
     list_available_stories,
     list_comments_for_story,
     list_saved_stories_for_user,
+    normalize_tag_list,
+    normalize_tag_name,
     remove_story_as_admin,
     save_story_for_user,
     search_available_stories_by_place,
@@ -1230,6 +1232,24 @@ class TestGetNearbyStoriesService:
 
         assert "ORDER BY" in sql
         assert "DESC" not in sql
+
+
+class TestTagNormalizationHelpers:
+    def test_normalize_tag_name_trims_and_lowercases(self):
+        assert normalize_tag_name("  Ottoman  ") == "ottoman"
+
+    def test_normalize_tag_name_rejects_blank_value(self):
+        with pytest.raises(HTTPException) as exc_info:
+            normalize_tag_name("   ")
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "Tags cannot be blank"
+
+    def test_normalize_tag_list_deduplicates_after_normalization(self):
+        assert normalize_tag_list(["  History ", "history", "OTTOMAN "]) == ["history", "ottoman"]
+
+    def test_normalize_tag_list_returns_empty_for_none(self):
+        assert normalize_tag_list(None) == []
 
 
 @pytest.mark.asyncio
