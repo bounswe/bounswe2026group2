@@ -4,6 +4,7 @@ pytest
 pytest-asyncio==0.25.3
 pytest-html
 httpx
+google-genai
 
 # Database
 sqlalchemy[asyncio]
