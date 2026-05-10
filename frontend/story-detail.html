@@ -200,6 +200,7 @@
 <script src="comments.js"></script>
 <script src="auth.js"></script>
 <script src="saves.js"></script>
+<script src="anonymous.js"></script>
 <script>
   // Initialize mini-map with arbitrary center initially
   var detailMap = L.map("detail-map", {
@@ -231,7 +232,10 @@
       .then(story => {
           document.getElementById('story-title').textContent = story.title || "Untitled";
           document.getElementById('story-summary').textContent = story.summary || "";
-          document.getElementById('story-author').innerHTML = 'by ' + (story.author || "Unknown");
+          document.getElementById('story-author').textContent = getAuthorByLine(story);
+          if (isAnonymousStory(story)) {
+            document.getElementById('story-author').classList.add('italic');
+          }
           document.getElementById('story-date').textContent = story.date_label || "No Date";
           document.getElementById('story-location').textContent = story.place_name || "Istanbul";
           document.getElementById('story-content').textContent = story.content || "No content available.";

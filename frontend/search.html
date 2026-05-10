@@ -91,6 +91,7 @@
     </main>
 
     <script src="config.js"></script>
+    <script src="anonymous.js"></script>
     <script>
         var searchForm = document.getElementById("search-form");
         var searchInput = document.getElementById("search-input");
@@ -210,7 +211,7 @@
                         (placeName ? '<span class="text-[11px] font-semibold text-primary truncate">' + escapeHtml(placeName) + '</span>' : '') +
                     '</div>' +
                     '<h3 class="font-headline font-bold text-base text-textmain leading-snug group-hover:text-primary transition-colors">' + escapeHtml(story.title) + '</h3>' +
-                    (story.author ? '<p class="mt-1 text-xs text-textmuted">by ' + escapeHtml(story.author) + '</p>' : '') +
+                    '<p class="mt-1 text-xs text-textmuted' + (isAnonymousStory(story) ? ' italic' : '') + '">' + escapeHtml(getAuthorByLine(story)) + '</p>' +
                     '<p class="mt-2.5 text-sm text-textmuted leading-relaxed line-clamp-3">' + escapeHtml(preview) + '</p>' +
                     '<div class="mt-4 flex items-center gap-1 text-xs font-bold text-primary">' +
                         'Read Story' +
