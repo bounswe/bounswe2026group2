@@ -104,18 +104,6 @@ async function handleEditProfileSubmit(e) {
     };
 
     try {
-        var updateRes = await authFetch(API_BASE + "/auth/me", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(profilePayload)
-        });
-        if (!updateRes.ok) {
-            if (updateRes.status === 401 && typeof logout === "function") logout();
-            var updatePayload = null;
-            try { updatePayload = await updateRes.json(); } catch (err) { void err; }
-            throw new Error(getErrorDetail(updatePayload) || "Failed to update profile");
-        }
-
         var wantsPasswordChange = false;
         var currentPassword = currentPasswordEl ? currentPasswordEl.value : "";
         var newPassword = newPasswordEl ? newPasswordEl.value : "";
@@ -151,6 +139,18 @@ async function handleEditProfileSubmit(e) {
             if (currentPasswordEl) currentPasswordEl.value = "";
             if (newPasswordEl) newPasswordEl.value = "";
             if (confirmPasswordEl) confirmPasswordEl.value = "";
+        }
+
+        var updateRes = await authFetch(API_BASE + "/auth/me", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(profilePayload)
+        });
+        if (!updateRes.ok) {
+            if (updateRes.status === 401 && typeof logout === "function") logout();
+            var updatePayload = null;
+            try { updatePayload = await updateRes.json(); } catch (err) { void err; }
+            throw new Error(getErrorDetail(updatePayload) || "Failed to update profile");
         }
 
         window.location.assign("profile.html");
