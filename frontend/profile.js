@@ -11,8 +11,29 @@ async function loadProfile() {
 
         var nameEl = document.getElementById("profile-name");
         var joinedEl = document.getElementById("profile-joined");
+        var bioEl = document.getElementById("profile-bio");
+        var locationEl = document.getElementById("profile-location");
+        var avatarEl = document.getElementById("profile-avatar");
 
         if (nameEl) nameEl.textContent = data.display_name || data.username;
+        if (bioEl) bioEl.textContent = data.bio || "";
+        if (locationEl) {
+            // Keep the icon span but replace the trailing text
+            var iconSpan = locationEl.querySelector(".material-symbols-outlined");
+            locationEl.textContent = "";
+            if (iconSpan) locationEl.appendChild(iconSpan);
+            var text = document.createTextNode(" " + (data.location || ""));
+            locationEl.appendChild(text);
+            if (!data.location) locationEl.style.display = "none";
+        }
+        if (avatarEl && data.avatar_url) {
+            avatarEl.style.backgroundImage = "url('" + data.avatar_url + "')";
+            avatarEl.style.backgroundSize = "cover";
+            avatarEl.style.backgroundPosition = "center";
+            avatarEl.style.backgroundRepeat = "no-repeat";
+            var icon = avatarEl.querySelector(".material-symbols-outlined");
+            if (icon) icon.style.opacity = "0";
+        }
         if (joinedEl && data.created_at) {
             var date = new Date(data.created_at);
             var options = { month: 'long', year: 'numeric' };
