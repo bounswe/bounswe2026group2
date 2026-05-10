@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from unittest.mock import AsyncMock
 
@@ -118,6 +119,17 @@ class TestStoryAiTaggingBackgroundFlow:
         )
         return login_resp.json()["access_token"]
 
+    async def _wait_for_story_tags(self, client, story_id: str, expected_tags: list[str]) -> dict:
+        for _ in range(10):
+            detail_resp = await client.get(f"/stories/{story_id}")
+            assert detail_resp.status_code == 200
+            data = detail_resp.json()
+            if data["tags"] == expected_tags:
+                return data
+            await asyncio.sleep(0.1)
+
+        return data
+
     async def test_create_story_triggers_background_ai_tagging(self, client, monkeypatch):
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr(
@@ -144,9 +156,8 @@ class TestStoryAiTaggingBackgroundFlow:
         assert create_resp.status_code == 201
         story_id = create_resp.json()["id"]
 
-        detail_resp = await client.get(f"/stories/{story_id}")
-        assert detail_resp.status_code == 200
-        assert detail_resp.json()["tags"] == ["bogazici", "turkiye", "spor"]
+        data = await self._wait_for_story_tags(client, story_id, ["bogazici", "turkiye", "spor"])
+        assert data["tags"] == ["bogazici", "turkiye", "spor"]
 
     async def test_ai_tagging_failure_does_not_break_story_creation(self, client, monkeypatch):
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
@@ -217,8 +228,6 @@ class TestStoryAiTaggingBackgroundFlow:
         )
         assert upload_resp.status_code == 201
 
-        detail_resp = await client.get(f"/stories/{story_id}")
-        assert detail_resp.status_code == 200
-        data = detail_resp.json()
+        data = await self._wait_for_story_tags(client, story_id, ["story", "audio", "bosphorus"])
         assert data["media_files"][0]["transcript"] == "Bosphorus running memories and local sports narration"
         assert data["tags"] == ["story", "audio", "bosphorus"]
