@@ -1,5 +1,5 @@
-from io import BytesIO
 import uuid
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -8,7 +8,11 @@ from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
 from app.db.enums import MediaType
-from app.services.transcription_service import preview_audio_transcription, transcribe_audio_content, transcribe_media_file
+from app.services.transcription_service import (
+    preview_audio_transcription,
+    transcribe_audio_content,
+    transcribe_media_file,
+)
 
 
 class _SessionContextManager:
