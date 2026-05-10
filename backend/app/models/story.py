@@ -82,6 +82,7 @@ class StoryCreateRequest(StoryDateInput):
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
+    is_anonymous: bool = False
 
 
 class StoryUpdateRequest(StoryDateInput):
@@ -91,6 +92,7 @@ class StoryUpdateRequest(StoryDateInput):
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
+    is_anonymous: bool | None = None
 
 
 class StoryBoundsFilter(BaseModel):
@@ -134,7 +136,8 @@ class StoryResponse(BaseModel):
     title: str
     summary: str | None
     content: str
-    author: str
+    author: str | None
+    is_anonymous: bool
     place_name: str | None
     latitude: float | None
     longitude: float | None
@@ -169,12 +172,15 @@ class StoryResponse(BaseModel):
         else:
             date_label = None
 
+        is_anonymous = getattr(story, "is_anonymous", False)
+
         return cls(
             id=story.id,
             title=story.title,
             summary=story.summary,
             content=story.content,
-            author=author_username,
+            author=None if is_anonymous else author_username,
+            is_anonymous=is_anonymous,
             place_name=story.place_name,
             latitude=story.latitude,
             longitude=story.longitude,

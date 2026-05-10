@@ -11,7 +11,7 @@ from starlette.datastructures import Headers, UploadFile
 from app.db.enums import DatePrecision, MediaType, NotificationEventType, ReportStatus, StoryStatus, StoryVisibility
 from app.db.notification import Notification
 from app.models.comment import CommentCreateRequest
-from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryUpdateRequest
+from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryResponse, StoryUpdateRequest
 from app.services.story_service import (
     create_comment_for_story,
     create_story_with_location,
@@ -47,6 +47,7 @@ def _make_story(**overrides):
         "date_precision": DatePrecision.YEAR,
         "status": StoryStatus.PUBLISHED,
         "visibility": StoryVisibility.PUBLIC,
+        "is_anonymous": False,
         "created_at": datetime.now(timezone.utc),
         "story_likes": [],
     }
@@ -1268,3 +1269,109 @@ class TestAdminRemoveStoryService:
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"
         db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestAnonymousStoryService:
+    async def test_from_orm_with_author_masks_author_when_anonymous(self):
+        story = _make_story(is_anonymous=True)
+
+        response = StoryResponse.from_orm_with_author(story, "realauthor")
+
+        assert response.author is None
+        assert response.is_anonymous is True
+
+    async def test_from_orm_with_author_exposes_author_when_not_anonymous(self):
+        story = _make_story(is_anonymous=False)
+
+        response = StoryResponse.from_orm_with_author(story, "realauthor")
+
+        assert response.author == "realauthor"
+        assert response.is_anonymous is False
+
+    async def test_create_story_persists_is_anonymous_and_masks_author(self):
+        payload = StoryCreateRequest(
+            title="Anonymous Story",
+            content="Content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            is_anonymous=True,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="realauthor")
+
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        async def _refresh_side_effect(story_obj):
+            story_obj.id = uuid.uuid4()
+            story_obj.created_at = datetime.now(timezone.utc)
+            story_obj.status = StoryStatus.PUBLISHED
+            story_obj.visibility = StoryVisibility.PUBLIC
+
+        db.refresh.side_effect = _refresh_side_effect
+        db.execute.return_value.scalar_one = lambda: 0
+
+        result = await create_story_with_location(db, current_user, payload)
+
+        assert result.is_anonymous is True
+        assert result.author is None
+        db.add.assert_called_once()
+        added_story = db.add.call_args.args[0]
+        assert added_story.is_anonymous is True
+
+    async def test_update_story_sets_is_anonymous_and_masks_author(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, user_id=uuid.uuid4(), is_anonymous=False)
+        current_user = SimpleNamespace(id=story.user_id, username="realauthor")
+
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            is_anonymous=True,
+        )
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await update_story_with_location_and_dates(db, story_id, current_user, payload)
+
+        assert result.is_anonymous is True
+        assert result.author is None
+        assert story.is_anonymous is True
+        db.commit.assert_awaited_once()
+
+    async def test_update_story_omitting_is_anonymous_preserves_existing_value(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, user_id=uuid.uuid4(), is_anonymous=True)
+        current_user = SimpleNamespace(id=story.user_id, username="realauthor")
+
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            # is_anonymous intentionally omitted
+        )
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        result = await update_story_with_location_and_dates(db, story_id, current_user, payload)
+
+        assert story.is_anonymous is True
+        assert result.author is None
+        db.commit.assert_awaited_once()

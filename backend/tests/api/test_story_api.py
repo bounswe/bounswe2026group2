@@ -1715,3 +1715,128 @@ class TestNearbyStoriesAPI:
         resp = await client.get("/stories/nearby?lat=41.0082")
 
         assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestAnonymousStoryAPI:
+    async def _create_user_and_token(self, client, username: str, email: str) -> str:
+        await client.post(
+            "/auth/register",
+            json={"username": username, "email": email, "password": "AnonPass1!"},
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": email, "password": "AnonPass1!"},
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_create_anonymous_story_returns_null_author(self, client):
+        token = await self._create_user_and_token(client, "anonuser1", "anon1@example.com")
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Anonymous Story",
+                "content": "Secret content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": True,
+            },
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["author"] is None
+        assert data["is_anonymous"] is True
+
+    async def test_create_non_anonymous_story_returns_real_author(self, client):
+        token = await self._create_user_and_token(client, "anonuser2", "anon2@example.com")
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Named Story",
+                "content": "Public content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": False,
+            },
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["author"] == "anonuser2"
+        assert data["is_anonymous"] is False
+
+    async def test_list_stories_hides_author_for_anonymous_story(self, client, db_session):
+        user = User(
+            username="anonlistuser",
+            email="anonlist@example.com",
+            password_hash=hash_password("AnonPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Anonymous Listed Story",
+            content="content",
+            summary="summary",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            is_anonymous=True,
+        )
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories")
+
+        assert resp.status_code == 200
+        items = [s for s in resp.json()["stories"] if s["title"] == "Anonymous Listed Story"]
+        assert len(items) == 1
+        assert items[0]["author"] is None
+        assert items[0]["is_anonymous"] is True
+
+    async def test_update_story_to_anonymous_hides_author(self, client):
+        token = await self._create_user_and_token(client, "anonuser3", "anon3@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Will Be Anonymous",
+                "content": "content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": False,
+            },
+        )
+        assert create_resp.status_code == 201
+        story_id = create_resp.json()["id"]
+        assert create_resp.json()["author"] == "anonuser3"
+
+        update_resp = await client.put(
+            f"/stories/{story_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Will Be Anonymous",
+                "content": "content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": True,
+            },
+        )
+
+        assert update_resp.status_code == 200
+        data = update_resp.json()
+        assert data["author"] is None
+        assert data["is_anonymous"] is True
