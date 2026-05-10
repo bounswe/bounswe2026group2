@@ -4,7 +4,7 @@ import logging
 import uuid
 from collections.abc import Mapping
 
-import httpx
+from google import genai
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -17,7 +17,6 @@ from app.services.tag_service import apply_ai_tags_to_story, normalize_tag_list
 
 MAX_GENERATED_TAGS = 10
 MIN_GENERATED_TAGS = 5
-AI_REQUEST_TIMEOUT_SECONDS = 30.0
 AI_TAGGING_MAX_ATTEMPTS = 3
 AI_TAGGING_RETRY_DELAYS_SECONDS = (1.0, 2.0)
 
@@ -53,6 +52,10 @@ def build_ai_tagging_prompt(
 def _extract_candidate_text(response_payload: object) -> str:
     if isinstance(response_payload, str):
         return response_payload
+
+    response_text = getattr(response_payload, "text", None)
+    if isinstance(response_text, str):
+        return response_text
 
     if not isinstance(response_payload, Mapping):
         raise ValueError("Unsupported AI response payload")
@@ -114,19 +117,41 @@ def build_ai_tagging_request_payload(
     )
     return {
         "model": settings.AI_TAGGING_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": "You generate clean keyword tags for story discovery.",
-            },
-            {
-                "role": "user",
-                "content": prompt,
-            },
-        ],
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
+        "contents": prompt,
     }
+
+
+def _create_gemini_client() -> genai.Client:
+    api_key = settings.GEMINI_API_KEY or settings.AI_TAGGING_API_KEY
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is not configured")
+    return genai.Client(api_key=api_key)
+
+
+def _generate_ai_story_tags_sync(
+    *,
+    title: str,
+    content: str,
+    place_name: str | None = None,
+    date_label: str | None = None,
+) -> list[str]:
+    payload = build_ai_tagging_request_payload(
+        title=title,
+        content=content,
+        place_name=place_name,
+        date_label=date_label,
+    )
+    client = _create_gemini_client()
+    try:
+        response = client.models.generate_content(
+            model=payload["model"],
+            contents=payload["contents"],
+        )
+    finally:
+        client.close()
+
+    tags = parse_ai_generated_tags(response)
+    return tags[:MAX_GENERATED_TAGS]
 
 
 async def generate_ai_story_tags(
@@ -136,32 +161,13 @@ async def generate_ai_story_tags(
     place_name: str | None = None,
     date_label: str | None = None,
 ) -> list[str]:
-    if not settings.AI_TAGGING_API_URL:
-        raise ValueError("AI_TAGGING_API_URL is not configured")
-    if not settings.AI_TAGGING_API_KEY:
-        raise ValueError("AI_TAGGING_API_KEY is not configured")
-
-    payload = build_ai_tagging_request_payload(
+    return await asyncio.to_thread(
+        _generate_ai_story_tags_sync,
         title=title,
         content=content,
         place_name=place_name,
         date_label=date_label,
     )
-    headers = {
-        "Authorization": f"Bearer {settings.AI_TAGGING_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT_SECONDS) as client:
-        response = await client.post(
-            settings.AI_TAGGING_API_URL,
-            json=payload,
-            headers=headers,
-        )
-        response.raise_for_status()
-
-    tags = parse_ai_generated_tags(response.json())
-    return tags[:MAX_GENERATED_TAGS]
 
 
 def _build_story_date_label(story: Story) -> str | None:

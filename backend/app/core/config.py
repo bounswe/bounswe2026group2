@@ -41,9 +41,9 @@ class Settings(BaseSettings):
     TRANSCRIPTION_MODEL: str = "base"
     TRANSCRIPTION_DEVICE: str = "cpu"
     TRANSCRIPTION_COMPUTE_TYPE: str = "int8"
-    AI_TAGGING_API_URL: str = ""
+    GEMINI_API_KEY: str = ""
     AI_TAGGING_API_KEY: str = ""
-    AI_TAGGING_MODEL: str = "story-tagging-v1"
+    AI_TAGGING_MODEL: str = "gemini-2.5-flash"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

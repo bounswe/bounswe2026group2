@@ -38,9 +38,9 @@ class TestStoryTaggingPrompt:
             date_label="1923",
         )
 
-        assert payload["messages"][0]["role"] == "system"
-        assert payload["messages"][1]["role"] == "user"
-        assert payload["response_format"] == {"type": "json_object"}
+        assert payload["model"]
+        assert "Title" in payload["contents"]
+        assert "Ankara" in payload["contents"]
 
 
 class TestGeneratedTagParsing:
@@ -63,6 +63,11 @@ class TestGeneratedTagParsing:
         )
 
         assert tags == ["spor", "istanbul", "tarih"]
+
+    def test_parse_ai_generated_tags_from_response_text_attribute(self):
+        tags = parse_ai_generated_tags(SimpleNamespace(text='{"tags": ["spor", "istanbul"]}'))
+
+        assert tags == ["spor", "istanbul"]
 
     def test_parse_ai_generated_tags_falls_back_to_comma_separated_text(self):
         tags = parse_ai_generated_tags("Bogazici, Turkey, Sports")
@@ -106,32 +111,14 @@ class TestAiTaggingReadiness:
 
 @pytest.mark.asyncio
 class TestGenerateStoryTagsWithAi:
-    async def test_generate_ai_story_tags_posts_and_parses_response(self, monkeypatch):
-        monkeypatch.setattr("app.services.ai_tagging_system.settings.AI_TAGGING_API_URL", "https://example.com/tagging")
-        monkeypatch.setattr("app.services.ai_tagging_system.settings.AI_TAGGING_API_KEY", "secret")
+    async def test_generate_ai_story_tags_uses_gemini_client_and_parses_response(self, monkeypatch):
+        monkeypatch.setattr("app.services.ai_tagging_system.settings.GEMINI_API_KEY", "secret")
         monkeypatch.setattr("app.services.ai_tagging_system.settings.AI_TAGGING_MODEL", "fake-model")
 
-        response = MagicMock()
-        response.json.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "content": '{"tags": ["Bogazici", "Turkiye", "Spor"]}',
-                    }
-                }
-            ]
-        }
-        response.raise_for_status.return_value = None
+        client = MagicMock()
+        client.models.generate_content.return_value = SimpleNamespace(text='{"tags": ["Bogazici", "Turkiye", "Spor"]}')
 
-        post = AsyncMock(return_value=response)
-
-        with patch("app.services.ai_tagging_system.httpx.AsyncClient") as client_cls:
-            client = AsyncMock()
-            client.post = post
-            client.__aenter__.return_value = client
-            client.__aexit__.return_value = None
-            client_cls.return_value = client
-
+        with patch("app.services.ai_tagging_system.genai.Client", return_value=client) as client_cls:
             tags = await generate_ai_story_tags(
                 title="A Day in Bogazici",
                 content="A sports memory from Istanbul.",
@@ -140,16 +127,18 @@ class TestGenerateStoryTagsWithAi:
             )
 
         assert tags == ["bogazici", "turkiye", "spor"]
-        post.assert_awaited_once()
+        client_cls.assert_called_once_with(api_key="secret")
+        client.models.generate_content.assert_called_once()
+        client.close.assert_called_once()
 
-    async def test_generate_ai_story_tags_requires_configuration(self, monkeypatch):
-        monkeypatch.setattr("app.services.ai_tagging_system.settings.AI_TAGGING_API_URL", "")
+    async def test_generate_ai_story_tags_requires_gemini_configuration(self, monkeypatch):
+        monkeypatch.setattr("app.services.ai_tagging_system.settings.GEMINI_API_KEY", "")
         monkeypatch.setattr("app.services.ai_tagging_system.settings.AI_TAGGING_API_KEY", "")
 
         with pytest.raises(ValueError) as exc_info:
             await generate_ai_story_tags(title="Title", content="Content")
 
-        assert "AI_TAGGING_API_URL" in str(exc_info.value)
+        assert "GEMINI_API_KEY" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
