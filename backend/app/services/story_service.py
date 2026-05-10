@@ -32,6 +32,7 @@ from app.models.story import (
     StorySaveResponse,
     StoryUpdateRequest,
 )
+from app.services.badge_service import check_and_award_story_badges
 from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 from app.services.storage import (
     build_public_object_url,
@@ -458,6 +459,9 @@ async def create_story_with_location(
     db.add(story)
     await db.commit()
     await db.refresh(story)
+
+    await check_and_award_story_badges(db, current_user.id)
+    await db.commit()
 
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
     like_count = await _get_story_like_count(db, story.id)

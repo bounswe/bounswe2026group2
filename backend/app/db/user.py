@@ -8,6 +8,7 @@ from app.db.enums import UserRole
 from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.db.badge import UserBadge
     from app.db.notification import Notification
     from app.db.story import Story
     from app.db.story_comment import StoryComment
@@ -72,6 +73,10 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         foreign_keys="Notification.actor_user_id",
     )
     reports: Mapped[list["StoryReport"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    user_badges: Mapped[list["UserBadge"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
