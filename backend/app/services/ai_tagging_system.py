@@ -1,4 +1,6 @@
+import asyncio
 import json
+import logging
 import uuid
 from collections.abc import Mapping
 
@@ -16,6 +18,10 @@ from app.services.tag_service import apply_ai_tags_to_story, normalize_tag_list
 MAX_GENERATED_TAGS = 10
 MIN_GENERATED_TAGS = 5
 AI_REQUEST_TIMEOUT_SECONDS = 30.0
+AI_TAGGING_MAX_ATTEMPTS = 3
+AI_TAGGING_RETRY_DELAYS_SECONDS = (1.0, 2.0)
+
+logger = logging.getLogger(__name__)
 
 
 def build_ai_tagging_prompt(
@@ -210,11 +216,23 @@ async def run_ai_tagging_for_story(story_id: uuid.UUID) -> bool:
         if transcript_text:
             content = f"{content}\n\nAudio transcript:\n{transcript_text}"
 
-        generated_tags = await generate_ai_story_tags(
-            title=story.title,
-            content=content,
-            place_name=story.place_name,
-            date_label=_build_story_date_label(story),
-        )
-        await apply_ai_tags_to_story(db, story.id, generated_tags)
-        return True
+        for attempt in range(AI_TAGGING_MAX_ATTEMPTS):
+            try:
+                generated_tags = await generate_ai_story_tags(
+                    title=story.title,
+                    content=content,
+                    place_name=story.place_name,
+                    date_label=_build_story_date_label(story),
+                )
+                await apply_ai_tags_to_story(db, story.id, generated_tags)
+                return True
+            except Exception:
+                if attempt == AI_TAGGING_MAX_ATTEMPTS - 1:
+                    logger.exception(
+                        "AI tagging failed for story %s after %s attempts", story.id, AI_TAGGING_MAX_ATTEMPTS
+                    )
+                    return False
+
+                await asyncio.sleep(AI_TAGGING_RETRY_DELAYS_SECONDS[attempt])
+
+        return False

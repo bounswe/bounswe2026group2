@@ -233,3 +233,33 @@ class TestRunAiTaggingForStory:
         await run_ai_tagging_for_story(story_id)
 
         assert generate_mock.await_args.kwargs["content"] == "Story content\n\nAudio transcript:\nTranscript text"
+
+    async def test_run_ai_tagging_for_story_retries_and_logs_without_raising(self, monkeypatch):
+        story_id = uuid.uuid4()
+        story = SimpleNamespace(
+            id=story_id,
+            title="Story Title",
+            content="Story content",
+            place_name="Istanbul",
+            date_start=None,
+            date_end=None,
+            media_files=[],
+        )
+
+        session = AsyncMock()
+        session.__aenter__.return_value = session
+        session.__aexit__.return_value = None
+        monkeypatch.setattr("app.services.ai_tagging_system.AsyncSessionLocal", lambda: session)
+        monkeypatch.setattr("app.services.ai_tagging_system._get_story_for_ai_tagging", AsyncMock(return_value=story))
+        monkeypatch.setattr(
+            "app.services.ai_tagging_system.generate_ai_story_tags",
+            AsyncMock(side_effect=RuntimeError("boom")),
+        )
+        monkeypatch.setattr("app.services.ai_tagging_system.asyncio.sleep", AsyncMock())
+        logger_exception = MagicMock()
+        monkeypatch.setattr("app.services.ai_tagging_system.logger.exception", logger_exception)
+
+        result = await run_ai_tagging_for_story(story_id)
+
+        assert result is False
+        assert logger_exception.call_count == 1
