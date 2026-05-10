@@ -60,8 +60,9 @@ async function uploadAvatarFromInput() {
     try {
         var objectUrl = URL.createObjectURL(file);
         applyAvatarPreview(objectUrl);
-    } catch (_) {
-        // Ignore preview failures; upload can still succeed
+    } catch (err) {
+        // Ignore preview failures; upload can still succeed.
+        void err;
     }
 
     var form = new FormData();
@@ -75,7 +76,7 @@ async function uploadAvatarFromInput() {
     if (!res.ok) {
         if (res.status === 401 && typeof logout === "function") logout();
         var payload = null;
-        try { payload = await res.json(); } catch (_) {}
+        try { payload = await res.json(); } catch (err) { void err; }
         throw new Error(getErrorDetail(payload) || "Failed to upload avatar");
     }
 
@@ -111,7 +112,7 @@ async function handleEditProfileSubmit(e) {
         if (!updateRes.ok) {
             if (updateRes.status === 401 && typeof logout === "function") logout();
             var updatePayload = null;
-            try { updatePayload = await updateRes.json(); } catch (_) {}
+            try { updatePayload = await updateRes.json(); } catch (err) { void err; }
             throw new Error(getErrorDetail(updatePayload) || "Failed to update profile");
         }
 
@@ -142,7 +143,7 @@ async function handleEditProfileSubmit(e) {
             if (!pwRes.ok) {
                 if (pwRes.status === 401 && typeof logout === "function") logout();
                 var pwPayload = null;
-                try { pwPayload = await pwRes.json(); } catch (_) {}
+                try { pwPayload = await pwRes.json(); } catch (err) { void err; }
                 throw new Error(getErrorDetail(pwPayload) || "Failed to change password");
             }
 
