@@ -1112,7 +1112,7 @@ class TestCreateStoryWithLocationService:
         assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
         assert result.like_count == 0
-        db.add.assert_called_once()
+        assert db.add.call_count == 2  # Story + auto-created StoryLocation
         assert db.commit.await_count == 2
         db.refresh.assert_awaited_once()
 
@@ -1501,8 +1501,8 @@ class TestAnonymousStoryService:
 
         assert result.is_anonymous is True
         assert result.author is None
-        db.add.assert_called_once()
-        added_story = db.add.call_args.args[0]
+        assert db.add.call_count == 2
+        added_story = db.add.call_args_list[0].args[0]
         assert added_story.is_anonymous is True
 
     async def test_update_story_sets_is_anonymous_and_masks_author(self):

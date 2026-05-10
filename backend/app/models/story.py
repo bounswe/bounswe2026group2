@@ -85,6 +85,12 @@ class StoryDateInput(BaseModel):
         return self.date_start, end_date, DatePrecision.DATE
 
 
+class LocationInput(BaseModel):
+    latitude: float = Field(ge=-90.0, le=90.0)
+    longitude: float = Field(ge=-180.0, le=180.0)
+    label: str | None = Field(default=None, max_length=255)
+
+
 class StoryCreateRequest(StoryDateInput):
     title: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
@@ -94,6 +100,7 @@ class StoryCreateRequest(StoryDateInput):
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
     is_anonymous: bool = False
+    locations: list[LocationInput] | None = None
 
 
 class StoryUpdateRequest(StoryDateInput):
@@ -105,6 +112,7 @@ class StoryUpdateRequest(StoryDateInput):
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
     is_anonymous: bool | None = None
+    locations: list[LocationInput] | None = None
 
 
 class StoryBoundsFilter(BaseModel):
@@ -143,6 +151,16 @@ class StoryDateRangeFilter(BaseModel):
         ).normalize_date_range()
 
 
+class LocationResponse(BaseModel):
+    id: uuid.UUID
+    latitude: float
+    longitude: float
+    label: str | None
+    sort_order: int
+
+    model_config = {"from_attributes": True}
+
+
 class StoryResponse(BaseModel):
     id: uuid.UUID
     title: str
@@ -154,6 +172,7 @@ class StoryResponse(BaseModel):
     place_name: str | None
     latitude: float | None
     longitude: float | None
+    locations: list[LocationResponse] = Field(default_factory=list)
     date_start: date | None
     date_end: date | None
     date_precision: DatePrecision | None
@@ -178,6 +197,20 @@ class StoryResponse(BaseModel):
 
         return [tag.name for tag in tags_attr.loaded_value]
 
+    @staticmethod
+    def _extract_loaded_locations(story: object) -> list[LocationResponse]:
+        try:
+            inspected_story = sa_inspect(story)
+        except NoInspectionAvailable:
+            locs = getattr(story, "locations", [])
+            return [LocationResponse.model_validate(loc, from_attributes=True) for loc in locs]
+
+        locations_attr = inspected_story.attrs.locations
+        if locations_attr.loaded_value is NO_VALUE:
+            return []
+
+        return [LocationResponse.model_validate(loc, from_attributes=True) for loc in locations_attr.loaded_value]
+
     @classmethod
     def from_orm_with_author(cls, story: object, author_username: str) -> "StoryResponse":
         date_start = getattr(story, "date_start", None)
@@ -201,6 +234,7 @@ class StoryResponse(BaseModel):
 
         is_anonymous = getattr(story, "is_anonymous", False)
         tags = cls._extract_loaded_tag_names(story)
+        locations = cls._extract_loaded_locations(story)
 
         return cls(
             id=story.id,
@@ -213,6 +247,7 @@ class StoryResponse(BaseModel):
             place_name=story.place_name,
             latitude=story.latitude,
             longitude=story.longitude,
+            locations=locations,
             date_start=date_start,
             date_end=date_end,
             date_precision=date_precision,
