@@ -213,14 +213,7 @@
   <script src="config.js"></script>
   <script src="auth.js"></script>
   <script src="login.js"></script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      var googleAuthButton = document.getElementById("google-auth-button");
-      if (googleAuthButton && typeof API_BASE !== "undefined") {
-        googleAuthButton.href = API_BASE + "/auth/google/login";
-      }
-    });
-  </script>
+  <script src="oauth-button.js"></script>
 </body>
 
 </html>

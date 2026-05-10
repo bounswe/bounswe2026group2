@@ -322,15 +322,12 @@
 
         document.addEventListener("DOMContentLoaded", function () {
             const form = document.getElementById("register-form");
-            const googleAuthButton = document.getElementById("google-auth-button");
             if (form) {
                 form.addEventListener("submit", handleRegister);
             }
-            if (googleAuthButton && typeof API_BASE !== "undefined") {
-                googleAuthButton.href = API_BASE + "/auth/google/login";
-            }
         });
     </script>
+    <script src="oauth-button.js"></script>
 </body>
 
 </html>
