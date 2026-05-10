@@ -1,10 +1,17 @@
 import json
+import uuid
 from collections.abc import Mapping
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
-from app.services.tag_service import normalize_tag_list
+from app.db.enums import MediaType
+from app.db.media_file import MediaFile
+from app.db.session import AsyncSessionLocal
+from app.db.story import Story
+from app.services.tag_service import apply_ai_tags_to_story, normalize_tag_list
 
 MAX_GENERATED_TAGS = 10
 MIN_GENERATED_TAGS = 5
@@ -149,3 +156,65 @@ async def generate_ai_story_tags(
 
     tags = parse_ai_generated_tags(response.json())
     return tags[:MAX_GENERATED_TAGS]
+
+
+def _build_story_date_label(story: Story) -> str | None:
+    if story.date_start and story.date_end:
+        if story.date_start == story.date_end:
+            return story.date_start.isoformat()
+        return f"{story.date_start.isoformat()} - {story.date_end.isoformat()}"
+    if story.date_start:
+        return story.date_start.isoformat()
+    return None
+
+
+def _collect_story_transcript_text(media_files: list[MediaFile]) -> str | None:
+    transcript_parts = [
+        media.transcript.strip() for media in media_files if media.transcript and media.transcript.strip()
+    ]
+    if not transcript_parts:
+        return None
+    return "\n\n".join(transcript_parts)
+
+
+def _story_requires_transcript_before_tagging(story: Story) -> bool:
+    return any(media.media_type == MediaType.AUDIO for media in story.media_files)
+
+
+def trigger_ai_tagging_if_ready(story: Story) -> bool:
+    if not (story.content and story.content.strip()):
+        return False
+
+    if not _story_requires_transcript_before_tagging(story):
+        return True
+
+    audio_files = [media for media in story.media_files if media.media_type == MediaType.AUDIO]
+    return all(media.transcript and media.transcript.strip() for media in audio_files)
+
+
+async def _get_story_for_ai_tagging(story_id: uuid.UUID, db) -> Story | None:
+    result = await db.execute(
+        select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)).options(selectinload(Story.media_files))
+    )
+    return result.scalar_one_or_none()
+
+
+async def run_ai_tagging_for_story(story_id: uuid.UUID) -> bool:
+    async with AsyncSessionLocal() as db:
+        story = await _get_story_for_ai_tagging(story_id, db)
+        if story is None or not trigger_ai_tagging_if_ready(story):
+            return False
+
+        transcript_text = _collect_story_transcript_text(story.media_files)
+        content = story.content.strip()
+        if transcript_text:
+            content = f"{content}\n\nAudio transcript:\n{transcript_text}"
+
+        generated_tags = await generate_ai_story_tags(
+            title=story.title,
+            content=content,
+            place_name=story.place_name,
+            date_label=_build_story_date_label(story),
+        )
+        await apply_ai_tags_to_story(db, story.id, generated_tags)
+        return True
