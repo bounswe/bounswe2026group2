@@ -115,13 +115,6 @@
           <textarea id="story" rows="7" placeholder="Write what happened here, who was involved, and why this place matters." required class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm leading-6 focus:border-primary focus:ring-primary"></textarea>
         </div>
 
-        <!-- Tags -->
-        <div>
-          <label class="mb-2 block text-sm font-semibold text-textmain">Tags <span class="font-normal text-textmuted">(optional)</span></label>
-          <p class="mb-2 text-xs text-textmuted">Add up to 10 tags to help others find your story. Press Enter or comma to confirm each tag.</p>
-          <div id="tag-input-container"></div>
-        </div>
-
         <!-- Map Placement Section -->
         <section>
           <div>
@@ -281,9 +274,6 @@
 
 <script>
   if (!requireAuth()) throw new Error("redirect");
-  var tagInput = typeof createTagInput === "function"
-    ? createTagInput(document.getElementById("tag-input-container"), { apiBase: API_BASE })
-    : null;
   // ─── Map Init ───
   var createMap = L.map("create-map", {
     center: [41.015, 28.979],
@@ -897,8 +887,7 @@
       longitude: parseFloat(lng),
       place_name: placeName,
       date_start: usingDateRange ? getISODateFromDateInput(dateStart) : getISODateFromDateInput(dateSingle),
-      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null,
-      tags: tagInput ? tagInput.getTags() : []
+      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null
     };
 
     setSubmittingState(true, "Creating Story...");

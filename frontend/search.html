@@ -71,11 +71,14 @@
                 <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                     <span class="text-xs font-semibold text-textmuted shrink-0">Tags:</span>
                     <div id="active-filter-chips" class="flex flex-wrap gap-1.5 items-center"></div>
-                    <div id="tag-filter-wrap" class="relative">
+                    <div id="tag-filter-wrap" class="flex items-center gap-1">
                         <input id="tag-filter-input" type="text" autocomplete="off"
                             class="text-xs border border-border rounded-full px-3 py-1 bg-white focus:border-primary outline-none w-28 placeholder:text-textmuted/60 transition-[width] focus:w-36"
-                            placeholder="+ filter by tag" />
-                        <div id="tag-filter-dropdown" class="hidden absolute left-0 top-full mt-1 w-56 z-50 max-h-48 overflow-y-auto rounded-xl border border-border bg-white shadow-soft"></div>
+                            placeholder="filter by tag"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();addTagFromInput();}" />
+                        <button type="button"
+                            class="shrink-0 text-xs font-semibold text-white bg-primary rounded-full px-2.5 py-1 hover:opacity-90 transition-opacity leading-none"
+                            onclick="addTagFromInput()">+</button>
                     </div>
                 </div>
                 <!-- Sort -->
@@ -129,7 +132,6 @@
         var emptyDetail = document.getElementById("empty-detail");
         var activeFilterChipsEl = document.getElementById("active-filter-chips");
         var tagFilterInput = document.getElementById("tag-filter-input");
-        var tagFilterDropdown = document.getElementById("tag-filter-dropdown");
         var sortSelect = document.getElementById("sort-select");
 
         // State
@@ -138,11 +140,6 @@
         var filterTags = [];
         var sortOrder = "relevance";
         var lastQuery = "";
-
-        // Tag filter dropdown state
-        var tagSuggestTimer = null;
-        var tagFilterDropdownVisible = false;
-        var tagFilterActiveIndex = -1;
 
         // Read initial state from URL
         filterTags = parseTagsFromUrl(window.location.search);
@@ -174,101 +171,19 @@
 
         // ─── Tag filter input ─────────────────────────────────────────────────
 
-        tagFilterInput.addEventListener("input", function () {
-            var query = tagFilterInput.value.trim();
-            clearTimeout(tagSuggestTimer);
-            if (query.length < 2) { hideTagFilterDropdown(); return; }
-            tagSuggestTimer = setTimeout(function () {
-                fetchTagSuggestions(API_BASE, query).then(function (items) {
-                    if (tagFilterInput.value.trim() === query) showTagFilterDropdown(items);
-                });
-            }, 300);
-        });
-
-        tagFilterInput.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                if (tagFilterDropdownVisible && tagFilterActiveIndex >= 0) {
-                    var opts = tagFilterDropdown.querySelectorAll("[role='option']");
-                    if (opts[tagFilterActiveIndex]) {
-                        opts[tagFilterActiveIndex].dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-                    }
-                } else {
-                    var val = tagFilterInput.value.trim().toLowerCase();
-                    if (val) { addFilterTag(val); tagFilterInput.value = ""; hideTagFilterDropdown(); }
-                }
-            } else if (e.key === "Escape") {
-                hideTagFilterDropdown();
-                tagFilterInput.blur();
-            } else if (e.key === "ArrowDown" && tagFilterDropdownVisible) {
-                e.preventDefault();
-                var downOpts = tagFilterDropdown.querySelectorAll("[role='option']");
-                tagFilterActiveIndex = Math.min(tagFilterActiveIndex + 1, downOpts.length - 1);
-                updateTagFilterActiveItem();
-            } else if (e.key === "ArrowUp" && tagFilterDropdownVisible) {
-                e.preventDefault();
-                tagFilterActiveIndex = Math.max(tagFilterActiveIndex - 1, -1);
-                updateTagFilterActiveItem();
+        function addTagFromInput() {
+            var inputEl = document.getElementById("tag-filter-input");
+            if (!inputEl) return;
+            var val = inputEl.value.trim().toLowerCase();
+            if (!val) return;
+            if (filterTags.indexOf(val) === -1) {
+                filterTags.push(val);
+                renderFilterChips();
+                updateUrlParams(lastQuery);
+                applyFiltersAndSort();
             }
-        });
-
-        tagFilterInput.addEventListener("blur", function () {
-            setTimeout(hideTagFilterDropdown, 150);
-        });
-
-        document.addEventListener("click", function (e) {
-            if (!document.getElementById("tag-filter-wrap").contains(e.target)) {
-                hideTagFilterDropdown();
-            }
-        });
-
-        function showTagFilterDropdown(items) {
-            tagFilterDropdown.innerHTML = "";
-            var shown = 0;
-            (items || []).forEach(function (item) {
-                var name = typeof item === "string" ? item : (item && item.name ? item.name : "");
-                if (!name || filterTags.indexOf(name.toLowerCase()) !== -1) return;
-
-                var opt = document.createElement("div");
-                opt.className = "px-4 py-2 text-sm cursor-pointer hover:bg-background";
-                opt.setAttribute("role", "option");
-                opt.textContent = name;
-
-                if (item && typeof item.story_count === "number") {
-                    var cnt = document.createElement("span");
-                    cnt.className = "ml-1 text-xs text-textmuted";
-                    cnt.textContent = "(" + item.story_count + ")";
-                    opt.appendChild(cnt);
-                }
-
-                opt.addEventListener("mousedown", function (e) {
-                    e.preventDefault();
-                    addFilterTag(name.toLowerCase());
-                    tagFilterInput.value = "";
-                    hideTagFilterDropdown();
-                    tagFilterInput.focus();
-                });
-                tagFilterDropdown.appendChild(opt);
-                shown++;
-            });
-
-            if (shown === 0) { hideTagFilterDropdown(); return; }
-            tagFilterDropdown.classList.remove("hidden");
-            tagFilterDropdownVisible = true;
-            tagFilterActiveIndex = -1;
-        }
-
-        function hideTagFilterDropdown() {
-            tagFilterDropdown.classList.add("hidden");
-            tagFilterDropdownVisible = false;
-            tagFilterActiveIndex = -1;
-        }
-
-        function updateTagFilterActiveItem() {
-            var items = tagFilterDropdown.querySelectorAll("[role='option']");
-            items.forEach(function (el, i) {
-                el.classList.toggle("bg-background", i === tagFilterActiveIndex);
-            });
+            inputEl.value = "";
+            inputEl.focus();
         }
 
         // ─── Filter state management ──────────────────────────────────────────
@@ -290,6 +205,8 @@
         }
 
         function renderFilterChips() {
+            var activeFilterChipsEl = document.getElementById("active-filter-chips");
+            if (!activeFilterChipsEl) return;
             activeFilterChipsEl.innerHTML = "";
             filterTags.forEach(function (tag) {
                 var chip = document.createElement("span");
@@ -298,17 +215,18 @@
                 var nameSpan = document.createElement("span");
                 nameSpan.textContent = tag;
 
-                var removeBtn = document.createElement("button");
-                removeBtn.type = "button";
-                removeBtn.className = "ml-0.5 leading-none text-primary/60 hover:text-primary transition-colors";
-                removeBtn.setAttribute("aria-label", "Remove filter " + tag);
-                removeBtn.textContent = "×";
+                var removeIcon = document.createElement("span");
+                removeIcon.textContent = "×";
+                removeIcon.setAttribute("aria-label", "Remove filter " + tag);
+                removeIcon.style.cssText = "cursor:pointer;line-height:1;opacity:0.6;font-size:14px;";
+                removeIcon.addEventListener("mouseover", function () { removeIcon.style.opacity = "1"; });
+                removeIcon.addEventListener("mouseout", function () { removeIcon.style.opacity = "0.6"; });
                 (function (t) {
-                    removeBtn.addEventListener("click", function () { removeFilterTag(t); });
+                    removeIcon.addEventListener("click", function () { removeFilterTag(t); });
                 }(tag));
 
                 chip.appendChild(nameSpan);
-                chip.appendChild(removeBtn);
+                chip.appendChild(removeIcon);
                 activeFilterChipsEl.appendChild(chip);
             });
         }

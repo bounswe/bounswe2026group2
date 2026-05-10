@@ -83,12 +83,6 @@
           class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm leading-6 focus:border-primary focus:ring-primary"></textarea>
       </div>
 
-      <div>
-        <label class="mb-2 block text-sm font-semibold text-textmain">Tags <span class="font-normal text-textmuted">(optional)</span></label>
-        <p class="mb-2 text-xs text-textmuted">Add up to 10 tags to help others find your story. Press Enter or comma to confirm each tag.</p>
-        <div id="tag-input-container"></div>
-      </div>
-
       <section>
         <div>
           <h2 class="font-headline text-3xl font-bold text-textmain">Location</h2>
@@ -186,10 +180,6 @@
   document.getElementById("back-link").href = backUrl;
   document.getElementById("btn-cancel").href = backUrl;
   document.getElementById("back-link-error").href = backUrl;
-
-  var tagInput = typeof createTagInput === "function"
-    ? createTagInput(document.getElementById("tag-input-container"), { apiBase: API_BASE })
-    : null;
 
   // ─── Map Init ───
   var editMap = L.map("edit-map", { center: [41.015, 28.979], zoom: 12 });
@@ -383,10 +373,6 @@
           }
         }
 
-        if (tagInput && story.tags && story.tags.length > 0) {
-          tagInput.setTags(story.tags);
-        }
-
         document.getElementById("story-form").classList.remove("hidden");
         setTimeout(function() { editMap.invalidateSize(); }, 200);
       })
@@ -456,8 +442,7 @@
       longitude: parseFloat(lng),
       place_name: placeName,
       date_start: usingDateRange ? getISODateFromDateInput(dateStart) : getISODateFromDateInput(dateSingle),
-      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null,
-      tags: tagInput ? tagInput.getTags() : []
+      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null
     };
 
     setSaving(true);
