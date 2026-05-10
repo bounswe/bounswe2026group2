@@ -225,9 +225,18 @@
               <div id="recording-transcript-panel" class="mt-4 hidden rounded-xl border border-border bg-white/90 px-4 py-3">
                 <label for="recording-transcript-draft" class="block text-sm font-semibold text-textmain">Transcript</label>
                 <p class="mt-1 text-xs leading-5 text-textmuted">
-                  After you stop recording, the app requests a <strong>preview transcript</strong> from the server (when the preview API is available). You can edit the text below. After you publish, the audio is uploaded and a transcript is stored on the story; the story detail page may show &ldquo;Processing&hellip;&rdquo; until that finishes.
+                  This process may take some time.
                 </p>
-                <p id="recording-transcript-status" class="mt-2 hidden text-xs font-semibold" role="status" aria-live="polite"></p>
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <p id="recording-transcript-status" class="hidden text-xs font-semibold" role="status" aria-live="polite"></p>
+                  <button
+                    type="button"
+                    id="btn-retry-transcription"
+                    class="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-textmain transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Retry transcription
+                  </button>
+                </div>
                 <textarea
                   id="recording-transcript-draft"
                   rows="4"
@@ -677,11 +686,18 @@
     }
   }
 
+  function setRetryTranscriptionVisible(visible) {
+    var btn = document.getElementById("btn-retry-transcription");
+    if (!btn) return;
+    btn.classList.toggle("hidden", !visible);
+  }
+
   async function fetchTranscriptionPreviewForRecordedFile(file) {
     transcriptionPreviewSeq++;
     var seq = transcriptionPreviewSeq;
     var textarea = document.getElementById("recording-transcript-draft");
     setRecordingTranscriptStatus("Transcribing…", "info");
+    setRetryTranscriptionVisible(false);
     if (textarea) {
       textarea.disabled = true;
     }
@@ -696,14 +712,13 @@
         return;
       }
       if (!res.ok) {
-        if (res.status === 404) {
-          setRecordingTranscriptStatus(
-            "Transcription preview is not available on this server yet (404). Ask the backend team to add POST /transcription/preview—you can still type below or publish and wait for the transcript on the story page.",
-            "warn"
-          );
+        var detail = await readErrorMessage(res, "Could not transcribe this recording.");
+        if (res.status === 401) {
+          setRecordingTranscriptStatus("Not authenticated (401). Please log in again.", "error");
         } else {
-          setRecordingTranscriptStatus(await readErrorMessage(res, "Could not transcribe this recording."), "error");
+          setRecordingTranscriptStatus("Transcription failed (" + res.status + "): " + detail, "error");
         }
+        setRetryTranscriptionVisible(true);
         return;
       }
       var data = await res.json();
@@ -724,6 +739,7 @@
         return;
       }
       setRecordingTranscriptStatus("Network error while transcribing. Check your connection and try recording again.", "error");
+      setRetryTranscriptionVisible(true);
     } finally {
       if (seq === transcriptionPreviewSeq && textarea) {
         textarea.disabled = false;
@@ -735,6 +751,7 @@
     var audioPreview = document.getElementById("recording-audio-preview");
 
     transcriptionPreviewSeq++;
+    transcriptionPreviewSeq++;
     if (recordingPreviewUrl) {
       URL.revokeObjectURL(recordingPreviewUrl);
       recordingPreviewUrl = null;
@@ -742,6 +759,15 @@
 
     audioPreview.removeAttribute("src");
     audioPreview.classList.add("hidden");
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptPanel) transcriptPanel.classList.add("hidden");
+    if (transcriptDraft) {
+      transcriptDraft.value = "";
+      transcriptDraft.disabled = false;
+    }
+    setRecordingTranscriptStatus("", null);
 
     var transcriptPanel = document.getElementById("recording-transcript-panel");
     var transcriptDraft = document.getElementById("recording-transcript-draft");
@@ -765,6 +791,7 @@
     var transcriptDraft = document.getElementById("recording-transcript-draft");
     if (transcriptDraft) transcriptDraft.value = "";
     if (transcriptPanel) transcriptPanel.classList.remove("hidden");
+    setRetryTranscriptionVisible(true);
   }
 
   async function startRecording() {
@@ -819,6 +846,7 @@
         setStartRecordingLabel("Record Again");
         setRecordingStatus("Recording ready. Preview it here, then publish the story to upload it.", false);
         void fetchTranscriptionPreviewForRecordedFile(recordedFile);
+        void fetchTranscriptionPreviewForRecordedFile(recordedFile);
       });
 
       recorder.start();
@@ -863,6 +891,10 @@
   document.getElementById("btn-start-recording").addEventListener("click", startRecording);
   document.getElementById("btn-stop-recording").addEventListener("click", stopRecording);
   document.getElementById("btn-cancel-recording").addEventListener("click", cancelRecording);
+  document.getElementById("btn-retry-transcription").addEventListener("click", function () {
+    if (!recordedFiles || recordedFiles.length === 0) return;
+    void fetchTranscriptionPreviewForRecordedFile(recordedFiles[0]);
+  });
 
   // ─── Checklist Updates ───
   function updateChecklist() {
