@@ -40,6 +40,16 @@ def _make_user(user_id: uuid.UUID):
 
 @pytest.mark.asyncio
 class TestGetCurrentUser:
+    async def test_rejects_missing_credentials(self):
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_current_user(credentials=None, db=db)
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == "Not authenticated"
+        db.execute.assert_not_awaited()
+
     async def test_returns_user_for_valid_token(self):
         user_id = uuid.uuid4()
         token = _make_token(sub=str(user_id))
