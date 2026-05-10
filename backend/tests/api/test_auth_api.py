@@ -226,7 +226,6 @@ class TestTokenVerificationAPI:
 
 
 @pytest.mark.asyncio
-<<<<<<< HEAD
 class TestProfileUpdateAPI:
     async def test_patch_me_updates_profile_fields(self, client):
         await client.post(
