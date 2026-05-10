@@ -102,19 +102,19 @@
                     </div>
 
                     <!-- Error message area -->
-                    <div id="error-message"
+                    <div id="error-message" data-testid="register-error"
                         class="hidden mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm"></div>
 
                     <!-- Success message area -->
-                    <div id="success-message"
+                    <div id="success-message" data-testid="register-success"
                         class="hidden mb-4 p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">
                     </div>
 
-                    <form id="register-form" class="space-y-5">
+                    <form id="register-form" data-testid="register-form" class="space-y-5">
                         <div>
                             <label for="username"
                                 class="block text-sm font-semibold mb-2 text-textmain">Username</label>
-                            <input id="username" type="text" placeholder="Choose a username" minlength="3"
+                            <input id="username" data-testid="register-username" type="text" placeholder="Choose a username" minlength="3"
                                 maxlength="50"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
                                 required />
@@ -122,7 +122,7 @@
 
                         <div>
                             <label for="email" class="block text-sm font-semibold mb-2 text-textmain">Email</label>
-                            <input id="email" type="email" placeholder="you@example.com"
+                            <input id="email" data-testid="register-email" type="email" placeholder="you@example.com"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
                                 required />
                         </div>
@@ -139,7 +139,7 @@
                         <div>
                             <label for="password"
                                 class="block text-sm font-semibold mb-2 text-textmain">Password</label>
-                            <input id="password" type="password" placeholder="At least 8 characters" minlength="8"
+                            <input id="password" data-testid="register-password" type="password" placeholder="At least 8 characters" minlength="8"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
                                 required />
                         </div>
@@ -147,14 +147,14 @@
                         <div>
                             <label for="confirm-password" class="block text-sm font-semibold mb-2 text-textmain">Confirm
                                 Password</label>
-                            <input id="confirm-password" type="password" placeholder="Re-enter your password"
+                            <input id="confirm-password" data-testid="register-confirm-password" type="password" placeholder="Re-enter your password"
                                 minlength="8"
                                 class="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary"
                                 required />
                         </div>
 
                         <div class="flex items-start gap-3">
-                            <input id="terms" type="checkbox"
+                            <input id="terms" data-testid="register-terms" type="checkbox"
                                 class="mt-0.5 rounded border-border text-primary focus:ring-primary" required />
                             <label for="terms" class="text-sm text-textmuted">
                                 I agree to the <a href="#" class="text-tertiary hover:underline">Terms of Service</a>
@@ -163,7 +163,7 @@
                             </label>
                         </div>
 
-                        <button type="submit" id="submit-button"
+                        <button type="submit" id="submit-button" data-testid="register-submit"
                             class="w-full rounded-xl bg-primary px-4 py-3 text-white font-semibold hover:opacity-95 transition">
                             Create Account
                         </button>
