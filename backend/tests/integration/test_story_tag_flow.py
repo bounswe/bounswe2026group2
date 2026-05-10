@@ -132,6 +132,7 @@ class TestStoryAiTaggingBackgroundFlow:
 
     async def test_create_story_triggers_background_ai_tagging(self, client, monkeypatch):
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
+        monkeypatch.setattr("app.routers.story.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr(
             "app.services.ai_tagging_system.generate_ai_story_tags",
             AsyncMock(return_value=["bogazici", "turkiye", "spor"]),
@@ -161,6 +162,7 @@ class TestStoryAiTaggingBackgroundFlow:
 
     async def test_ai_tagging_failure_does_not_break_story_creation(self, client, monkeypatch):
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
+        monkeypatch.setattr("app.routers.story.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr(
             "app.services.ai_tagging_system.generate_ai_story_tags",
             AsyncMock(side_effect=RuntimeError("ai down")),
@@ -192,6 +194,7 @@ class TestStoryAiTaggingBackgroundFlow:
     async def test_audio_transcript_completion_triggers_ai_tagging(self, client, monkeypatch):
         monkeypatch.setattr("app.services.story_service.upload_bytes", lambda **kwargs: None)
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
+        monkeypatch.setattr("app.routers.story.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.services.transcription_service.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr(
             "app.services.transcription_service.transcribe_audio_content",
