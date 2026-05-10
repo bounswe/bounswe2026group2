@@ -8,19 +8,18 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 from starlette.datastructures import Headers, UploadFile
 
-from app.db.enums import DatePrecision, MediaType, NotificationEventType, ReportStatus, StoryStatus, StoryVisibility
+from app.db.enums import (
+    DatePrecision,
+    MediaType,
+    NotificationEventType,
+    ReportStatus,
+    StoryStatus,
+    StoryVisibility,
+)
 from app.db.notification import Notification
 from app.db.tag import Tag
 from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryResponse, StoryUpdateRequest
-from app.services.tag_service import (
-    apply_ai_tags_to_story,
-    attach_tags_to_story,
-    build_tag_slug,
-    get_or_create_tags,
-    normalize_tag_list,
-    normalize_tag_name,
-)
 from app.services.story_service import (
     create_comment_for_story,
     create_story_with_location,
@@ -39,6 +38,14 @@ from app.services.story_service import (
     unsave_story_for_user,
     update_story_with_location_and_dates,
     upload_media_for_story,
+)
+from app.services.tag_service import (
+    apply_ai_tags_to_story,
+    attach_tags_to_story,
+    build_tag_slug,
+    get_or_create_tags,
+    normalize_tag_list,
+    normalize_tag_name,
 )
 
 
