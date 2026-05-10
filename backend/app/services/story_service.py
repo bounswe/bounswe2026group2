@@ -97,6 +97,7 @@ MIME_TYPE_FALLBACKS_BY_EXTENSION = {
     },
 }
 
+
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     stories = [StoryResponse.from_orm_with_author(story, author_username) for story, author_username in rows]
     return StoryListResponse(stories=stories, total=len(stories))

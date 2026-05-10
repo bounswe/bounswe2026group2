@@ -86,9 +86,7 @@ async def apply_ai_tags_to_story(
     tag_names: list[str] | None,
 ) -> Story:
     result = await db.execute(
-        select(Story)
-        .where(Story.id == story_id, Story.deleted_at.is_(None))
-        .options(selectinload(Story.tags))
+        select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)).options(selectinload(Story.tags))
     )
     story = result.scalar_one_or_none()
     if story is None:
