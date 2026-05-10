@@ -63,6 +63,32 @@
                 </button>
             </form>
         </div>
+
+        <!-- Filter Bar -->
+        <div class="border-t border-border/20 bg-[#f5f0e8]/80">
+            <div class="max-w-screen-xl mx-auto px-6 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-2">
+                <!-- Tag filter -->
+                <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                    <span class="text-xs font-semibold text-textmuted shrink-0">Tags:</span>
+                    <div id="active-filter-chips" class="flex flex-wrap gap-1.5 items-center"></div>
+                    <div id="tag-filter-wrap" class="relative">
+                        <input id="tag-filter-input" type="text" autocomplete="off"
+                            class="text-xs border border-border rounded-full px-3 py-1 bg-white focus:border-primary outline-none w-28 placeholder:text-textmuted/60 transition-[width] focus:w-36"
+                            placeholder="+ filter by tag" />
+                        <div id="tag-filter-dropdown" class="hidden absolute left-0 top-full mt-1 w-56 z-50 max-h-48 overflow-y-auto rounded-xl border border-border bg-white shadow-soft"></div>
+                    </div>
+                </div>
+                <!-- Sort -->
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="text-xs font-semibold text-textmuted">Sort:</span>
+                    <select id="sort-select" class="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-white focus:border-primary outline-none text-textmain cursor-pointer">
+                        <option value="relevance">Relevance</option>
+                        <option value="newest">Newest first</option>
+                        <option value="oldest">Oldest first</option>
+                    </select>
+                </div>
+            </div>
+        </div>
     </header>
 
     <!-- Content -->
@@ -91,6 +117,8 @@
     </main>
 
     <script src="config.js"></script>
+    <script src="tags.js"></script>
+    <script src="search-filters.js"></script>
     <script>
         var searchForm = document.getElementById("search-form");
         var searchInput = document.getElementById("search-input");
@@ -99,40 +127,224 @@
         var resultsEl = document.getElementById("results");
         var emptyEl = document.getElementById("empty");
         var emptyDetail = document.getElementById("empty-detail");
+        var activeFilterChipsEl = document.getElementById("active-filter-chips");
+        var tagFilterInput = document.getElementById("tag-filter-input");
+        var tagFilterDropdown = document.getElementById("tag-filter-dropdown");
+        var sortSelect = document.getElementById("sort-select");
 
-        // Cache: storyId -> full detail (with media_files)
+        // State
         var storyCache = {};
+        var allStories = [];
+        var filterTags = [];
+        var sortOrder = "relevance";
+        var lastQuery = "";
 
-        // Read initial query from URL
-        var urlParams = new URLSearchParams(window.location.search);
-        var initialQuery = urlParams.get("q") || "";
-        if (initialQuery) {
-            searchInput.value = initialQuery;
-            performSearch(initialQuery);
-        }
+        // Tag filter dropdown state
+        var tagSuggestTimer = null;
+        var tagFilterDropdownVisible = false;
+        var tagFilterActiveIndex = -1;
+
+        // Read initial state from URL
+        filterTags = parseTagsFromUrl(window.location.search);
+        sortOrder = parseSortFromUrl(window.location.search);
+        var initialQuery = new URLSearchParams(window.location.search).get("q") || "";
+
+        if (initialQuery) searchInput.value = initialQuery;
+        sortSelect.value = sortOrder;
+        renderFilterChips();
+        if (initialQuery) performSearch(initialQuery);
+
+        // ─── Search form ──────────────────────────────────────────────────────
 
         searchForm.addEventListener("submit", function (e) {
             e.preventDefault();
             var query = searchInput.value.trim();
             if (query.length < 1) return;
-
-            // Update URL without reload
-            var url = new URL(window.location);
-            url.searchParams.set("q", query);
-            window.history.replaceState({}, "", url);
-
+            updateUrlParams(query);
             performSearch(query);
         });
 
+        // ─── Sort ─────────────────────────────────────────────────────────────
+
+        sortSelect.addEventListener("change", function () {
+            sortOrder = sortSelect.value;
+            updateUrlParams(lastQuery);
+            applyFiltersAndSort();
+        });
+
+        // ─── Tag filter input ─────────────────────────────────────────────────
+
+        tagFilterInput.addEventListener("input", function () {
+            var query = tagFilterInput.value.trim();
+            clearTimeout(tagSuggestTimer);
+            if (query.length < 2) { hideTagFilterDropdown(); return; }
+            tagSuggestTimer = setTimeout(function () {
+                fetchTagSuggestions(API_BASE, query).then(function (items) {
+                    if (tagFilterInput.value.trim() === query) showTagFilterDropdown(items);
+                });
+            }, 300);
+        });
+
+        tagFilterInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                if (tagFilterDropdownVisible && tagFilterActiveIndex >= 0) {
+                    var opts = tagFilterDropdown.querySelectorAll("[role='option']");
+                    if (opts[tagFilterActiveIndex]) {
+                        opts[tagFilterActiveIndex].dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+                    }
+                } else {
+                    var val = tagFilterInput.value.trim().toLowerCase();
+                    if (val) { addFilterTag(val); tagFilterInput.value = ""; hideTagFilterDropdown(); }
+                }
+            } else if (e.key === "Escape") {
+                hideTagFilterDropdown();
+                tagFilterInput.blur();
+            } else if (e.key === "ArrowDown" && tagFilterDropdownVisible) {
+                e.preventDefault();
+                var downOpts = tagFilterDropdown.querySelectorAll("[role='option']");
+                tagFilterActiveIndex = Math.min(tagFilterActiveIndex + 1, downOpts.length - 1);
+                updateTagFilterActiveItem();
+            } else if (e.key === "ArrowUp" && tagFilterDropdownVisible) {
+                e.preventDefault();
+                tagFilterActiveIndex = Math.max(tagFilterActiveIndex - 1, -1);
+                updateTagFilterActiveItem();
+            }
+        });
+
+        tagFilterInput.addEventListener("blur", function () {
+            setTimeout(hideTagFilterDropdown, 150);
+        });
+
+        document.addEventListener("click", function (e) {
+            if (!document.getElementById("tag-filter-wrap").contains(e.target)) {
+                hideTagFilterDropdown();
+            }
+        });
+
+        function showTagFilterDropdown(items) {
+            tagFilterDropdown.innerHTML = "";
+            var shown = 0;
+            (items || []).forEach(function (item) {
+                var name = typeof item === "string" ? item : (item && item.name ? item.name : "");
+                if (!name || filterTags.indexOf(name.toLowerCase()) !== -1) return;
+
+                var opt = document.createElement("div");
+                opt.className = "px-4 py-2 text-sm cursor-pointer hover:bg-background";
+                opt.setAttribute("role", "option");
+                opt.textContent = name;
+
+                if (item && typeof item.story_count === "number") {
+                    var cnt = document.createElement("span");
+                    cnt.className = "ml-1 text-xs text-textmuted";
+                    cnt.textContent = "(" + item.story_count + ")";
+                    opt.appendChild(cnt);
+                }
+
+                opt.addEventListener("mousedown", function (e) {
+                    e.preventDefault();
+                    addFilterTag(name.toLowerCase());
+                    tagFilterInput.value = "";
+                    hideTagFilterDropdown();
+                    tagFilterInput.focus();
+                });
+                tagFilterDropdown.appendChild(opt);
+                shown++;
+            });
+
+            if (shown === 0) { hideTagFilterDropdown(); return; }
+            tagFilterDropdown.classList.remove("hidden");
+            tagFilterDropdownVisible = true;
+            tagFilterActiveIndex = -1;
+        }
+
+        function hideTagFilterDropdown() {
+            tagFilterDropdown.classList.add("hidden");
+            tagFilterDropdownVisible = false;
+            tagFilterActiveIndex = -1;
+        }
+
+        function updateTagFilterActiveItem() {
+            var items = tagFilterDropdown.querySelectorAll("[role='option']");
+            items.forEach(function (el, i) {
+                el.classList.toggle("bg-background", i === tagFilterActiveIndex);
+            });
+        }
+
+        // ─── Filter state management ──────────────────────────────────────────
+
+        function addFilterTag(name) {
+            name = name.trim().toLowerCase();
+            if (!name || filterTags.indexOf(name) !== -1) return;
+            filterTags.push(name);
+            renderFilterChips();
+            updateUrlParams(lastQuery);
+            applyFiltersAndSort();
+        }
+
+        function removeFilterTag(name) {
+            filterTags = filterTags.filter(function (t) { return t !== name; });
+            renderFilterChips();
+            updateUrlParams(lastQuery);
+            applyFiltersAndSort();
+        }
+
+        function renderFilterChips() {
+            activeFilterChipsEl.innerHTML = "";
+            filterTags.forEach(function (tag) {
+                var chip = document.createElement("span");
+                chip.className = "inline-flex items-center gap-1 rounded-full bg-[rgba(119,90,25,0.12)] border border-[rgba(119,90,25,0.2)] px-2.5 py-0.5 text-xs font-semibold text-primary";
+
+                var nameSpan = document.createElement("span");
+                nameSpan.textContent = tag;
+
+                var removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "ml-0.5 leading-none text-primary/60 hover:text-primary transition-colors";
+                removeBtn.setAttribute("aria-label", "Remove filter " + tag);
+                removeBtn.textContent = "×";
+                (function (t) {
+                    removeBtn.addEventListener("click", function () { removeFilterTag(t); });
+                }(tag));
+
+                chip.appendChild(nameSpan);
+                chip.appendChild(removeBtn);
+                activeFilterChipsEl.appendChild(chip);
+            });
+        }
+
+        function updateUrlParams(query) {
+            var url = new URL(window.location);
+            if (query) url.searchParams.set("q", query);
+            if (filterTags.length > 0) {
+                url.searchParams.set("tags", serializeTagsToUrl(filterTags));
+            } else {
+                url.searchParams.delete("tags");
+            }
+            if (sortOrder !== "relevance") {
+                url.searchParams.set("sort", sortOrder);
+            } else {
+                url.searchParams.delete("sort");
+            }
+            window.history.replaceState({}, "", url);
+        }
+
+        // ─── Search & render ──────────────────────────────────────────────────
+
         async function performSearch(query) {
-            // Show loading
+            lastQuery = query;
             statusEl.classList.add("hidden");
             emptyEl.classList.add("hidden");
             resultsEl.innerHTML = "";
             loadingEl.classList.remove("hidden");
 
             try {
-                var response = await fetch(API_BASE + "/stories/search?place_name=" + encodeURIComponent(query));
+                var searchUrl = API_BASE + "/stories/search?place_name=" + encodeURIComponent(query);
+                if (filterTags.length > 0) {
+                    searchUrl += "&tags=" + encodeURIComponent(serializeTagsToUrl(filterTags));
+                }
+
+                var response = await fetch(searchUrl);
                 if (!response.ok) throw new Error("Search request failed");
                 var data = await response.json();
                 var stories = data.stories || [];
@@ -140,33 +352,30 @@
                 loadingEl.classList.add("hidden");
 
                 if (stories.length === 0) {
+                    allStories = [];
                     emptyEl.classList.remove("hidden");
                     emptyDetail.textContent = 'No stories found for "' + query + '". Try a different place name.';
                     return;
                 }
 
-                statusEl.classList.remove("hidden");
-                statusEl.innerHTML = '<p class="text-textmuted text-sm">Found <strong class="text-textmain">' + stories.length + '</strong> ' + (stories.length === 1 ? 'story' : 'stories') + ' for "<strong class="text-textmain">' + escapeHtml(query) + '</strong>"</p>';
-
-                // Render cards immediately with basic info
-                stories.forEach(function (story) {
-                    resultsEl.appendChild(createStoryCard(story, null));
-                });
-
-                // Fetch full details (with media) for each story in parallel
+                // Fetch full details in parallel to get tags and media
                 var detailPromises = stories.map(function (story) {
                     return fetchStoryDetail(story.id);
                 });
                 var details = await Promise.allSettled(detailPromises);
 
-                // Update cards with media once details arrive
                 details.forEach(function (result, i) {
                     if (result.status === "fulfilled" && result.value) {
                         var detail = result.value;
                         storyCache[detail.id] = detail;
-                        updateCardWithMedia(stories[i].id, detail);
+                        stories[i].tags = detail.tags || [];
+                        stories[i].media_files = detail.media_files || [];
+                        stories[i].date_start = detail.date_start || stories[i].date_start || "";
                     }
                 });
+
+                allStories = stories;
+                applyFiltersAndSort();
 
             } catch (err) {
                 loadingEl.classList.add("hidden");
@@ -177,9 +386,7 @@
         }
 
         async function fetchStoryDetail(storyId) {
-            // Return from cache if available
             if (storyCache[storyId]) return storyCache[storyId];
-
             var response = await fetch(API_BASE + "/stories/" + storyId);
             if (!response.ok) return null;
             var detail = await response.json();
@@ -187,7 +394,39 @@
             return detail;
         }
 
-        function createStoryCard(story, detail) {
+        function applyFiltersAndSort() {
+            if (allStories.length === 0) return;
+
+            var filtered = filterStoriesByTags(allStories, filterTags);
+            var sorted = sortStories(filtered, sortOrder);
+
+            resultsEl.innerHTML = "";
+            emptyEl.classList.add("hidden");
+            statusEl.classList.remove("hidden");
+
+            var total = allStories.length;
+            var count = sorted.length;
+
+            if (count === 0) {
+                emptyEl.classList.remove("hidden");
+                emptyDetail.textContent = filterTags.length > 0
+                    ? "No stories match the selected tags. Try removing some filters."
+                    : 'No stories found for "' + lastQuery + '". Try a different place name.';
+                statusEl.innerHTML = '<p class="text-textmuted text-sm">Found <strong class="text-textmain">0</strong> of <strong class="text-textmain">' + total + '</strong> ' + (total === 1 ? 'story' : 'stories') + ' matching your filters.</p>';
+                return;
+            }
+
+            var countText = filterTags.length > 0
+                ? '<strong class="text-textmain">' + count + '</strong> of <strong class="text-textmain">' + total + '</strong> ' + (total === 1 ? 'story' : 'stories') + ' matching filters for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"'
+                : '<strong class="text-textmain">' + count + '</strong> ' + (count === 1 ? 'story' : 'stories') + ' for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"';
+            statusEl.innerHTML = '<p class="text-textmuted text-sm">Found ' + countText + '</p>';
+
+            sorted.forEach(function (story) {
+                resultsEl.appendChild(createStoryCard(story));
+            });
+        }
+
+        function createStoryCard(story) {
             var card = document.createElement("a");
             card.href = "story-detail.html?id=" + story.id;
             card.id = "card-" + story.id;
@@ -199,9 +438,34 @@
                 ? story.content.substring(0, 150) + "..."
                 : (story.content || "");
 
+            // Media
+            var images = (story.media_files || []).filter(function (m) { return m.media_type === "image"; });
+            var mediaInner = images.length > 0
+                ? '<img src="' + escapeHtml(images[0].media_url) + '" alt="' + escapeHtml(story.title) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />' +
+                  (images.length > 1 ? '<div class="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">+' + (images.length - 1) + '</div>' : '')
+                : '<span class="material-symbols-outlined text-4xl text-primary/30">photo_library</span>';
+
+            // Tags
+            var tags = story.tags || [];
+            var tagsHtml = "";
+            if (tags.length > 0) {
+                var visibleTags = tags.slice(0, 4);
+                tagsHtml = '<div class="mt-3 flex flex-wrap gap-1">';
+                visibleTags.forEach(function (tag) {
+                    var tagName = typeof tag === "string" ? tag : (tag && tag.name ? tag.name : "");
+                    if (tagName) {
+                        tagsHtml += '<span class="inline-flex items-center rounded-full bg-[rgba(119,90,25,0.08)] border border-[rgba(119,90,25,0.15)] px-2 py-0.5 text-[10px] font-semibold text-primary">' + escapeHtml(tagName) + '</span>';
+                    }
+                });
+                if (tags.length > 4) {
+                    tagsHtml += '<span class="inline-flex items-center rounded-full bg-border/50 px-2 py-0.5 text-[10px] font-semibold text-textmuted">+' + (tags.length - 4) + '</span>';
+                }
+                tagsHtml += '</div>';
+            }
+
             card.innerHTML =
-                '<div id="media-' + story.id + '" class="h-44 bg-gradient-to-br from-[#e9dfcd] to-[#f7f3eb] flex items-center justify-center relative overflow-hidden">' +
-                    '<span class="material-symbols-outlined text-4xl text-primary/30">photo_library</span>' +
+                '<div class="h-44 bg-gradient-to-br from-[#e9dfcd] to-[#f7f3eb] flex items-center justify-center relative overflow-hidden">' +
+                    mediaInner +
                 '</div>' +
                 '<div class="p-5">' +
                     '<div class="flex items-center gap-2 mb-2">' +
@@ -212,6 +476,7 @@
                     '<h3 class="font-headline font-bold text-base text-textmain leading-snug group-hover:text-primary transition-colors">' + escapeHtml(story.title) + '</h3>' +
                     (story.author ? '<p class="mt-1 text-xs text-textmuted">by ' + escapeHtml(story.author) + '</p>' : '') +
                     '<p class="mt-2.5 text-sm text-textmuted leading-relaxed line-clamp-3">' + escapeHtml(preview) + '</p>' +
+                    tagsHtml +
                     '<div class="mt-4 flex items-center gap-1 text-xs font-bold text-primary">' +
                         'Read Story' +
                         '<span class="material-symbols-outlined text-sm group-hover:translate-x-0.5 transition-transform">arrow_forward</span>' +
@@ -221,22 +486,9 @@
             return card;
         }
 
-        function updateCardWithMedia(storyId, detail) {
-            var mediaContainer = document.getElementById("media-" + storyId);
-            if (!mediaContainer) return;
-            if (!detail.media_files || detail.media_files.length === 0) return;
-
-            var images = detail.media_files.filter(function (m) { return m.media_type === "image"; });
-            if (images.length === 0) return;
-
-            mediaContainer.innerHTML =
-                '<img src="' + escapeHtml(images[0].media_url) + '" alt="' + escapeHtml(detail.title) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />' +
-                (images.length > 1 ? '<div class="absolute bottom-2 right-2 bg-black/50 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">+' + (images.length - 1) + '</div>' : '');
-        }
-
         function escapeHtml(str) {
             var div = document.createElement("div");
-            div.appendChild(document.createTextNode(str));
+            div.appendChild(document.createTextNode(str || ""));
             return div.innerHTML;
         }
     </script>
