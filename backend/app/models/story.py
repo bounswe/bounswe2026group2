@@ -3,6 +3,9 @@ from datetime import date, datetime
 from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import NoInspectionAvailable
+from sqlalchemy.orm.attributes import NO_VALUE
 
 from app.db.enums import DatePrecision, MediaType, ReportReason, ReportStatus, StoryStatus, StoryVisibility
 
@@ -154,6 +157,20 @@ class StoryResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @staticmethod
+    def _extract_loaded_tag_names(story: object) -> list[str]:
+        try:
+            inspected_story = sa_inspect(story)
+        except NoInspectionAvailable:
+            tags = getattr(story, "tags", [])
+            return [tag.name for tag in tags]
+
+        tags_attr = inspected_story.attrs.tags
+        if tags_attr.loaded_value is NO_VALUE:
+            return []
+
+        return [tag.name for tag in tags_attr.loaded_value]
+
     @classmethod
     def from_orm_with_author(cls, story: object, author_username: str) -> "StoryResponse":
         date_start = getattr(story, "date_start", None)
@@ -176,7 +193,7 @@ class StoryResponse(BaseModel):
             date_label = None
 
         is_anonymous = getattr(story, "is_anonymous", False)
-        tags = [tag.name for tag in getattr(story, "tags", [])]
+        tags = cls._extract_loaded_tag_names(story)
 
         return cls(
             id=story.id,
