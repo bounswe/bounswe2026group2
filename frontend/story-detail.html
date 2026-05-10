@@ -53,6 +53,11 @@
     }
 
     @keyframes like-pop {
+      0% { transform: scale(1); }
+      55% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
     .material-symbols-outlined {
       font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
     }
@@ -65,8 +70,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .like-button[data-animating="true"] { animation: none; }
-    @media (prefers-reduced-motion: reduce) {
+      .like-button[data-animating="true"],
       .save-button[data-animating="true"] { animation: none; }
     }
   </style>
@@ -198,7 +202,6 @@
 <script src="likes.js"></script>
 <script src="config.js"></script>
 <script src="comments.js"></script>
-<script src="auth.js"></script>
 <script src="saves.js"></script>
 <script src="story-transcript.js"></script>
 <script>
