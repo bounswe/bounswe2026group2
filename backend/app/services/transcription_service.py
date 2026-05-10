@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.db.enums import MediaType
 from app.db.media_file import MediaFile
 from app.db.session import AsyncSessionLocal
-from app.services.ai_tagging_system import run_ai_tagging_for_story
+from app.services.ai_tagging_system import is_ai_tagging_configured, run_ai_tagging_for_story
 from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,8 @@ async def transcribe_media_file(
             media.transcript = transcript
             await db.commit()
 
-            await run_ai_tagging_for_story(media.story_id)
+            if is_ai_tagging_configured():
+                await run_ai_tagging_for_story(media.story_id)
     except Exception:
         logger.exception("Failed to persist transcript for media file %s", media_file_id)
 

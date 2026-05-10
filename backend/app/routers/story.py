@@ -28,7 +28,7 @@ from app.models.story import (
     StoryUpdateRequest,
     UpdateReportStatusRequest,
 )
-from app.services.ai_tagging_system import run_ai_tagging_for_story
+from app.services.ai_tagging_system import is_ai_tagging_configured, run_ai_tagging_for_story
 from app.services.story_service import (
     create_comment_for_story,
     create_report_for_story,
@@ -71,7 +71,8 @@ async def create_story(
     db: AsyncSession = Depends(get_db),
 ):
     story = await create_story_with_location(db, current_user, payload)
-    background_tasks.add_task(run_ai_tagging_for_story, story.id)
+    if is_ai_tagging_configured():
+        background_tasks.add_task(run_ai_tagging_for_story, story.id)
     return story
 
 

@@ -23,6 +23,10 @@ AI_TAGGING_RETRY_DELAYS_SECONDS = (1.0, 2.0)
 logger = logging.getLogger(__name__)
 
 
+def is_ai_tagging_configured() -> bool:
+    return bool(settings.GEMINI_API_KEY or settings.AI_TAGGING_API_KEY)
+
+
 def build_ai_tagging_prompt(
     *,
     title: str,
@@ -122,9 +126,9 @@ def build_ai_tagging_request_payload(
 
 
 def _create_gemini_client() -> genai.Client:
-    api_key = settings.GEMINI_API_KEY or settings.AI_TAGGING_API_KEY
-    if not api_key:
+    if not is_ai_tagging_configured():
         raise ValueError("GEMINI_API_KEY is not configured")
+    api_key = settings.GEMINI_API_KEY or settings.AI_TAGGING_API_KEY
     return genai.Client(api_key=api_key)
 
 
@@ -212,6 +216,9 @@ async def _get_story_for_ai_tagging(story_id: uuid.UUID, db) -> Story | None:
 
 
 async def run_ai_tagging_for_story(story_id: uuid.UUID) -> bool:
+    if not is_ai_tagging_configured():
+        return False
+
     async with AsyncSessionLocal() as db:
         story = await _get_story_for_ai_tagging(story_id, db)
         if story is None or not trigger_ai_tagging_if_ready(story):
