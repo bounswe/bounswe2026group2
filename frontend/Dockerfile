@@ -16,6 +16,7 @@ COPY profile.js /usr/share/nginx/html/profile.js
 COPY edit-profile.js /usr/share/nginx/html/edit-profile.js
 COPY login.js /usr/share/nginx/html/login.js
 COPY auth.js /usr/share/nginx/html/auth.js
+COPY oauth-callback.js /usr/share/nginx/html/oauth-callback.js
 COPY config.js /usr/share/nginx/html/config.js
 COPY saves.js /usr/share/nginx/html/saves.js
 COPY saved.js /usr/share/nginx/html/saved.js
