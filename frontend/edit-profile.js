@@ -105,6 +105,7 @@ async function handleEditProfileSubmit(e) {
 
     try {
         var wantsPasswordChange = false;
+        var skipRedirectAfterSave = false;
         var currentPassword = currentPasswordEl ? currentPasswordEl.value : "";
         var newPassword = newPasswordEl ? newPasswordEl.value : "";
         var confirmPassword = confirmPasswordEl ? confirmPasswordEl.value : "";
@@ -116,29 +117,32 @@ async function handleEditProfileSubmit(e) {
                 throw new Error("Please enter current password and a new password.");
             }
             if (newPassword !== confirmPassword) {
-                throw new Error("New password and confirmation do not match.");
+                if (typeof window !== "undefined" && typeof window.alert === "function") {
+                    window.alert("New password and confirmation do not match.");
+                }
+                skipRedirectAfterSave = true;
+            } else {
+                var pwRes = await authFetch(API_BASE + "/auth/me/password", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    })
+                });
+
+                if (!pwRes.ok) {
+                    if (pwRes.status === 401 && typeof logout === "function") logout();
+                    var pwPayload = null;
+                    try { pwPayload = await pwRes.json(); } catch (err) { void err; }
+                    throw new Error(getErrorDetail(pwPayload) || "Failed to change password");
+                }
+
+                // Clear password inputs after successful change
+                if (currentPasswordEl) currentPasswordEl.value = "";
+                if (newPasswordEl) newPasswordEl.value = "";
+                if (confirmPasswordEl) confirmPasswordEl.value = "";
             }
-
-            var pwRes = await authFetch(API_BASE + "/auth/me/password", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    current_password: currentPassword,
-                    new_password: newPassword
-                })
-            });
-
-            if (!pwRes.ok) {
-                if (pwRes.status === 401 && typeof logout === "function") logout();
-                var pwPayload = null;
-                try { pwPayload = await pwRes.json(); } catch (err) { void err; }
-                throw new Error(getErrorDetail(pwPayload) || "Failed to change password");
-            }
-
-            // Clear password inputs after successful change
-            if (currentPasswordEl) currentPasswordEl.value = "";
-            if (newPasswordEl) newPasswordEl.value = "";
-            if (confirmPasswordEl) confirmPasswordEl.value = "";
         }
 
         var updateRes = await authFetch(API_BASE + "/auth/me", {
@@ -153,7 +157,9 @@ async function handleEditProfileSubmit(e) {
             throw new Error(getErrorDetail(updatePayload) || "Failed to update profile");
         }
 
-        window.location.assign("profile.html");
+        if (!skipRedirectAfterSave) {
+            window.location.assign("profile.html");
+        }
     } catch (err) {
         console.error("Error saving profile:", err);
         if (typeof window !== "undefined" && typeof window.alert === "function") {

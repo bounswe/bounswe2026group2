@@ -128,22 +128,22 @@ describe("edit profile page unit tests", () => {
         const fakeEvent = { preventDefault: jest.fn() };
 
         global.authFetch
-            // PATCH /auth/me
-            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
             // POST /auth/me/password (204, no body)
-            .mockResolvedValueOnce({ ok: true, status: 204, json: () => Promise.resolve({}) });
+            .mockResolvedValueOnce({ ok: true, status: 204, json: () => Promise.resolve({}) })
+            // PATCH /auth/me
+            .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
         await handleEditProfileSubmit(fakeEvent);
 
         expect(global.authFetch).toHaveBeenNthCalledWith(
             1,
-            "http://localhost/auth/me",
-            expect.objectContaining({ method: "PATCH" })
+            "http://localhost/auth/me/password",
+            expect.objectContaining({ method: "POST" })
         );
         expect(global.authFetch).toHaveBeenNthCalledWith(
             2,
-            "http://localhost/auth/me/password",
-            expect.objectContaining({ method: "POST" })
+            "http://localhost/auth/me",
+            expect.objectContaining({ method: "PATCH" })
         );
         expect(assignMock).toHaveBeenCalledWith("profile.html");
     });
