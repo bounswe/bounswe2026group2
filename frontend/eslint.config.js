@@ -30,6 +30,12 @@ module.exports = [
                 Blob: "readonly",
                 File: "readonly",
                 MediaRecorder: "readonly",
+                MouseEvent: "readonly",
+                KeyboardEvent: "readonly",
+                setTimeout: "readonly",
+                clearTimeout: "readonly",
+                setInterval: "readonly",
+                clearInterval: "readonly",
                 // CommonJS exports used by some source files for testing
                 module: "readonly",
                 // Libraries loaded via <script>
@@ -65,6 +71,8 @@ module.exports = [
                 afterEach: "readonly",
                 jest: "readonly",
                 global: "readonly",
+                MouseEvent: "readonly",
+                KeyboardEvent: "readonly",
             },
         },
     },
