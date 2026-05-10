@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
 from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.tag import story_tags_table
 
 if TYPE_CHECKING:
     from app.db.media_file import MediaFile
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from app.db.story_like import StoryLike
     from app.db.story_report import StoryReport
     from app.db.story_save import StorySave
+    from app.db.tag import Tag
     from app.db.user import User
 
 
@@ -100,4 +102,8 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     reports: Mapped[list["StoryReport"]] = relationship(
         back_populates="story",
         cascade="all, delete-orphan",
+    )
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=story_tags_table,
+        back_populates="stories",
     )
