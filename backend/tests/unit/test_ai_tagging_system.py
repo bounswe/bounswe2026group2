@@ -95,6 +95,14 @@ class TestAiTaggingReadiness:
 
         assert trigger_ai_tagging_if_ready(story) is True
 
+    def test_trigger_ai_tagging_if_ready_returns_false_for_blank_story_content(self):
+        story = SimpleNamespace(
+            content="   ",
+            media_files=[],
+        )
+
+        assert trigger_ai_tagging_if_ready(story) is False
+
 
 @pytest.mark.asyncio
 class TestGenerateStoryTagsWithAi:
@@ -198,3 +206,30 @@ class TestRunAiTaggingForStory:
         assert result is True
         generate_mock.assert_awaited_once()
         persist_mock.assert_awaited_once_with(session, story_id, ["bogazici", "spor"])
+
+    async def test_run_ai_tagging_for_story_includes_transcript_in_ai_content(self, monkeypatch):
+        story_id = uuid.uuid4()
+        story = SimpleNamespace(
+            id=story_id,
+            title="Story Title",
+            content="Story content",
+            place_name="Istanbul",
+            date_start=date(2024, 1, 1),
+            date_end=date(2024, 12, 31),
+            media_files=[SimpleNamespace(media_type="audio", transcript="Transcript text")],
+        )
+
+        session = AsyncMock()
+        session.__aenter__.return_value = session
+        session.__aexit__.return_value = None
+        monkeypatch.setattr("app.services.ai_tagging_system.AsyncSessionLocal", lambda: session)
+        monkeypatch.setattr("app.services.ai_tagging_system._get_story_for_ai_tagging", AsyncMock(return_value=story))
+
+        generate_mock = AsyncMock(return_value=["bogazici"])
+        persist_mock = AsyncMock()
+        monkeypatch.setattr("app.services.ai_tagging_system.generate_ai_story_tags", generate_mock)
+        monkeypatch.setattr("app.services.ai_tagging_system.apply_ai_tags_to_story", persist_mock)
+
+        await run_ai_tagging_for_story(story_id)
+
+        assert generate_mock.await_args.kwargs["content"] == "Story content\n\nAudio transcript:\nTranscript text"

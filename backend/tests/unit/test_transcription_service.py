@@ -52,9 +52,10 @@ class TestTranscribeAudioContent:
 
 @pytest.mark.asyncio
 class TestTranscribeMediaFile:
-    async def test_persists_transcript_for_audio_media(self):
+    async def test_persists_transcript_for_audio_media_and_triggers_ai_tagging(self):
         media_file_id = uuid.uuid4()
-        media = SimpleNamespace(id=media_file_id, media_type=MediaType.AUDIO, transcript=None)
+        story_id = uuid.uuid4()
+        media = SimpleNamespace(id=media_file_id, story_id=story_id, media_type=MediaType.AUDIO, transcript=None)
         db = AsyncMock()
         db.execute.return_value.scalar_one_or_none = lambda: media
 
@@ -63,20 +64,25 @@ class TestTranscribeMediaFile:
             new=AsyncMock(return_value="Audio transcript"),
         ) as mock_transcribe:
             with patch(
-                "app.services.transcription_service.AsyncSessionLocal",
-                return_value=_SessionContextManager(db),
-            ) as mock_session_factory:
-                await transcribe_media_file(
-                    media_file_id=media_file_id,
-                    filename="audio.webm",
-                    content=b"audio-bytes",
-                    mime_type="audio/webm",
-                )
+                "app.services.transcription_service.run_ai_tagging_for_story",
+                new=AsyncMock(),
+            ) as mock_run_ai_tagging:
+                with patch(
+                    "app.services.transcription_service.AsyncSessionLocal",
+                    return_value=_SessionContextManager(db),
+                ) as mock_session_factory:
+                    await transcribe_media_file(
+                        media_file_id=media_file_id,
+                        filename="audio.webm",
+                        content=b"audio-bytes",
+                        mime_type="audio/webm",
+                    )
 
         assert media.transcript == "Audio transcript"
         mock_transcribe.assert_awaited_once()
         mock_session_factory.assert_called_once()
         db.commit.assert_awaited_once()
+        mock_run_ai_tagging.assert_awaited_once_with(story_id)
 
     async def test_skips_persist_when_no_transcript_is_returned(self):
         with patch(
@@ -84,19 +90,24 @@ class TestTranscribeMediaFile:
             new=AsyncMock(return_value=None),
         ) as mock_transcribe:
             with patch("app.services.transcription_service.AsyncSessionLocal") as mock_session_factory:
-                await transcribe_media_file(
-                    media_file_id=uuid.uuid4(),
-                    filename="audio.webm",
-                    content=b"audio-bytes",
-                    mime_type="audio/webm",
-                )
+                with patch(
+                    "app.services.transcription_service.run_ai_tagging_for_story",
+                    new=AsyncMock(),
+                ) as mock_run_ai_tagging:
+                    await transcribe_media_file(
+                        media_file_id=uuid.uuid4(),
+                        filename="audio.webm",
+                        content=b"audio-bytes",
+                        mime_type="audio/webm",
+                    )
 
         mock_transcribe.assert_awaited_once()
         mock_session_factory.assert_not_called()
+        mock_run_ai_tagging.assert_not_awaited()
 
     async def test_skips_persist_for_non_audio_media(self):
         media_file_id = uuid.uuid4()
-        media = SimpleNamespace(id=media_file_id, media_type=MediaType.VIDEO, transcript=None)
+        media = SimpleNamespace(id=media_file_id, story_id=uuid.uuid4(), media_type=MediaType.VIDEO, transcript=None)
         db = AsyncMock()
         db.execute.return_value.scalar_one_or_none = lambda: media
 
@@ -105,15 +116,20 @@ class TestTranscribeMediaFile:
             new=AsyncMock(return_value="Should not be stored"),
         ):
             with patch(
-                "app.services.transcription_service.AsyncSessionLocal",
-                return_value=_SessionContextManager(db),
-            ):
-                await transcribe_media_file(
-                    media_file_id=media_file_id,
-                    filename="audio.webm",
-                    content=b"audio-bytes",
-                    mime_type="audio/webm",
-                )
+                "app.services.transcription_service.run_ai_tagging_for_story",
+                new=AsyncMock(),
+            ) as mock_run_ai_tagging:
+                with patch(
+                    "app.services.transcription_service.AsyncSessionLocal",
+                    return_value=_SessionContextManager(db),
+                ):
+                    await transcribe_media_file(
+                        media_file_id=media_file_id,
+                        filename="audio.webm",
+                        content=b"audio-bytes",
+                        mime_type="audio/webm",
+                    )
 
         assert media.transcript is None
         db.commit.assert_not_awaited()
+        mock_run_ai_tagging.assert_not_awaited()
