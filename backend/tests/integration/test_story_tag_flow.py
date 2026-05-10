@@ -3,6 +3,7 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.tag_service import apply_ai_tags_to_story
 
@@ -108,6 +109,15 @@ class TestStoryTagFlow:
 
 @pytest.mark.asyncio
 class TestStoryAiTaggingBackgroundFlow:
+    def _patch_background_session_factory(self, monkeypatch, db_session):
+        session_factory = async_sessionmaker(
+            bind=db_session.bind,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        monkeypatch.setattr("app.services.ai_tagging_system.AsyncSessionLocal", session_factory)
+        monkeypatch.setattr("app.services.transcription_service.AsyncSessionLocal", session_factory)
+
     async def _register_and_login(self, client, username: str, email: str, password: str = "StoryTag1!") -> str:
         await client.post(
             "/auth/register",
@@ -130,7 +140,8 @@ class TestStoryAiTaggingBackgroundFlow:
 
         return data
 
-    async def test_create_story_triggers_background_ai_tagging(self, client, monkeypatch):
+    async def test_create_story_triggers_background_ai_tagging(self, client, db_session, monkeypatch):
+        self._patch_background_session_factory(monkeypatch, db_session)
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.routers.story.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr(
@@ -160,7 +171,8 @@ class TestStoryAiTaggingBackgroundFlow:
         data = await self._wait_for_story_tags(client, story_id, ["bogazici", "turkiye", "spor"])
         assert data["tags"] == ["bogazici", "turkiye", "spor"]
 
-    async def test_ai_tagging_failure_does_not_break_story_creation(self, client, monkeypatch):
+    async def test_ai_tagging_failure_does_not_break_story_creation(self, client, db_session, monkeypatch):
+        self._patch_background_session_factory(monkeypatch, db_session)
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.routers.story.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr(
@@ -191,7 +203,8 @@ class TestStoryAiTaggingBackgroundFlow:
         assert detail_resp.status_code == 200
         assert detail_resp.json()["tags"] == []
 
-    async def test_audio_transcript_completion_triggers_ai_tagging(self, client, monkeypatch):
+    async def test_audio_transcript_completion_triggers_ai_tagging(self, client, db_session, monkeypatch):
+        self._patch_background_session_factory(monkeypatch, db_session)
         monkeypatch.setattr("app.services.story_service.upload_bytes", lambda **kwargs: None)
         monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.routers.story.is_ai_tagging_configured", lambda: True)
