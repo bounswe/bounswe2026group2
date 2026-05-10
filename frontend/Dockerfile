@@ -2,6 +2,7 @@ FROM nginx:alpine
 
 COPY index.html /usr/share/nginx/html/index.html
 COPY forgot-password.html /usr/share/nginx/html/forgot-password.html
+COPY oauth-callback.html /usr/share/nginx/html/oauth-callback.html
 COPY register.html /usr/share/nginx/html/register.html
 COPY map.html /usr/share/nginx/html/map.html
 COPY story-create.html /usr/share/nginx/html/story-create.html

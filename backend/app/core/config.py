@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+    FRONTEND_GOOGLE_CALLBACK_URL: str = "http://localhost:3000/oauth-callback.html"
 
     # ── Speech-to-Text ───────────────────────────────────────────────────────
     TRANSCRIPTION_MODEL: str = "base"

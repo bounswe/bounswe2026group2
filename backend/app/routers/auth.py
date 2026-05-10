@@ -1,9 +1,11 @@
 import secrets
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Cookie, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.db.user import User
@@ -103,7 +105,9 @@ async def google_callback(
 ):
     if not oauth_state or state != oauth_state:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state")
-    return await google_oauth_login(db, code)
+    token = await google_oauth_login(db, code)
+    fragment = urlencode({"access_token": token.access_token, "token_type": token.token_type})
+    return RedirectResponse(url=f"{settings.FRONTEND_GOOGLE_CALLBACK_URL}#{fragment}")
 
 
 @router.get(
