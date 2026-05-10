@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -102,3 +103,118 @@ class TestStoryTagFlow:
         assert saved_resp.status_code == 200
         saved_story = next(story for story in saved_resp.json()["stories"] if story["id"] == story_id)
         assert saved_story["tags"] == ["turkiye", "spor"]
+
+
+@pytest.mark.asyncio
+class TestStoryAiTaggingBackgroundFlow:
+    async def _register_and_login(self, client, username: str, email: str, password: str = "StoryTag1!") -> str:
+        await client.post(
+            "/auth/register",
+            json={"username": username, "email": email, "password": password},
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": email, "password": password},
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_create_story_triggers_background_ai_tagging(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.ai_tagging_system.generate_ai_story_tags",
+            AsyncMock(return_value=["bogazici", "turkiye", "spor"]),
+        )
+
+        token = await self._register_and_login(client, "autotag1", "autotag1@example.com")
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Background Tagged Story",
+                "content": "A story about Bogazici sports memories in Turkey.",
+                "summary": "Auto-tag this story",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "date_start": 2024,
+                "date_end": 2024,
+            },
+        )
+
+        assert create_resp.status_code == 201
+        story_id = create_resp.json()["id"]
+
+        detail_resp = await client.get(f"/stories/{story_id}")
+        assert detail_resp.status_code == 200
+        assert detail_resp.json()["tags"] == ["bogazici", "turkiye", "spor"]
+
+    async def test_ai_tagging_failure_does_not_break_story_creation(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.ai_tagging_system.generate_ai_story_tags",
+            AsyncMock(side_effect=RuntimeError("ai down")),
+        )
+
+        token = await self._register_and_login(client, "autotag2", "autotag2@example.com")
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Story Still Creates",
+                "content": "Even if AI tagging fails, creation should succeed.",
+                "summary": "Failure-tolerant creation",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+                "date_start": 2024,
+                "date_end": 2024,
+            },
+        )
+
+        assert create_resp.status_code == 201
+        story_id = create_resp.json()["id"]
+
+        detail_resp = await client.get(f"/stories/{story_id}")
+        assert detail_resp.status_code == 200
+        assert detail_resp.json()["tags"] == []
+
+    async def test_audio_transcript_completion_triggers_ai_tagging(self, client, monkeypatch):
+        monkeypatch.setattr("app.services.story_service.upload_bytes", lambda **kwargs: None)
+        monkeypatch.setattr(
+            "app.services.transcription_service.transcribe_audio_content",
+            AsyncMock(return_value="Bosphorus running memories and local sports narration"),
+        )
+        monkeypatch.setattr(
+            "app.services.ai_tagging_system.generate_ai_story_tags",
+            AsyncMock(side_effect=[["story"], ["story", "audio", "bosphorus"]]),
+        )
+
+        token = await self._register_and_login(client, "autotag3", "autotag3@example.com")
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Audio Tagged Story",
+                "content": "Initial story content.",
+                "summary": "Audio story",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "date_start": 2024,
+                "date_end": 2024,
+            },
+        )
+        assert create_resp.status_code == 201
+        story_id = create_resp.json()["id"]
+
+        upload_resp = await client.post(
+            f"/stories/{story_id}/media",
+            headers={"Authorization": f"Bearer {token}"},
+            data={"media_type": "audio", "sort_order": "0"},
+            files={"file": ("audio.webm", b"audio-bytes", "audio/webm")},
+        )
+        assert upload_resp.status_code == 201
+
+        detail_resp = await client.get(f"/stories/{story_id}")
+        assert detail_resp.status_code == 200
+        data = detail_resp.json()
+        assert data["media_files"][0]["transcript"] == "Bosphorus running memories and local sports narration"
+        assert data["tags"] == ["story", "audio", "bosphorus"]
