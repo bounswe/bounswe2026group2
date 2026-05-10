@@ -157,6 +157,7 @@ class TestRunAiTaggingForStory:
         session = AsyncMock()
         session.__aenter__.return_value = session
         session.__aexit__.return_value = None
+        monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.services.ai_tagging_system.AsyncSessionLocal", lambda: session)
         monkeypatch.setattr("app.services.ai_tagging_system._get_story_for_ai_tagging", AsyncMock(return_value=story))
         generate_mock = AsyncMock()
@@ -182,6 +183,7 @@ class TestRunAiTaggingForStory:
         session = AsyncMock()
         session.__aenter__.return_value = session
         session.__aexit__.return_value = None
+        monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.services.ai_tagging_system.AsyncSessionLocal", lambda: session)
         monkeypatch.setattr("app.services.ai_tagging_system._get_story_for_ai_tagging", AsyncMock(return_value=story))
 
@@ -211,6 +213,7 @@ class TestRunAiTaggingForStory:
         session = AsyncMock()
         session.__aenter__.return_value = session
         session.__aexit__.return_value = None
+        monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.services.ai_tagging_system.AsyncSessionLocal", lambda: session)
         monkeypatch.setattr("app.services.ai_tagging_system._get_story_for_ai_tagging", AsyncMock(return_value=story))
 
@@ -238,6 +241,7 @@ class TestRunAiTaggingForStory:
         session = AsyncMock()
         session.__aenter__.return_value = session
         session.__aexit__.return_value = None
+        monkeypatch.setattr("app.services.ai_tagging_system.is_ai_tagging_configured", lambda: True)
         monkeypatch.setattr("app.services.ai_tagging_system.AsyncSessionLocal", lambda: session)
         monkeypatch.setattr("app.services.ai_tagging_system._get_story_for_ai_tagging", AsyncMock(return_value=story))
         monkeypatch.setattr(
