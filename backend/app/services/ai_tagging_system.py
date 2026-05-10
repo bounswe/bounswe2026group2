@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def is_ai_tagging_configured() -> bool:
-    return bool(settings.GEMINI_API_KEY or settings.AI_TAGGING_API_KEY)
+    return bool(settings.GEMINI_API_KEY)
 
 
 def build_ai_tagging_prompt(
@@ -88,6 +88,11 @@ def parse_ai_generated_tags(response_payload: object) -> list[str]:
     if not candidate_text:
         return []
 
+    # Strip markdown code fences (e.g. ```json ... ```)
+    if candidate_text.startswith("```"):
+        candidate_text = candidate_text.split("\n", 1)[-1]
+        candidate_text = candidate_text.rsplit("```", 1)[0].strip()
+
     try:
         parsed_payload = json.loads(candidate_text)
     except json.JSONDecodeError:
@@ -128,7 +133,7 @@ def build_ai_tagging_request_payload(
 def _create_gemini_client() -> genai.Client:
     if not is_ai_tagging_configured():
         raise ValueError("GEMINI_API_KEY is not configured")
-    api_key = settings.GEMINI_API_KEY or settings.AI_TAGGING_API_KEY
+    api_key = settings.GEMINI_API_KEY
     return genai.Client(api_key=api_key)
 
 

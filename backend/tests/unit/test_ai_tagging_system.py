@@ -74,6 +74,12 @@ class TestGeneratedTagParsing:
 
         assert tags == ["bogazici", "turkey", "sports"]
 
+    def test_parse_ai_generated_tags_strips_markdown_code_fence(self):
+        raw = '```json\n{"tags": ["istanbul", "architecture", "ottoman"]}\n```'
+        tags = parse_ai_generated_tags(raw)
+
+        assert tags == ["istanbul", "architecture", "ottoman"]
+
 
 class TestAiTaggingReadiness:
     def test_trigger_ai_tagging_if_ready_returns_true_for_text_only_story(self):
@@ -133,7 +139,6 @@ class TestGenerateStoryTagsWithAi:
 
     async def test_generate_ai_story_tags_requires_gemini_configuration(self, monkeypatch):
         monkeypatch.setattr("app.services.ai_tagging_system.settings.GEMINI_API_KEY", "")
-        monkeypatch.setattr("app.services.ai_tagging_system.settings.AI_TAGGING_API_KEY", "")
 
         with pytest.raises(ValueError) as exc_info:
             await generate_ai_story_tags(title="Title", content="Content")
