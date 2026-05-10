@@ -79,6 +79,7 @@ class StoryCreateRequest(StoryDateInput):
     title: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
     summary: str | None = None
+    tags: list[str] | None = None
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
@@ -89,6 +90,7 @@ class StoryUpdateRequest(StoryDateInput):
     title: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
     summary: str | None = None
+    tags: list[str] | None = None
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
@@ -136,6 +138,7 @@ class StoryResponse(BaseModel):
     title: str
     summary: str | None
     content: str
+    tags: list[str] = Field(default_factory=list)
     author: str | None
     is_anonymous: bool
     place_name: str | None
@@ -173,12 +176,14 @@ class StoryResponse(BaseModel):
             date_label = None
 
         is_anonymous = getattr(story, "is_anonymous", False)
+        tags = [tag.name for tag in getattr(story, "tags", [])]
 
         return cls(
             id=story.id,
             title=story.title,
             summary=story.summary,
             content=story.content,
+            tags=tags,
             author=None if is_anonymous else author_username,
             is_anonymous=is_anonymous,
             place_name=story.place_name,
