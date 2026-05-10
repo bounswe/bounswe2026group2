@@ -455,7 +455,10 @@ async def create_story_with_location(
 
     normalized_date_start, normalized_date_end, normalized_date_precision = payload.normalize_date_range()
 
+    # Pre-generate the PK so StoryLocation FK is available before the first flush.
+    story_id = uuid.uuid4()
     story = Story(
+        id=story_id,
         user_id=current_user.id,
         title=payload.title,
         summary=payload.summary,
@@ -475,12 +478,12 @@ async def create_story_with_location(
 
     if payload.locations:
         validate_location_list(payload.locations)
-        for loc in build_story_locations(story.id, payload.locations):
+        for loc in build_story_locations(story_id, payload.locations):
             db.add(loc)
     else:
         db.add(
             StoryLocation(
-                story_id=story.id,
+                story_id=story_id,
                 latitude=payload.latitude,
                 longitude=payload.longitude,
                 label=place_name,
