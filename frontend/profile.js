@@ -11,8 +11,29 @@ async function loadProfile() {
 
         var nameEl = document.getElementById("profile-name");
         var joinedEl = document.getElementById("profile-joined");
+        var bioEl = document.getElementById("profile-bio");
+        var locationEl = document.getElementById("profile-location");
+        var avatarEl = document.getElementById("profile-avatar");
 
         if (nameEl) nameEl.textContent = data.display_name || data.username;
+        if (bioEl) bioEl.textContent = data.bio || "";
+        if (locationEl) {
+            // Keep the icon span but replace the trailing text
+            var iconSpan = locationEl.querySelector(".material-symbols-outlined");
+            locationEl.textContent = "";
+            if (iconSpan) locationEl.appendChild(iconSpan);
+            var text = document.createTextNode(" " + (data.location || ""));
+            locationEl.appendChild(text);
+            if (!data.location) locationEl.style.display = "none";
+        }
+        if (avatarEl && data.avatar_url) {
+            avatarEl.style.backgroundImage = "url('" + data.avatar_url + "')";
+            avatarEl.style.backgroundSize = "cover";
+            avatarEl.style.backgroundPosition = "center";
+            avatarEl.style.backgroundRepeat = "no-repeat";
+            var icon = avatarEl.querySelector(".material-symbols-outlined");
+            if (icon) icon.style.opacity = "0";
+        }
         if (joinedEl && data.created_at) {
             var date = new Date(data.created_at);
             var options = { month: 'long', year: 'numeric' };
@@ -57,6 +78,9 @@ async function loadUserStories(username) {
         const statStoriesEl = document.getElementById("stat-stories");
         if (statStoriesEl) statStoriesEl.textContent = myStories.length;
 
+        // Update likes/comments received on my stories (best-effort; may be slow for many stories)
+        void updateEngagementStatsForStories(myStories);
+
         // EĞER HİKAYE YOKSA: Senin orijinal güzel tasarımını göster
         if (myStories.length === 0) {
             container.innerHTML = `
@@ -94,6 +118,74 @@ async function loadUserStories(username) {
         console.error("Error loading user stories:", err);
         container.innerHTML = `<p class="text-red-500 text-center p-4">Error loading stories. Please try again.</p>`;
     }
+}
+
+async function updateEngagementStatsForStories(stories) {
+    var likesEl = document.getElementById("stat-likes");
+    var commentsEl = document.getElementById("stat-comments");
+    if (!likesEl && !commentsEl) return;
+
+    if (likesEl) likesEl.textContent = "…";
+    if (commentsEl) commentsEl.textContent = "…";
+
+    var totalLikes = 0;
+    var totalComments = 0;
+
+    // Limit concurrency to avoid spamming the API.
+    var concurrency = 4;
+    var index = 0;
+
+    async function worker() {
+        while (index < stories.length) {
+            var i = index;
+            index++;
+            var story = stories[i];
+            if (!story || !story.id) continue;
+
+            try {
+                // Likes: use story detail's like_count
+                if (likesEl) {
+                    var detailRes = await authFetch(API_BASE + "/stories/" + story.id);
+                    if (detailRes.ok) {
+                        var detail = await detailRes.json();
+                        if (detail && typeof detail.like_count === "number") {
+                            totalLikes += detail.like_count;
+                        }
+                    }
+                }
+            } catch (err) {
+                // ignore per-story failures
+                void err;
+            }
+
+            try {
+                // Comments: use comments list response total
+                if (commentsEl) {
+                    var commentsRes = await authFetch(API_BASE + "/stories/" + story.id + "/comments");
+                    if (commentsRes.ok) {
+                        var commentsData = await commentsRes.json();
+                        if (commentsData && typeof commentsData.total === "number") {
+                            totalComments += commentsData.total;
+                        } else if (commentsData && Array.isArray(commentsData.comments)) {
+                            totalComments += commentsData.comments.length;
+                        }
+                    }
+                }
+            } catch (err) {
+                void err;
+            }
+        }
+    }
+
+    var workers = [];
+    for (var w = 0; w < Math.min(concurrency, stories.length || 0); w++) {
+        workers.push(worker());
+    }
+
+    await Promise.all(workers);
+
+    if (likesEl) likesEl.textContent = String(totalLikes);
+    if (commentsEl) commentsEl.textContent = String(totalComments);
 }
 
 if (typeof document !== "undefined") {
