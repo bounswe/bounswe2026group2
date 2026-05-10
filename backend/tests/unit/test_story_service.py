@@ -10,8 +10,17 @@ from starlette.datastructures import Headers, UploadFile
 
 from app.db.enums import DatePrecision, MediaType, NotificationEventType, ReportStatus, StoryStatus, StoryVisibility
 from app.db.notification import Notification
+from app.db.tag import Tag
 from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryResponse, StoryUpdateRequest
+from app.services.tag_service import (
+    apply_ai_tags_to_story,
+    attach_tags_to_story,
+    build_tag_slug,
+    get_or_create_tags,
+    normalize_tag_list,
+    normalize_tag_name,
+)
 from app.services.story_service import (
     create_comment_for_story,
     create_story_with_location,
@@ -23,8 +32,6 @@ from app.services.story_service import (
     list_available_stories,
     list_comments_for_story,
     list_saved_stories_for_user,
-    normalize_tag_list,
-    normalize_tag_name,
     remove_story_as_admin,
     save_story_for_user,
     search_available_stories_by_place,
@@ -1250,6 +1257,60 @@ class TestTagNormalizationHelpers:
 
     def test_normalize_tag_list_returns_empty_for_none(self):
         assert normalize_tag_list(None) == []
+
+    def test_build_tag_slug_replaces_spaces_and_symbols(self):
+        assert build_tag_slug("  Bogazici Universitesi!  ") == "bogazici-universitesi"
+
+
+@pytest.mark.asyncio
+class TestAiTagPersistenceHelpers:
+    async def test_get_or_create_tags_reuses_existing_and_creates_missing(self):
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.execute.return_value = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag]))
+
+        tags = await get_or_create_tags(db, [" Bogazici ", "Turkiye"])
+
+        assert [tag.name for tag in tags] == ["bogazici", "turkiye"]
+        assert tags[0] is existing_tag
+        assert tags[1].slug == "turkiye"
+        db.add.assert_called_once()
+        db.flush.assert_awaited_once()
+
+    async def test_attach_tags_to_story_adds_only_missing_relations(self):
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        existing_tag.id = uuid.uuid4()
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
+        story = _make_story(tags=[existing_tag])
+
+        attach_tags_to_story(story, [existing_tag, new_tag])
+
+        assert [tag.name for tag in story.tags] == ["bogazici", "turkiye"]
+
+    async def test_apply_ai_tags_to_story_attaches_tags_and_commits(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, tags=[])
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        existing_tag.id = uuid.uuid4()
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),
+        ]
+
+        updated_story = await apply_ai_tags_to_story(db, story_id, ["Bogazici", "Turkiye"])
+
+        assert updated_story is story
+        assert [tag.name for tag in story.tags] == ["bogazici", "turkiye"]
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once_with(story, attribute_names=["tags"])
 
 
 @pytest.mark.asyncio

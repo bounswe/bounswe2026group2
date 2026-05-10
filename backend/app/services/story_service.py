@@ -97,40 +97,6 @@ MIME_TYPE_FALLBACKS_BY_EXTENSION = {
     },
 }
 
-MAX_TAG_LENGTH = 100
-
-
-def normalize_tag_name(tag: str) -> str:
-    normalized = tag.strip().lower()
-    if not normalized:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Tags cannot be blank",
-        )
-    if len(normalized) > MAX_TAG_LENGTH:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Tags must be at most {MAX_TAG_LENGTH} characters long",
-        )
-    return normalized
-
-
-def normalize_tag_list(tags: list[str] | None) -> list[str]:
-    if not tags:
-        return []
-
-    normalized_tags: list[str] = []
-    seen: set[str] = set()
-
-    for tag in tags:
-        normalized = normalize_tag_name(tag)
-        if normalized not in seen:
-            seen.add(normalized)
-            normalized_tags.append(normalized)
-
-    return normalized_tags
-
-
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     stories = [StoryResponse.from_orm_with_author(story, author_username) for story, author_username in rows]
     return StoryListResponse(stories=stories, total=len(stories))
