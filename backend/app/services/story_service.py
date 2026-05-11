@@ -268,7 +268,10 @@ async def search_available_stories_by_place(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
             Story.deleted_at.is_(None),
-            Story.place_name.ilike(f"%{place_name}%"),
+            or_(
+                Story.place_name.ilike(f"%{place_name}%"),
+                func.similarity(Story.place_name, place_name) >= 0.3,
+            ),
         )
     )
 
