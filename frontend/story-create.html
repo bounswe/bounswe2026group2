@@ -141,16 +141,21 @@
             <div id="create-map" style="height: 100%; width: 100%;"></div>
           </div>
 
-          <!-- Selected Location Display -->
-          <div id="selected-location" class="mt-3 hidden">
-            <div class="flex items-center gap-2 rounded-xl bg-[rgba(53,97,143,0.08)] px-4 py-3 text-sm">
-              <span class="text-tertiary font-semibold">📍 Pinned:</span>
-              <span id="selected-location-text" class="text-textmain"></span>
-              <button type="button" id="clear-location" class="ml-auto text-xs text-red-500 hover:underline">Clear</button>
+          <!-- Pinned locations chip strip -->
+          <div class="mt-4 rounded-2xl border border-border bg-[rgba(53,97,143,0.05)] p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-textmain">Pinned locations</p>
+                <p class="mt-0.5 text-xs text-textmuted">Click the map to add a pin. Drag any pin to refine its position. Add multiple pins to tell a story across places — a route will connect them in order.</p>
+              </div>
+              <button type="button" id="clear-locations" class="hidden shrink-0 text-xs font-semibold text-red-500 hover:underline">
+                Clear all
+              </button>
             </div>
+            <div id="location-chips" class="mt-3 flex flex-wrap gap-2"></div>
           </div>
 
-          <!-- Hidden fields for coordinates -->
+          <!-- Hidden fields for coordinates (kept for the existing backend payload shape) -->
           <input type="hidden" id="latitude" name="latitude" />
           <input type="hidden" id="longitude" name="longitude" />
         </section>
@@ -349,6 +354,7 @@
 <script src="auth.js"></script>
 <script src="recording.js"></script>
 <script src="tags.js"></script>
+<script src="multi-location.js"></script>
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -365,59 +371,50 @@
     maxZoom: 19
   }).addTo(createMap);
 
-  var pinMarker = null;
+  // ─── Multi-location picker ───
+  var chipContainer = document.getElementById("location-chips");
+  var clearAllBtn = document.getElementById("clear-locations");
+  var latitudeInput = document.getElementById("latitude");
+  var longitudeInput = document.getElementById("longitude");
+  var locationNameInput = document.getElementById("location");
 
-  function setPin(lat, lng, label) {
-    if (pinMarker) createMap.removeLayer(pinMarker);
-
-    pinMarker = L.marker([lat, lng], {
-      draggable: true
-    }).addTo(createMap);
-
-    pinMarker.on("dragend", function () {
-      var pos = pinMarker.getLatLng();
-      updateLocationFields(pos.lat, pos.lng, null);
-      reverseGeocode(pos.lat, pos.lng);
-    });
-
-    document.getElementById("latitude").value = lat.toFixed(6);
-    document.getElementById("longitude").value = lng.toFixed(6);
-
-    var display = label || (lat.toFixed(4) + ", " + lng.toFixed(4));
-    document.getElementById("selected-location-text").textContent = display;
-    document.getElementById("selected-location").classList.remove("hidden");
-
-    updateChecklist();
-  }
-
-  function updateLocationFields(lat, lng, name) {
-    document.getElementById("latitude").value = lat.toFixed(6);
-    document.getElementById("longitude").value = lng.toFixed(6);
-    if (name) {
-      document.getElementById("location").value = name;
-      document.getElementById("selected-location-text").textContent = name + " (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")";
+  function onPickerChange(locs) {
+    if (locs.length > 0) {
+      latitudeInput.value = locs[0].latitude.toFixed(6);
+      longitudeInput.value = locs[0].longitude.toFixed(6);
     } else {
-      document.getElementById("selected-location-text").textContent = lat.toFixed(4) + ", " + lng.toFixed(4);
+      latitudeInput.value = "";
+      longitudeInput.value = "";
     }
-    document.getElementById("selected-location").classList.remove("hidden");
+    clearAllBtn.classList.toggle("hidden", locs.length === 0);
+    renderLocationChips(chipContainer, locs, {
+      onRemove: function (i) { picker.remove(i); },
+      onFocus: function (i) { picker.focus(i); }
+    });
     updateChecklist();
   }
 
-  // Click on map to pin
+  var picker = createMultiLocationPicker(L, createMap, { onChange: onPickerChange });
+  onPickerChange([]); // initial render
+
+  function addPinFromMapClick(lat, lng) {
+    var added = picker.add({ latitude: lat, longitude: lng, label: null });
+    if (!added) return;
+    // Reverse geocode this pin so the chip shows a readable label and
+    // (if the user hasn't typed one yet) the "Location Name" input is
+    // populated from the first pin.
+    reverseGeocode(lat, lng, picker.count() - 1);
+  }
+
+  // Click on map to add a pin
   createMap.on("click", function (e) {
-    setPin(e.latlng.lat, e.latlng.lng, null);
-    reverseGeocode(e.latlng.lat, e.latlng.lng);
+    addPinFromMapClick(e.latlng.lat, e.latlng.lng);
   });
 
-  // Clear location
-  document.getElementById("clear-location").addEventListener("click", function () {
-    if (pinMarker) createMap.removeLayer(pinMarker);
-    pinMarker = null;
-    document.getElementById("latitude").value = "";
-    document.getElementById("longitude").value = "";
-    document.getElementById("location").value = "";
-    document.getElementById("selected-location").classList.add("hidden");
-    updateChecklist();
+  // Clear all locations
+  clearAllBtn.addEventListener("click", function () {
+    picker.clear();
+    locationNameInput.value = "";
   });
 
   // ─── Geocoding (Nominatim / OpenStreetMap) ───
@@ -451,9 +448,12 @@
                   div.addEventListener("click", function () {
                     var lat = parseFloat(item.lat);
                     var lon = parseFloat(item.lon);
+                    var shortLabel = item.display_name.split(",").slice(0, 2).join(",").trim();
                     createMap.setView([lat, lon], 16);
-                    setPin(lat, lon, item.display_name.split(",").slice(0, 2).join(","));
-                    document.getElementById("location").value = item.display_name.split(",").slice(0, 2).join(",").trim();
+                    var added = picker.add({ latitude: lat, longitude: lon, label: shortLabel });
+                    if (added && picker.count() === 1 && !locationNameInput.value.trim()) {
+                      locationNameInput.value = shortLabel;
+                    }
                     searchInput.value = item.display_name.split(",").slice(0, 3).join(",");
                     searchResults.classList.add("hidden");
                   });
@@ -475,16 +475,24 @@
     }
   });
 
-  // Reverse geocode when clicking on map
-  function reverseGeocode(lat, lng) {
+  // Reverse geocode a pin so its chip shows a readable label. For the very
+  // first pin, also populate the "Location Name" input (the user can still
+  // overwrite it) so single-location stories behave the same as before.
+  function reverseGeocode(lat, lng, pinIndex) {
     fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lng + "&zoom=16")
             .then(function (r) { return r.json(); })
             .then(function (data) {
-              if (data && data.display_name) {
-                var shortName = data.display_name.split(",").slice(0, 3).join(",").trim();
-                var locationName = data.display_name.split(",").slice(0, 2).join(",").trim();
-                document.getElementById("location").value = locationName;
-                document.getElementById("selected-location-text").textContent = shortName + " (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")";
+              if (!data || !data.display_name) return;
+              var locationName = data.display_name.split(",").slice(0, 2).join(",").trim();
+              if (typeof pinIndex === "number") {
+                picker.setLabel(pinIndex, locationName);
+                renderLocationChips(chipContainer, picker.getLocations(), {
+                  onRemove: function (i) { picker.remove(i); },
+                  onFocus: function (i) { picker.focus(i); }
+                });
+              }
+              if (pinIndex === 0 && !locationNameInput.value.trim()) {
+                locationNameInput.value = locationName;
               }
             })
             .catch(function () { /* silent fail */ });
@@ -1169,6 +1177,7 @@
     }
 
     var isAnonymous = document.getElementById("is-anonymous").value === "true";
+    var pickerLocations = picker.getLocations();
 
     var payload = {
       title: title,
@@ -1181,6 +1190,13 @@
       date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null,
       is_anonymous: isAnonymous
     };
+
+    // Only send the locations array for multi-location stories. Single-pin
+    // stories continue to use the legacy latitude/longitude/place_name shape
+    // for backwards compatibility with existing list/detail rendering.
+    if (pickerLocations.length > 1) {
+      payload.locations = pickerLocations;
+    }
 
     setSubmittingState(true, "Creating Story...");
 

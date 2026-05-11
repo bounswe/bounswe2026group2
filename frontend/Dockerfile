@@ -31,6 +31,8 @@ COPY tags.js /usr/share/nginx/html/tags.js
 COPY search-filters.js /usr/share/nginx/html/search-filters.js
 COPY story-edit.html /usr/share/nginx/html/story-edit.html
 COPY story-transcript.js /usr/share/nginx/html/story-transcript.js
+COPY anonymous.js /usr/share/nginx/html/anonymous.js
+COPY multi-location.js /usr/share/nginx/html/multi-location.js
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 EXPOSE 80
