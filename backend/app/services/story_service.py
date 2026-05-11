@@ -607,6 +607,7 @@ async def upload_media_for_story(
             detail="Failed to upload media to storage",
         )
 
+    transcript = payload.transcript if payload.media_type == MediaType.AUDIO else None
     media = MediaFile(
         story_id=story_id,
         bucket_name=bucket_name,
@@ -618,6 +619,7 @@ async def upload_media_for_story(
         sort_order=payload.sort_order,
         alt_text=payload.alt_text,
         caption=payload.caption,
+        transcript=transcript,
     )
 
     try:
@@ -635,7 +637,7 @@ async def upload_media_for_story(
             detail="Failed to persist media metadata",
         )
 
-    if payload.media_type == MediaType.AUDIO and background_tasks is not None:
+    if payload.media_type == MediaType.AUDIO and transcript is None and background_tasks is not None:
         background_tasks.add_task(
             transcribe_media_file,
             media_file_id=media.id,

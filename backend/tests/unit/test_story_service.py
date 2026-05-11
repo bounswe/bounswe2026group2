@@ -367,6 +367,65 @@ class TestUploadMediaForStoryService:
         assert task.kwargs["content"] == b"audio-bytes"
         assert task.kwargs["mime_type"] == "audio/webm"
 
+    async def test_upload_audio_with_transcript_persists_and_skips_background_transcription(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO, transcript="  Reviewed transcript  ")
+        file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm")
+        background_tasks = BackgroundTasks()
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(
+                db,
+                story_id,
+                file,
+                payload,
+                background_tasks=background_tasks,
+            )
+
+        assert result.media.media_type == MediaType.AUDIO
+        assert result.media.transcript == "Reviewed transcript"
+        assert background_tasks.tasks == []
+
+    async def test_upload_audio_with_blank_transcript_queues_background_transcription(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO, transcript="   ")
+        file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm")
+        background_tasks = BackgroundTasks()
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(
+                db,
+                story_id,
+                file,
+                payload,
+                background_tasks=background_tasks,
+            )
+
+        assert result.media.transcript is None
+        assert len(background_tasks.tasks) == 1
+
     async def test_upload_image_does_not_queue_background_transcription(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id)
