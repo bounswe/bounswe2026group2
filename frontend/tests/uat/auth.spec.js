@@ -68,6 +68,16 @@ test.describe('TC_AUTH_2 — Google OAuth Login', () => {
   const FAKE_TOKEN = 'test.jwt.token';
 
   test('logs in via Google OAuth and lands on the map', async ({ page }) => {
+    // map.html calls GET /auth/me on load; a 401 would remove the token from
+    // localStorage before we can assert it.  Return a mock user to prevent that.
+    await page.route('**/auth/me', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'test-id', username: 'testuser', email: 'testuser@example.com' }),
+      });
+    });
+
     // ── Step 1: Open the login page ─────────────────────────────────────────
     await page.goto('/index.html');
 
