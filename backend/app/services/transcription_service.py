@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import uuid
-from functools import lru_cache
 from tempfile import NamedTemporaryFile
 
 from fastapi import UploadFile, status
@@ -100,34 +99,32 @@ async def _transcribe_with_whisper(
     )
 
 
-@lru_cache(maxsize=1)
-def _load_whisper_model():
-    try:
-        from faster_whisper import WhisperModel
-    except ImportError as exc:
-        raise RuntimeError("faster-whisper is not installed") from exc
-
-    return WhisperModel(
-        settings.TRANSCRIPTION_MODEL,
-        device=settings.TRANSCRIPTION_DEVICE,
-        compute_type=settings.TRANSCRIPTION_COMPUTE_TYPE,
-    )
-
-
 def _transcribe_with_whisper_sync(
     *,
     filename: str,
     content: bytes,
     mime_type: str | None,
 ) -> str | None:
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as exc:
+        raise RuntimeError("faster-whisper is not installed") from exc
+
     suffix = os.path.splitext(filename)[1] or ".audio"
     with NamedTemporaryFile(suffix=suffix, delete=True) as temp_audio:
         temp_audio.write(content)
         temp_audio.flush()
 
-        model = _load_whisper_model()
-        segments, _info = model.transcribe(temp_audio.name, beam_size=5)
-        transcript = " ".join(segment.text.strip() for segment in segments if getattr(segment, "text", "").strip())
+        model = WhisperModel(
+            settings.TRANSCRIPTION_MODEL,
+            device=settings.TRANSCRIPTION_DEVICE,
+            compute_type=settings.TRANSCRIPTION_COMPUTE_TYPE,
+        )
+        try:
+            segments, _info = model.transcribe(temp_audio.name, beam_size=5)
+            transcript = " ".join(segment.text.strip() for segment in segments if getattr(segment, "text", "").strip())
+        finally:
+            del model
 
     if not transcript:
         logger.warning("Whisper transcription for %s returned no text", filename)
