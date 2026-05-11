@@ -222,6 +222,29 @@
 
               <audio id="recording-audio-preview" class="mt-4 hidden w-full" controls></audio>
 
+              <div id="recording-transcript-panel" class="mt-4 hidden rounded-xl border border-border bg-white/90 px-4 py-3">
+                <label for="recording-transcript-draft" class="block text-sm font-semibold text-textmain">Transcript</label>
+                <p class="mt-1 text-xs leading-5 text-textmuted">
+                  This process may take some time.
+                </p>
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <p id="recording-transcript-status" class="hidden text-xs font-semibold" role="status" aria-live="polite"></p>
+                  <button
+                    type="button"
+                    id="btn-retry-transcription"
+                    class="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-textmain transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Retry transcription
+                  </button>
+                </div>
+                <textarea
+                  id="recording-transcript-draft"
+                  rows="4"
+                  class="mt-2 w-full resize-y rounded-xl border border-border bg-white px-3 py-2 text-sm leading-6 text-textmain shadow-sm focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder="Transcript appears here after the server responds, or type your own."
+                ></textarea>
+              </div>
+
               <div class="mt-4 grid gap-2 sm:grid-cols-3">
                 <button type="button" id="btn-start-recording" class="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95">
                   Start
@@ -641,9 +664,95 @@
     }
   }
 
+  var transcriptionPreviewSeq = 0;
+
+  function setRecordingTranscriptStatus(message, tone) {
+    var el = document.getElementById("recording-transcript-status");
+    if (!el) return;
+    if (!message) {
+      el.classList.add("hidden");
+      el.textContent = "";
+      el.classList.remove("text-textmuted", "text-amber-800", "text-red-700");
+      return;
+    }
+    el.classList.remove("hidden");
+    el.textContent = message;
+    el.classList.remove("text-textmuted", "text-amber-800", "text-red-700");
+    if (tone === "error") {
+      el.classList.add("text-red-700");
+    } else if (tone === "warn") {
+      el.classList.add("text-amber-800");
+    } else {
+      el.classList.add("text-textmuted");
+    }
+  }
+
+  function setRetryTranscriptionVisible(visible) {
+    var btn = document.getElementById("btn-retry-transcription");
+    if (!btn) return;
+    btn.classList.toggle("hidden", !visible);
+  }
+
+  async function fetchTranscriptionPreviewForRecordedFile(file) {
+    transcriptionPreviewSeq++;
+    var seq = transcriptionPreviewSeq;
+    var textarea = document.getElementById("recording-transcript-draft");
+    setRecordingTranscriptStatus("Transcribing…", "info");
+    setRetryTranscriptionVisible(false);
+    if (textarea) {
+      textarea.disabled = true;
+    }
+    try {
+      var formData = new FormData();
+      formData.append("file", file, file.name || "recording.webm");
+      var res = await authFetch(API_BASE + "/transcription/preview", {
+        method: "POST",
+        body: formData
+      });
+      if (seq !== transcriptionPreviewSeq) {
+        return;
+      }
+      if (!res.ok) {
+        var detail = await readErrorMessage(res, "Could not transcribe this recording.");
+        if (res.status === 401) {
+          setRecordingTranscriptStatus("Not authenticated (401). Please log in again.", "error");
+        } else {
+          setRecordingTranscriptStatus("Transcription failed (" + res.status + "): " + detail, "error");
+        }
+        setRetryTranscriptionVisible(true);
+        return;
+      }
+      var data = await res.json();
+      if (seq !== transcriptionPreviewSeq) {
+        return;
+      }
+      var t = data && data.transcript;
+      if (typeof t === "string" && t.trim().length > 0) {
+        if (textarea) {
+          textarea.value = t;
+        }
+        setRecordingTranscriptStatus("Transcript from server—you can edit below.", "info");
+      } else {
+        setRecordingTranscriptStatus("No text was detected in this recording. You can type your own transcript.", "warn");
+      }
+    } catch (err) {
+      if (seq !== transcriptionPreviewSeq) {
+        return;
+      }
+      setRecordingTranscriptStatus("Network error while transcribing. Check your connection and try recording again.", "error");
+      setRetryTranscriptionVisible(true);
+    } finally {
+      if (seq === transcriptionPreviewSeq && textarea) {
+        textarea.disabled = false;
+      }
+    }
+  }
+
   function clearRecordingPreview() {
     var audioPreview = document.getElementById("recording-audio-preview");
 
+    transcriptionPreviewSeq++;
+    transcriptionPreviewSeq++;
     if (recordingPreviewUrl) {
       URL.revokeObjectURL(recordingPreviewUrl);
       recordingPreviewUrl = null;
@@ -651,6 +760,24 @@
 
     audioPreview.removeAttribute("src");
     audioPreview.classList.add("hidden");
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptPanel) transcriptPanel.classList.add("hidden");
+    if (transcriptDraft) {
+      transcriptDraft.value = "";
+      transcriptDraft.disabled = false;
+    }
+    setRecordingTranscriptStatus("", null);
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptPanel) transcriptPanel.classList.add("hidden");
+    if (transcriptDraft) {
+      transcriptDraft.value = "";
+      transcriptDraft.disabled = false;
+    }
+    setRecordingTranscriptStatus("", null);
   }
 
   function showRecordedPreview(file) {
@@ -660,6 +787,12 @@
     recordingPreviewUrl = URL.createObjectURL(file);
     audioPreview.src = recordingPreviewUrl;
     audioPreview.classList.remove("hidden");
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptDraft) transcriptDraft.value = "";
+    if (transcriptPanel) transcriptPanel.classList.remove("hidden");
+    setRetryTranscriptionVisible(true);
   }
 
   async function startRecording() {
@@ -713,6 +846,8 @@
         updateFileList();
         setStartRecordingLabel("Record Again");
         setRecordingStatus("Recording ready. Preview it here, then publish the story to upload it.", false);
+        void fetchTranscriptionPreviewForRecordedFile(recordedFile);
+        void fetchTranscriptionPreviewForRecordedFile(recordedFile);
       });
 
       recorder.start();
@@ -757,6 +892,10 @@
   document.getElementById("btn-start-recording").addEventListener("click", startRecording);
   document.getElementById("btn-stop-recording").addEventListener("click", stopRecording);
   document.getElementById("btn-cancel-recording").addEventListener("click", cancelRecording);
+  document.getElementById("btn-retry-transcription").addEventListener("click", function () {
+    if (!recordedFiles || recordedFiles.length === 0) return;
+    void fetchTranscriptionPreviewForRecordedFile(recordedFiles[0]);
+  });
 
   // ─── Checklist Updates ───
   function updateChecklist() {

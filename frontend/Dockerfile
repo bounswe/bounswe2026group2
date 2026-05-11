@@ -2,6 +2,7 @@ FROM nginx:alpine
 
 COPY index.html /usr/share/nginx/html/index.html
 COPY forgot-password.html /usr/share/nginx/html/forgot-password.html
+COPY oauth-callback.html /usr/share/nginx/html/oauth-callback.html
 COPY register.html /usr/share/nginx/html/register.html
 COPY map.html /usr/share/nginx/html/map.html
 COPY story-create.html /usr/share/nginx/html/story-create.html
@@ -15,6 +16,8 @@ COPY profile.js /usr/share/nginx/html/profile.js
 COPY edit-profile.js /usr/share/nginx/html/edit-profile.js
 COPY login.js /usr/share/nginx/html/login.js
 COPY auth.js /usr/share/nginx/html/auth.js
+COPY oauth-button.js /usr/share/nginx/html/oauth-button.js
+COPY oauth-callback.js /usr/share/nginx/html/oauth-callback.js
 COPY config.js /usr/share/nginx/html/config.js
 COPY saves.js /usr/share/nginx/html/saves.js
 COPY saved.js /usr/share/nginx/html/saved.js

@@ -101,6 +101,23 @@ module.exports = [
         },
     },
     {
+        files: ["tests/mobile-e2e/**/*.js"],
+        languageOptions: {
+            sourceType: "commonjs",
+            globals: {
+                require: "readonly",
+                exports: "readonly",
+                module: "readonly",
+                process: "readonly",
+                __dirname: "readonly",
+                describe: "readonly",
+                it: "readonly",
+                expect: "readonly",
+                browser: "readonly",
+            },
+        },
+    },
+    {
         files: ["**/*.mjs"],
         languageOptions: {
             sourceType: "module",
