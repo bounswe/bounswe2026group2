@@ -228,6 +228,16 @@ class TestStorySearchByPlaceNameFlow:
         assert data["stories"][0]["title"] == "Istanbul Story"
         assert data["stories"][0]["place_name"] == "Istanbul"
 
+    async def test_search_q_returns_matching_story_content(self, client):
+        await self._seed_stories(client)
+
+        resp = await client.get("/stories/search?q=Content%20about%20Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Istanbul Story"
+
     async def test_search_excludes_non_matching_place(self, client):
         await self._seed_stories(client)
 
@@ -241,6 +251,15 @@ class TestStorySearchByPlaceNameFlow:
         await self._seed_stories(client)
 
         resp = await client.get("/stories/search?place_name=Trabzon")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"stories": [], "total": 0}
+
+    async def test_search_q_no_match_returns_empty(self, client):
+        await self._seed_stories(client)
+
+        resp = await client.get("/stories/search?q=Trabzon")
 
         assert resp.status_code == 200
         data = resp.json()
