@@ -1,7 +1,7 @@
 """Add story_locations table and backfill from existing story lat/lng.
 
 Revision ID: 20260510_0018
-Revises: 20260510_0017
+Revises: 20260510_0019
 Create Date: 2026-05-10 00:00:00
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "20260510_0018"
-down_revision: Union[str, Sequence[str], None] = "20260510_0017"
+down_revision: Union[str, Sequence[str], None] = "20260510_0019"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
