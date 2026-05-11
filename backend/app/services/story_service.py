@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import and_, exists, func, nulls_last, or_, select
+from sqlalchemy import and_, case, exists, func, nulls_last, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -63,6 +63,44 @@ def _apply_tag_relevance_filter(stmt, tag_names: list[str]):
         .where(Tag.name.in_(tag_names))
         .group_by(Story.id, User.username)
         .order_by(tag_match_count.desc(), Story.created_at.desc())
+    )
+
+
+def _apply_hybrid_search_filter(stmt, search_query: str):
+    normalized_query = search_query.strip().lower()
+    query_pattern = f"%{normalized_query}%"
+    tag_score = func.coalesce(
+        func.max(
+            case(
+                (func.lower(Tag.name) == normalized_query, 30),
+                (Tag.name.ilike(query_pattern), 15),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    text_score = (
+        case((Story.title.ilike(query_pattern), 20), else_=0)
+        + case((Story.summary.ilike(query_pattern), 12), else_=0)
+        + case((Story.content.ilike(query_pattern), 8), else_=0)
+        + case((Story.place_name.ilike(query_pattern), 10), else_=0)
+    )
+    search_score = tag_score + text_score
+
+    return (
+        stmt.outerjoin(story_tags_table, story_tags_table.c.story_id == Story.id)
+        .outerjoin(Tag, Tag.id == story_tags_table.c.tag_id)
+        .where(
+            or_(
+                Story.title.ilike(query_pattern),
+                Story.summary.ilike(query_pattern),
+                Story.content.ilike(query_pattern),
+                Story.place_name.ilike(query_pattern),
+                Tag.name.ilike(query_pattern),
+            )
+        )
+        .group_by(Story.id, User.username)
+        .order_by(search_score.desc(), Story.created_at.desc())
     )
 
 
@@ -254,7 +292,8 @@ async def list_available_stories(
 
 async def search_available_stories_by_place(
     db: AsyncSession,
-    place_name: str,
+    place_name: str | None = None,
+    search_query: str | None = None,
     query_start: date | None = None,
     query_end: date | None = None,
     tags: list[str] | None = None,
@@ -268,9 +307,13 @@ async def search_available_stories_by_place(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
             Story.deleted_at.is_(None),
-            Story.place_name.ilike(f"%{place_name}%"),
         )
     )
+
+    if search_query is not None:
+        stmt = _apply_hybrid_search_filter(stmt, search_query)
+    elif place_name is not None:
+        stmt = stmt.where(Story.place_name.ilike(f"%{place_name}%"))
 
     if query_start is not None and query_end is not None:
         stmt = stmt.where(
@@ -280,9 +323,11 @@ async def search_available_stories_by_place(
             Story.date_end >= query_start,
         )
 
-    if normalized_tags:
+    if search_query is not None and normalized_tags:
+        stmt = stmt.where(Tag.name.in_(normalized_tags))
+    elif normalized_tags:
         stmt = _apply_tag_relevance_filter(stmt, normalized_tags)
-    else:
+    elif search_query is None:
         stmt = stmt.order_by(Story.created_at.desc())
 
     result = await db.execute(stmt)

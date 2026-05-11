@@ -211,8 +211,7 @@ async def search_stories(
             detail=exc.errors(include_context=False, include_url=False),
         )
 
-    search_term = q or place_name
-    if search_term is None:
+    if q is None and place_name is None:
         raise HTTPException(
             status_code=422,
             detail="Either q or place_name is required",
@@ -220,7 +219,8 @@ async def search_stories(
 
     return await search_available_stories_by_place(
         db,
-        search_term,
+        place_name=place_name,
+        search_query=q,
         query_start=normalized_query_start,
         query_end=normalized_query_end,
         tags=tags,

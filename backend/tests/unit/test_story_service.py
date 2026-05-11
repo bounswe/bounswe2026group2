@@ -283,6 +283,26 @@ class TestSearchAvailableStoriesByPlaceService:
         assert "stories.date_start <=" in sql
         assert "stories.date_end >=" in sql
 
+    async def test_general_search_query_includes_story_text_place_and_tag_matching(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, search_query="gecek")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LEFT OUTER JOIN story_tags" in sql
+        assert "LEFT OUTER JOIN tags" in sql
+        assert "stories.title" in sql
+        assert "stories.summary" in sql
+        assert "stories.content" in sql
+        assert "stories.place_name" in sql
+        assert "tags.name" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY" in sql
+        assert "stories.created_at DESC" in sql
+
     async def test_search_query_includes_tag_or_filter_and_relevance_sorting_when_tags_provided(self):
         db = AsyncMock()
         db.execute.return_value.all = lambda: []
