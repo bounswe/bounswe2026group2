@@ -1168,12 +1168,13 @@ class TestCreateStoryWithLocationService:
             SimpleNamespace(scalar_one=lambda: 0),
         ]
 
-        result = await create_story_with_location(db, current_user, payload)
+        with patch("app.services.story_service.check_and_award_story_badges", new_callable=AsyncMock):
+            result = await create_story_with_location(db, current_user, payload)
 
         # Only the Story is added; no auto-created StoryLocation for an explicit empty list
         assert result.title == "New Story"
         assert db.add.call_count == 1
-        db.commit.assert_awaited_once()
+        assert db.commit.await_count == 2
         db.refresh.assert_not_awaited()
 
     async def test_create_story_rejects_missing_place_name(self):
