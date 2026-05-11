@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from app.db.enums import UserRole
+from app.db.enums import BadgeRuleType, UserRole
 from app.models.story import StoryResponse
 
 
@@ -57,10 +57,35 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BadgeResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str
+    icon_key: str
+    rule_type: BadgeRuleType
+    awarded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class UserProfileResponse(UserResponse):
     bio: str | None
     location: str | None
     avatar_url: str | None
+    badges: list[BadgeResponse] = Field(default_factory=list)
+
+
+class UserPublicProfileResponse(BaseModel):
+    id: uuid.UUID
+    username: str
+    display_name: str | None
+    bio: str | None
+    location: str | None
+    avatar_url: str | None
+    badges: list[BadgeResponse] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class UserProfileUpdateRequest(BaseModel):
