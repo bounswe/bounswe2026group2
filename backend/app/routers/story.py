@@ -408,6 +408,7 @@ async def upload_story_media(
     media_type: MediaType = Form(...),
     alt_text: str | None = Form(default=None),
     caption: str | None = Form(default=None),
+    transcript: str | None = Form(default=None),
     sort_order: int = Form(default=0),
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -416,6 +417,7 @@ async def upload_story_media(
         media_type=media_type,
         alt_text=alt_text,
         caption=caption,
+        transcript=transcript,
         sort_order=sort_order,
     )
     return await upload_media_for_story(

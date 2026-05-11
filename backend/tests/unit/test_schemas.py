@@ -271,11 +271,23 @@ class TestMediaUploadRequestSchema:
             media_type=MediaType.AUDIO,
             alt_text="A sound clip",
             caption="Recording from 1920",
+            transcript="Reviewed transcript",
             sort_order=3,
         )
         assert req.alt_text == "A sound clip"
         assert req.caption == "Recording from 1920"
+        assert req.transcript == "Reviewed transcript"
         assert req.sort_order == 3
+
+    def test_trims_transcript(self):
+        req = MediaUploadRequest(media_type=MediaType.AUDIO, transcript="  Reviewed transcript  ")
+
+        assert req.transcript == "Reviewed transcript"
+
+    def test_normalizes_whitespace_only_transcript_to_none(self):
+        req = MediaUploadRequest(media_type=MediaType.AUDIO, transcript="   ")
+
+        assert req.transcript is None
 
     def test_rejects_negative_sort_order(self):
         with pytest.raises(ValidationError):

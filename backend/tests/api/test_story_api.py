@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import func, select
@@ -299,6 +300,55 @@ class TestStoryMediaUploadAPI:
 
         assert resp.status_code == 422
         assert "Unsupported mime type" in resp.json()["detail"]
+
+    async def test_upload_audio_media_with_transcript_persists_and_skips_background_transcription(
+        self, client, db_session, monkeypatch
+    ):
+        token = await self._create_user_and_token(client)
+
+        user = User(
+            username="storyowner3",
+            email="storyowner3@example.com",
+            password_hash=hash_password("StoryOwner3!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Story with transcripted audio",
+            summary="summary",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+        )
+        db_session.add(story)
+        await db_session.commit()
+
+        monkeypatch.setattr("app.services.story_service.upload_bytes", lambda **kwargs: None)
+        transcribe_media_file = AsyncMock()
+        monkeypatch.setattr("app.services.story_service.transcribe_media_file", transcribe_media_file)
+
+        resp = await client.post(
+            f"/stories/{story.id}/media",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "media_type": "audio",
+                "transcript": "  Reviewed transcript  ",
+                "sort_order": "1",
+            },
+            files={"file": ("audio.webm", b"audio-bytes", "audio/webm")},
+        )
+
+        assert resp.status_code == 201
+        media = resp.json()["media"]
+        assert media["media_type"] == "audio"
+        assert media["transcript"] == "Reviewed transcript"
+
+        result = await db_session.execute(select(MediaFile).where(MediaFile.id == uuid.UUID(media["id"])))
+        persisted_media = result.scalar_one()
+        assert persisted_media.transcript == "Reviewed transcript"
+        transcribe_media_file.assert_not_awaited()
 
 
 @pytest.mark.asyncio

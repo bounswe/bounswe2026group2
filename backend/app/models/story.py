@@ -2,9 +2,16 @@ import uuid
 from datetime import date, datetime
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.db.enums import DatePrecision, MediaType, ReportReason, ReportStatus, StoryStatus, StoryVisibility
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 class StoryDateInput(BaseModel):
@@ -203,7 +210,13 @@ class MediaUploadRequest(BaseModel):
     media_type: MediaType
     alt_text: str | None = Field(default=None, max_length=500)
     caption: str | None = Field(default=None, max_length=500)
+    transcript: str | None = None
     sort_order: int = Field(default=0, ge=0)
+
+    @field_validator("transcript", mode="before")
+    @classmethod
+    def normalize_transcript(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
 
 
 class MediaFileResponse(BaseModel):
