@@ -25,6 +25,7 @@ from app.services.story_service import (
     create_story_with_location,
     delete_comment_for_story,
     get_nearby_stories,
+    get_timeline_stories,
     get_story_detail_by_id,
     get_story_like_summary,
     like_story,
@@ -1305,6 +1306,100 @@ class TestGetNearbyStoriesService:
 
         assert "ORDER BY" in sql
         assert "DESC" not in sql
+
+
+@pytest.mark.asyncio
+class TestGetTimelineStoriesService:
+    async def test_returns_stories_with_coord_filter(self):
+        story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "timelineauthor")]
+
+        result = await get_timeline_stories(db, center_lat=41.0082, center_lng=28.9784, radius_km=5.0)
+
+        assert result.total == 1
+        assert result.stories[0].id == story.id
+        db.execute.assert_awaited_once()
+
+    async def test_returns_stories_with_place_name_filter(self):
+        story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "timelineauthor")]
+
+        result = await get_timeline_stories(db, place_name="Istanbul")
+
+        assert result.total == 1
+        db.execute.assert_awaited_once()
+
+    async def test_returns_empty_response_when_no_matches(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await get_timeline_stories(db, place_name="Nowhere")
+
+        assert result.total == 0
+        assert result.stories == []
+
+    async def test_query_orders_by_date_start_asc_nulls_last(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="Istanbul")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "ORDER BY" in sql
+        assert "stories.date_start" in sql
+        assert "NULLS LAST" in sql
+
+    async def test_coord_filter_uses_haversine(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, center_lat=41.0, center_lng=29.0, radius_km=5.0)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "asin" in sql
+        assert "sqrt" in sql
+
+    async def test_place_name_filter_uses_ilike(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="kadikoy")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LIKE" in sql.upper()
+
+    async def test_limit_and_offset_applied(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="Istanbul", limit=5, offset=10)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LIMIT" in sql.upper()
+        assert "OFFSET" in sql.upper()
+
+    async def test_coord_lookup_takes_priority_when_both_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, center_lat=41.0, center_lng=29.0, radius_km=5.0, place_name="Istanbul")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        # Haversine present (coord path), ILIKE absent (place_name ignored)
+        assert "asin" in sql
+        assert "LIKE" not in sql.upper()
 
 
 class TestTagNormalizationHelpers:
