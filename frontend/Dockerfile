@@ -26,6 +26,7 @@ COPY saved.js /usr/share/nginx/html/saved.js
 COPY likes.js /usr/share/nginx/html/likes.js
 COPY comments.js /usr/share/nginx/html/comments.js
 COPY recording.js /usr/share/nginx/html/recording.js
+COPY assets/ /usr/share/nginx/html/assets/
 COPY tags.js /usr/share/nginx/html/tags.js
 COPY search-filters.js /usr/share/nginx/html/search-filters.js
 COPY story-edit.html /usr/share/nginx/html/story-edit.html

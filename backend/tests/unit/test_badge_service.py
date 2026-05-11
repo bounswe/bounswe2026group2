@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.db.badge import Badge
 from app.db.enums import BadgeRuleType
 from app.services.badge_service import check_and_award_story_badges, get_user_badges
 
@@ -28,6 +29,15 @@ def _make_user_badge(user_id: uuid.UUID, badge: SimpleNamespace) -> SimpleNamesp
     )
 
 
+class TestBadgeModel:
+    def test_rule_type_uses_database_values(self):
+        assert Badge.__table__.c.rule_type.type.enums == [
+            "first_story",
+            "story_milestone_5",
+            "story_milestone_10",
+        ]
+
+
 @pytest.mark.asyncio
 class TestCheckAndAwardStoryBadges:
     async def test_no_badges_awarded_when_story_count_is_zero(self):
@@ -38,8 +48,9 @@ class TestCheckAndAwardStoryBadges:
             SimpleNamespace(all=lambda: []),  # owned badge_ids
         ]
 
-        await check_and_award_story_badges(db, user_id)
+        result = await check_and_award_story_badges(db, user_id)
 
+        assert result is None
         db.add.assert_not_called()
 
     async def test_first_story_badge_awarded_on_first_story(self):
@@ -54,8 +65,9 @@ class TestCheckAndAwardStoryBadges:
         ]
         db.add = MagicMock()
 
-        await check_and_award_story_badges(db, user_id)
+        result = await check_and_award_story_badges(db, user_id)
 
+        assert result == badge.name
         assert db.add.call_count == 1
         awarded = db.add.call_args.args[0]
         assert awarded.user_id == user_id
@@ -75,8 +87,9 @@ class TestCheckAndAwardStoryBadges:
         ]
         db.add = MagicMock()
 
-        await check_and_award_story_badges(db, user_id)
+        result = await check_and_award_story_badges(db, user_id)
 
+        assert result == milestone_badge.name
         assert db.add.call_count == 1
         awarded = db.add.call_args.args[0]
         assert awarded.badge_id == milestone_badge.id
@@ -97,8 +110,9 @@ class TestCheckAndAwardStoryBadges:
         ]
         db.add = MagicMock()
 
-        await check_and_award_story_badges(db, user_id)
+        result = await check_and_award_story_badges(db, user_id)
 
+        assert result == milestone_10_badge.name
         assert db.add.call_count == 1
         awarded = db.add.call_args.args[0]
         assert awarded.badge_id == milestone_10_badge.id
@@ -115,8 +129,9 @@ class TestCheckAndAwardStoryBadges:
         ]
         db.add = MagicMock()
 
-        await check_and_award_story_badges(db, user_id)
+        result = await check_and_award_story_badges(db, user_id)
 
+        assert result is None
         db.add.assert_not_called()
 
     async def test_no_badge_awarded_when_badge_row_missing_from_db(self):
@@ -130,8 +145,9 @@ class TestCheckAndAwardStoryBadges:
         ]
         db.add = MagicMock()
 
-        await check_and_award_story_badges(db, user_id)
+        result = await check_and_award_story_badges(db, user_id)
 
+        assert result is None
         db.add.assert_not_called()
 
     async def test_all_three_badges_awarded_at_ten_stories_when_none_owned(self):
@@ -148,8 +164,9 @@ class TestCheckAndAwardStoryBadges:
         ]
         db.add = MagicMock()
 
-        await check_and_award_story_badges(db, user_id)
+        result = await check_and_award_story_badges(db, user_id)
 
+        assert result == b10.name
         assert db.add.call_count == 3
         awarded_badge_ids = {c.args[0].badge_id for c in db.add.call_args_list}
         assert awarded_badge_ids == {b1.id, b5.id, b10.id}
