@@ -181,7 +181,7 @@ class TestStoryLocationFlow:
 
         # Search bounds that only cover Izmir (secondary location), not Istanbul (primary)
         search_resp = await client.get(
-            "/stories/search",
+            "/stories",
             params={
                 "min_lat": 37.0,
                 "max_lat": 39.5,
