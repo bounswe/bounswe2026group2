@@ -41,8 +41,8 @@ from app.services.storage import (
     get_bucket_for_media_type,
     upload_bytes,
 )
-from app.services.transcription_service import transcribe_media_file
 from app.services.tag_service import normalize_tag_list
+from app.services.transcription_service import transcribe_media_file
 
 
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
@@ -50,15 +50,17 @@ def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     return StoryListResponse(stories=stories, total=len(stories))
 
 
-def _apply_tag_or_filter(stmt, tag_names: list[str]):
+def _apply_tag_relevance_filter(stmt, tag_names: list[str]):
     if not tag_names:
         return stmt
 
+    tag_match_count = func.count(Tag.id)
     return (
         stmt.join(story_tags_table, story_tags_table.c.story_id == Story.id)
         .join(Tag, Tag.id == story_tags_table.c.tag_id)
         .where(Tag.name.in_(tag_names))
-        .distinct()
+        .group_by(Story.id, User.username)
+        .order_by(tag_match_count.desc(), Story.created_at.desc())
     )
 
 
@@ -204,9 +206,7 @@ async def list_available_stories(
             Story.visibility == StoryVisibility.PUBLIC,
             Story.deleted_at.is_(None),
         )
-        .order_by(Story.created_at.desc())
     )
-    stmt = _apply_tag_or_filter(stmt, normalized_tags)
 
     if all(v is not None for v in (min_lat, max_lat, min_lng, max_lng)):
         stmt = stmt.where(
@@ -225,6 +225,11 @@ async def list_available_stories(
             Story.date_start <= query_end,
             Story.date_end >= query_start,
         )
+
+    if normalized_tags:
+        stmt = _apply_tag_relevance_filter(stmt, normalized_tags)
+    else:
+        stmt = stmt.order_by(Story.created_at.desc())
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -250,9 +255,7 @@ async def search_available_stories_by_place(
             Story.deleted_at.is_(None),
             Story.place_name.ilike(f"%{place_name}%"),
         )
-        .order_by(Story.created_at.desc())
     )
-    stmt = _apply_tag_or_filter(stmt, normalized_tags)
 
     if query_start is not None and query_end is not None:
         stmt = stmt.where(
@@ -261,6 +264,11 @@ async def search_available_stories_by_place(
             Story.date_start <= query_end,
             Story.date_end >= query_start,
         )
+
+    if normalized_tags:
+        stmt = _apply_tag_relevance_filter(stmt, normalized_tags)
+    else:
+        stmt = stmt.order_by(Story.created_at.desc())
 
     result = await db.execute(stmt)
     rows = result.all()
