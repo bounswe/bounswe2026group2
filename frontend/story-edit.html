@@ -54,7 +54,8 @@
   </style>
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
-<main class="w-full px-4 py-10 lg:px-8 xl:px-10 2xl:px-14">
+<div id="site-header"></div>
+<main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14">
 
   <header class="mb-10">
     <a id="back-link" href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
@@ -174,6 +175,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="config.js"></script>
 <script src="auth.js"></script>
+<script src="site-header.js"></script>
+<script>mountSiteHeader();</script>
 <script src="tags.js"></script>
 <script src="multi-location.js"></script>
 <script>

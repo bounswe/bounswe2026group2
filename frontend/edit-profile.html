@@ -43,23 +43,8 @@
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
   
-  <!-- Top Navigation Bar -->
-  <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
-    <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
-      <div class="flex items-center gap-8">
-        <a href="map.html" class="text-2xl font-bold font-headline text-textmain tracking-tight hover:text-tertiary transition-colors">
-          Local History Map
-        </a>
-      </div>
-      <div class="flex items-center gap-3 sm:gap-4">
-        <a href="profile.html"
-          class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary bg-primary/10 text-primary shadow-sm transition hover:bg-primary/20"
-          aria-label="Open profile">
-          <span class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
-        </a>
-      </div>
-    </div>
-  </header>
+  <!-- Top Navigation Bar (rendered by site-header.js) -->
+  <div id="site-header"></div>
 
   <main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14 max-w-3xl mx-auto">
     <header class="mb-10 text-center">
@@ -155,6 +140,8 @@
 
   <script src="config.js"></script>
   <script src="auth.js"></script>
+  <script src="site-header.js"></script>
+  <script>mountSiteHeader();</script>
   <script src="edit-profile.js"></script>
 </body>
 </html>
