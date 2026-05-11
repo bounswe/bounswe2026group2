@@ -48,8 +48,8 @@ class TestCheckAndAwardStoryBadges:
 
         db = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one=lambda: 1),   # story count = 1
-            SimpleNamespace(all=lambda: []),          # no badges owned yet
+            SimpleNamespace(scalar_one=lambda: 1),  # story count = 1
+            SimpleNamespace(all=lambda: []),  # no badges owned yet
             SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [badge])),  # batch badges
         ]
         db.add = MagicMock()
@@ -91,7 +91,9 @@ class TestCheckAndAwardStoryBadges:
         db.execute.side_effect = [
             SimpleNamespace(scalar_one=lambda: 10),
             SimpleNamespace(all=lambda: [(first_badge.id,), (milestone_5_badge.id,)]),
-            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [first_badge, milestone_5_badge, milestone_10_badge])),
+            SimpleNamespace(
+                scalars=lambda: SimpleNamespace(all=lambda: [first_badge, milestone_5_badge, milestone_10_badge])
+            ),
         ]
         db.add = MagicMock()
 
