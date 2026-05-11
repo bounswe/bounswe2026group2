@@ -640,7 +640,6 @@ class TestGetStoryDetailByIdService:
         db.execute.side_effect = [
             SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
             SimpleNamespace(scalar_one=lambda: 2),  # like_count
-            SimpleNamespace(),  # UPDATE view_count
         ]
 
         result = await get_story_detail_by_id(db, story_id)
@@ -655,10 +654,10 @@ class TestGetStoryDetailByIdService:
         assert result.media_files[1].media_url.endswith("/images/stories/key.png")
         assert result.like_count == 2
         assert result.view_count == 0
-        assert db.execute.await_count == 3
-        db.commit.assert_awaited_once()
+        assert db.execute.await_count == 2
+        db.commit.assert_not_awaited()
 
-    async def test_view_count_is_incremented_on_detail_fetch(self):
+    async def test_view_count_is_incremented_when_track_view_true(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id, view_count=5, media_files=[])
 
@@ -669,12 +668,45 @@ class TestGetStoryDetailByIdService:
             SimpleNamespace(),  # UPDATE view_count
         ]
 
-        result = await get_story_detail_by_id(db, story_id)
+        result = await get_story_detail_by_id(db, story_id, viewer=None, track_view=True)
 
-        # Response shows pre-increment count; DB increment is committed
         assert result.view_count == 5
         db.commit.assert_awaited_once()
         assert db.execute.await_count == 3
+
+    async def test_view_count_not_incremented_when_track_view_false(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, view_count=5, media_files=[])
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 0),  # like_count
+        ]
+
+        result = await get_story_detail_by_id(db, story_id, viewer=None, track_view=False)
+
+        assert result.view_count == 5
+        db.commit.assert_not_awaited()
+        assert db.execute.await_count == 2
+
+    async def test_view_count_not_incremented_when_owner_views(self):
+        owner_id = uuid.uuid4()
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, user_id=owner_id, view_count=3, media_files=[])
+        owner = _make_user(id=owner_id)
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 0),  # like_count
+        ]
+
+        result = await get_story_detail_by_id(db, story_id, viewer=owner, track_view=True)
+
+        assert result.view_count == 3
+        db.commit.assert_not_awaited()
+        assert db.execute.await_count == 2
 
     async def test_raises_404_when_story_not_found(self):
         db = AsyncMock()
