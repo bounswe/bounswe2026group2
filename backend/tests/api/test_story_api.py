@@ -1432,6 +1432,170 @@ class TestStorySearchAPI:
         assert data["stories"][0]["title"] == "Istanbul Story"
         assert data["stories"][0]["place_name"] == "Istanbul"
 
+    async def test_search_by_q_uses_search_contract(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?q=Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Istanbul Story"
+        assert data["stories"][0]["place_name"] == "Istanbul"
+
+    async def test_search_by_q_matches_story_tags(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="semanticsearchauthor",
+            email="semanticsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Neighborhood Memory",
+            summary="A local city story",
+            content="Families remembered the old streets together.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+        await apply_ai_tags_to_story(db_session, story.id, ["gecekondu"])
+
+        resp = await client.get("/stories/search?q=gecek")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Neighborhood Memory"
+        assert data["stories"][0]["tags"] == ["gecekondu"]
+
+    async def test_search_by_q_matches_story_tags_with_typo(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="typosearchauthor",
+            email="typosearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Neighborhood Memory",
+            summary="A local city story",
+            content="Families remembered the old streets together.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+        await apply_ai_tags_to_story(db_session, story.id, ["gecekondu"])
+
+        resp = await client.get("/stories/search?q=gecokondi")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Neighborhood Memory"
+        assert data["stories"][0]["tags"] == ["gecekondu"]
+
+    async def test_search_by_q_matches_story_content(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="contentsearchauthor",
+            email="contentsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        matching_story = Story(
+            user_id=user.id,
+            title="Urban Memory",
+            summary="A local memory",
+            content="A story about old gecekondu streets and neighbors.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        non_matching_story = Story(
+            user_id=user.id,
+            title="Coastal Memory",
+            summary="A seaside memory",
+            content="A story about boats and sea wind.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Izmir",
+        )
+        db_session.add_all([matching_story, non_matching_story])
+        await db_session.commit()
+
+        resp = await client.get("/stories/search?q=gecek")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Urban Memory"
+
+    async def test_search_by_q_matches_story_content_with_typo(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="contenttypoauthor",
+            email="contenttypoauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Urban Memory",
+            summary="A local memory",
+            content="A story about old gecekondu streets and neighbors.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/search?q=gecokondi")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Urban Memory"
+
+    async def test_search_by_q_no_match_returns_empty(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?q=doesnotexist")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"stories": [], "total": 0}
+
     async def test_search_by_place_name_returns_only_public_published(self, client, db_session):
         await self._seed_stories(db_session)
 
@@ -1507,13 +1671,100 @@ class TestStorySearchAPI:
         assert data["total"] == 1
         assert data["stories"][0]["title"] == "Recent Izmir Story"
 
+    async def test_search_by_q_with_tags_and_date_filter_narrows_results(self, client, db_session):
+        from datetime import date
+
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="combinedsearchauthor",
+            email="combinedsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        matching_story = Story(
+            user_id=user.id,
+            title="Gecekondu Sports Story",
+            summary="A matching urban sports memory",
+            content="A gecekondu neighborhood sports story.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        wrong_tag_story = Story(
+            user_id=user.id,
+            title="Gecekondu Music Story",
+            summary="Wrong tag",
+            content="A gecekondu neighborhood music story.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        wrong_date_story = Story(
+            user_id=user.id,
+            title="Old Gecekondu Sports Story",
+            summary="Wrong date",
+            content="A gecekondu neighborhood sports story.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(1980, 1, 1),
+            date_end=date(1980, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add_all([matching_story, wrong_tag_story, wrong_date_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, matching_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, wrong_tag_story.id, ["muzik"])
+        await apply_ai_tags_to_story(db_session, wrong_date_story.id, ["spor"])
+
+        resp = await client.get(
+            "/stories/search?q=gecek&tags=spor&query_start=2020-01-01&query_end=2020-12-31&query_precision=date"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Gecekondu Sports Story"
+
     async def test_search_missing_place_name_returns_422(self, client):
         resp = await client.get("/stories/search")
 
-        assert resp.status_code == 422
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Either q or place_name is required"
+
+    async def test_search_q_takes_precedence_over_place_name(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        # q=istanbul matches the Istanbul story; place_name=Ankara would have returned
+        # the Ankara story if it took precedence. Only Istanbul results should appear.
+        resp = await client.get("/stories/search?q=istanbul&place_name=Ankara")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [s["title"] for s in data["stories"]]
+        assert "Istanbul Story" in titles
+        assert "Ankara Story" not in titles
 
     async def test_search_empty_place_name_returns_422(self, client):
         resp = await client.get("/stories/search?place_name=")
+
+        assert resp.status_code == 422
+
+    async def test_search_empty_q_returns_422(self, client):
+        resp = await client.get("/stories/search?q=")
 
         assert resp.status_code == 422
 

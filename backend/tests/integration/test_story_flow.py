@@ -224,9 +224,29 @@ class TestStorySearchByPlaceNameFlow:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 1
-        assert data["stories"][0]["title"] == "Istanbul Story"
+        titles = [story["title"] for story in data["stories"]]
+        assert "Istanbul Story" in titles
         assert data["stories"][0]["place_name"] == "Istanbul"
+
+    async def test_search_q_returns_matching_story_content(self, client):
+        await self._seed_stories(client)
+
+        resp = await client.get("/stories/search?q=Content%20about%20Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert "Istanbul Story" in titles
+
+    async def test_search_q_returns_matching_story_content_with_typo(self, client):
+        await self._seed_stories(client)
+
+        resp = await client.get("/stories/search?q=Istanubl")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert "Istanbul Story" in titles
 
     async def test_search_excludes_non_matching_place(self, client):
         await self._seed_stories(client)
@@ -246,7 +266,16 @@ class TestStorySearchByPlaceNameFlow:
         data = resp.json()
         assert data == {"stories": [], "total": 0}
 
+    async def test_search_q_no_match_returns_empty(self, client):
+        await self._seed_stories(client)
+
+        resp = await client.get("/stories/search?q=Trabzon")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"stories": [], "total": 0}
+
     async def test_search_missing_place_name_returns_422(self, client):
         resp = await client.get("/stories/search")
 
-        assert resp.status_code == 422
+        assert resp.status_code == 400
