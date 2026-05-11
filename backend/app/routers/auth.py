@@ -21,7 +21,7 @@ from app.models.user import (
 from app.services.auth_service import (
     build_google_auth_url,
     change_user_password,
-    get_user_profile,
+    get_full_user_profile,
     google_oauth_login,
     login_user,
     register_user,
@@ -119,8 +119,11 @@ async def google_callback(
         401: {"description": "Missing, invalid, or expired token"},
     },
 )
-async def me(current_user: User = Depends(get_current_user)):
-    return get_user_profile(current_user)
+async def me(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_full_user_profile(db, current_user)
 
 
 @router.patch(

@@ -32,6 +32,7 @@ from app.models.story import (
     StorySaveResponse,
     StoryUpdateRequest,
 )
+from app.services.badge_service import check_and_award_story_badges
 from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 from app.services.storage import (
     build_public_object_url,
@@ -459,6 +460,9 @@ async def create_story_with_location(
     await db.commit()
     await db.refresh(story)
 
+    await check_and_award_story_badges(db, current_user.id)
+    await db.commit()
+
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
     like_count = await _get_story_like_count(db, story.id)
     return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
@@ -607,6 +611,7 @@ async def upload_media_for_story(
             detail="Failed to upload media to storage",
         )
 
+    transcript = payload.transcript if payload.media_type == MediaType.AUDIO else None
     media = MediaFile(
         story_id=story_id,
         bucket_name=bucket_name,
@@ -618,6 +623,7 @@ async def upload_media_for_story(
         sort_order=payload.sort_order,
         alt_text=payload.alt_text,
         caption=payload.caption,
+        transcript=transcript,
     )
 
     try:
@@ -635,7 +641,7 @@ async def upload_media_for_story(
             detail="Failed to persist media metadata",
         )
 
-    if payload.media_type == MediaType.AUDIO and background_tasks is not None:
+    if payload.media_type == MediaType.AUDIO and transcript is None and background_tasks is not None:
         background_tasks.add_task(
             transcribe_media_file,
             media_file_id=media.id,
