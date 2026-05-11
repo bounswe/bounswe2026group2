@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
@@ -58,6 +59,7 @@ async def db_session():
     # Reset the schema first so stale tables from earlier runs don't survive
     # and silently bypass new columns added to the ORM models.
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
