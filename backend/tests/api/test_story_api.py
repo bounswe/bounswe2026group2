@@ -1432,6 +1432,17 @@ class TestStorySearchAPI:
         assert data["stories"][0]["title"] == "Istanbul Story"
         assert data["stories"][0]["place_name"] == "Istanbul"
 
+    async def test_search_by_q_uses_search_contract(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?q=Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Istanbul Story"
+        assert data["stories"][0]["place_name"] == "Istanbul"
+
     async def test_search_by_place_name_returns_only_public_published(self, client, db_session):
         await self._seed_stories(db_session)
 
@@ -1511,9 +1522,15 @@ class TestStorySearchAPI:
         resp = await client.get("/stories/search")
 
         assert resp.status_code == 422
+        assert resp.json()["detail"] == "Either q or place_name is required"
 
     async def test_search_empty_place_name_returns_422(self, client):
         resp = await client.get("/stories/search?place_name=")
+
+        assert resp.status_code == 422
+
+    async def test_search_empty_q_returns_422(self, client):
+        resp = await client.get("/stories/search?q=")
 
         assert resp.status_code == 422
 

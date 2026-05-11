@@ -163,18 +163,29 @@ async def list_stories(
 @router.get(
     "/search",
     response_model=StoryListResponse,
-    summary="Search stories by place name",
+    summary="Search stories",
     description=(
-        "Search published public stories by place name (case-insensitive substring match). "
+        "Search published public stories by general query (q) or legacy place_name. "
         "Optionally filter by date range using query_start/query_end/query_precision and by tags. "
         "Multiple tags use OR matching; stories matching more requested tags rank higher."
     ),
     responses={
-        422: {"description": "Validation error for place_name or date filter parameters"},
+        422: {"description": "Validation error for search, tags, or date filter parameters"},
     },
 )
 async def search_stories(
-    place_name: str = Query(min_length=1, max_length=255),
+    q: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="General search query. In this API contract step, q is accepted and uses the existing search path.",
+    ),
+    place_name: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="Legacy place-name search parameter. Kept for backward compatibility.",
+    ),
     query_start: int | str | None = Query(default=None),
     query_end: int | str | None = Query(default=None),
     query_precision: str | None = Query(default=None),
@@ -200,9 +211,16 @@ async def search_stories(
             detail=exc.errors(include_context=False, include_url=False),
         )
 
+    search_term = q or place_name
+    if search_term is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Either q or place_name is required",
+        )
+
     return await search_available_stories_by_place(
         db,
-        place_name,
+        search_term,
         query_start=normalized_query_start,
         query_end=normalized_query_end,
         tags=tags,
