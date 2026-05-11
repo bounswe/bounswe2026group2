@@ -1824,12 +1824,15 @@ class TestTimelineStoriesAPI:
 
     async def test_stories_sorted_by_date_start_asc(self, client, db_session):
         from datetime import date as date_type
+
         user = self._make_user("tlauthor3", "tl3@example.com")
         db_session.add(user)
         await db_session.flush()
 
         story_later = self._make_story(user.id, "Later Event", place_name="Uskudar", date_start=date_type(1900, 1, 1))
-        story_earlier = self._make_story(user.id, "Earlier Event", place_name="Uskudar", date_start=date_type(1800, 1, 1))
+        story_earlier = self._make_story(
+            user.id, "Earlier Event", place_name="Uskudar", date_start=date_type(1800, 1, 1)
+        )
         db_session.add_all([story_later, story_earlier])
         await db_session.commit()
 
@@ -1843,6 +1846,7 @@ class TestTimelineStoriesAPI:
 
     async def test_null_date_start_sorted_last(self, client, db_session):
         from datetime import date as date_type
+
         user = self._make_user("tlauthor4", "tl4@example.com")
         db_session.add(user)
         await db_session.flush()
