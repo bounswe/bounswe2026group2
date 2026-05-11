@@ -165,9 +165,11 @@ async def list_stories(
     response_model=StoryListResponse,
     summary="Search stories",
     description=(
-        "Search published public stories by general query (q) or legacy place_name. "
+        "Search published public stories by general query (q) across title, summary, content, place name, and tags, "
+        "or by legacy place_name. "
         "Optionally filter by date range using query_start/query_end/query_precision and by tags. "
-        "Multiple tags use OR matching; stories matching more requested tags rank higher."
+        "Multiple tags use OR matching; stories matching more requested tags rank higher. "
+        "Example: /stories/search?q=gecek"
     ),
     responses={
         422: {"description": "Validation error for search, tags, or date filter parameters"},
@@ -178,7 +180,10 @@ async def search_stories(
         default=None,
         min_length=1,
         max_length=255,
-        description="General search query. In this API contract step, q is accepted and uses the existing search path.",
+        description=(
+            "General search query matched against story title, summary, content, place name, and tags "
+            "(for example, q=gecek can match a story tagged gecekondu)."
+        ),
     ),
     place_name: str | None = Query(
         default=None,
