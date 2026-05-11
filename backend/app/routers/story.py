@@ -28,6 +28,7 @@ from app.models.story import (
     StoryUpdateRequest,
     UpdateReportStatusRequest,
 )
+from app.services.ai_tagging_system import is_ai_tagging_configured, run_ai_tagging_for_story
 from app.services.story_service import (
     create_comment_for_story,
     create_report_for_story,
@@ -65,10 +66,14 @@ router = APIRouter(prefix="/stories", tags=["stories"])
 )
 async def create_story(
     payload: StoryCreateRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await create_story_with_location(db, current_user, payload)
+    story = await create_story_with_location(db, current_user, payload)
+    if is_ai_tagging_configured():
+        background_tasks.add_task(run_ai_tagging_for_story, story.id)
+    return story
 
 
 @router.put(

@@ -1,0 +1,22 @@
+{
+  "name": "local-history-mobile-e2e",
+  "private": true,
+  "description": "Local-only Appium E2E skeleton for the Local History Story Map Android APK.",
+  "scripts": {
+    "test": "wdio run wdio.conf.js",
+    "test:smoke": "wdio run wdio.conf.js --spec specs/smoke.spec.js",
+    "appium": "appium",
+    "appium:install-driver": "appium driver install uiautomator2"
+  },
+  "devDependencies": {
+    "@wdio/cli": "^9.20.0",
+    "@wdio/junit-reporter": "^9.20.0",
+    "@wdio/local-runner": "^9.20.0",
+    "@wdio/mocha-framework": "^9.20.0",
+    "@wdio/spec-reporter": "^9.20.0",
+    "appium": "^2.19.0",
+    "appium-uiautomator2-driver": "^4.2.9",
+    "dotenv": "^17.2.3",
+    "webdriverio": "^9.20.0"
+  }
+}

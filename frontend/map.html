@@ -47,6 +47,29 @@
         }
 
         function setProfileButton(user) {
+            // Prefer avatar when available.
+            var avatarUrl = user && user.avatar_url;
+            if (avatarUrl) {
+                var avatarImg = document.getElementById("profile-button-avatar");
+                if (avatarImg) {
+                    avatarImg.src = avatarUrl;
+                    avatarImg.classList.remove("hidden");
+                }
+
+                profileButtonIcon.classList.add("hidden");
+                profileButtonInitials.textContent = "";
+                profileButtonInitials.classList.add("hidden");
+                profileButtonInitials.classList.remove("inline-flex");
+                profileButton.setAttribute("aria-label", "Open account menu for " + getProfileLabel(user));
+                return;
+            }
+
+            var avatarImg = document.getElementById("profile-button-avatar");
+            if (avatarImg) {
+                avatarImg.removeAttribute("src");
+                avatarImg.classList.add("hidden");
+            }
+
             var initials = getProfileInitials(user);
 
             if (initials) {
@@ -357,6 +380,7 @@
                     <button id="btn-profile" type="button"
                         class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
                         aria-label="Open account menu" aria-haspopup="menu" aria-expanded="false">
+                        <img id="profile-button-avatar" alt="" class="hidden h-9 w-9 rounded-full object-cover" />
                         <span id="profile-button-icon"
                             class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
                         <span id="profile-button-initials"

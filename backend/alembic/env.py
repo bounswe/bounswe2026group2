@@ -14,6 +14,7 @@ from app.db.story_comment import StoryComment  # noqa: F401
 from app.db.story_like import StoryLike  # noqa: F401
 from app.db.story_report import StoryReport  # noqa: F401
 from app.db.story_save import StorySave  # noqa: F401
+from app.db.tag import Tag  # noqa: F401
 from app.db.user import User  # noqa: F401
 
 config = context.config
