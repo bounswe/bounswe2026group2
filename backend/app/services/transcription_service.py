@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import threading
 import uuid
 from tempfile import NamedTemporaryFile
 
@@ -15,6 +16,10 @@ from app.services.ai_tagging_system import is_ai_tagging_configured, run_ai_tagg
 from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 
 logger = logging.getLogger(__name__)
+
+# Semaphore ensures at most one WhisperModel is instantiated at a time.
+# Without this, concurrent requests each load their own model, multiplying peak memory.
+_transcription_semaphore = threading.Semaphore(1)
 
 
 async def transcribe_media_file(
@@ -115,16 +120,19 @@ def _transcribe_with_whisper_sync(
         temp_audio.write(content)
         temp_audio.flush()
 
-        model = WhisperModel(
-            settings.TRANSCRIPTION_MODEL,
-            device=settings.TRANSCRIPTION_DEVICE,
-            compute_type=settings.TRANSCRIPTION_COMPUTE_TYPE,
-        )
-        try:
-            segments, _info = model.transcribe(temp_audio.name, beam_size=5)
-            transcript = " ".join(segment.text.strip() for segment in segments if getattr(segment, "text", "").strip())
-        finally:
-            del model
+        with _transcription_semaphore:
+            model = WhisperModel(
+                settings.TRANSCRIPTION_MODEL,
+                device=settings.TRANSCRIPTION_DEVICE,
+                compute_type=settings.TRANSCRIPTION_COMPUTE_TYPE,
+            )
+            try:
+                segments, _info = model.transcribe(temp_audio.name, beam_size=5)
+                transcript = " ".join(
+                    segment.text.strip() for segment in segments if getattr(segment, "text", "").strip()
+                )
+            finally:
+                del model
 
     if not transcript:
         logger.warning("Whisper transcription for %s returned no text", filename)
