@@ -325,6 +325,7 @@ class TestSearchAvailableStoriesByPlaceService:
         assert "stories.place_name" in sql
         assert "tags.name" in sql
         assert "similarity" in sql.lower()
+        assert "word_similarity" in sql.lower()
         assert "GROUP BY stories.id, users.username" in sql
         assert "ORDER BY" in sql
         assert "stories.created_at DESC" in sql

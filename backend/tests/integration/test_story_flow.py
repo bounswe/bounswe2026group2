@@ -238,6 +238,16 @@ class TestStorySearchByPlaceNameFlow:
         assert data["total"] == 1
         assert data["stories"][0]["title"] == "Istanbul Story"
 
+    async def test_search_q_returns_matching_story_content_with_typo(self, client):
+        await self._seed_stories(client)
+
+        resp = await client.get("/stories/search?q=Istanubl")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Istanbul Story"
+
     async def test_search_excludes_non_matching_place(self, client):
         await self._seed_stories(client)
 

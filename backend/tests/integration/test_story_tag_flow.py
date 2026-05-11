@@ -170,6 +170,24 @@ class TestStoryTagFlow:
         assert data["stories"][0]["id"] == story_id
         assert data["stories"][0]["tags"] == ["gecekondu"]
 
+    async def test_story_search_q_matches_tag_typo(self, client, db_session):
+        token = await self._register_and_login(client, "tagtypo", "tagtypo@example.com")
+        story_id = await self._create_story(client, token, title="Typo Tolerant Memory")
+
+        await apply_ai_tags_to_story(
+            db_session,
+            uuid.UUID(story_id),
+            ["Gecekondu"],
+        )
+
+        resp = await client.get("/stories/search?q=gecokondi")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["id"] == story_id
+        assert data["stories"][0]["tags"] == ["gecekondu"]
+
     async def test_saved_stories_returns_tags(self, client, db_session):
         author_token = await self._register_and_login(client, "tagsaveauthor", "tagsaveauthor@example.com")
         saver_token = await self._register_and_login(client, "tagsaver", "tagsaver@example.com")

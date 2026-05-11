@@ -1555,6 +1555,39 @@ class TestStorySearchAPI:
         assert data["total"] == 1
         assert data["stories"][0]["title"] == "Urban Memory"
 
+    async def test_search_by_q_matches_story_content_with_typo(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="contenttypoauthor",
+            email="contenttypoauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Urban Memory",
+            summary="A local memory",
+            content="A story about old gecekondu streets and neighbors.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/search?q=gecokondi")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Urban Memory"
+
     async def test_search_by_q_no_match_returns_empty(self, client, db_session):
         await self._seed_stories(db_session)
 
