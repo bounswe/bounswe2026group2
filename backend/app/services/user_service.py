@@ -130,6 +130,10 @@ async def get_current_user_engagement_stats(
                 .where(*story_filters)
                 .scalar_subquery()
                 .label("total_saves_received"),
+                select(func.coalesce(func.sum(Story.view_count), 0))
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_views_received"),
             )
         )
     ).one()
@@ -140,6 +144,7 @@ async def get_current_user_engagement_stats(
         total_likes_received=values["total_likes_received"],
         total_comments_received=values["total_comments_received"],
         total_saves_received=values["total_saves_received"],
+        total_views_received=values["total_views_received"],
     )
 
 
@@ -186,6 +191,10 @@ async def get_current_user_dashboard(
                 .where(*story_filters)
                 .scalar_subquery()
                 .label("total_saves_received"),
+                select(func.coalesce(func.sum(Story.view_count), 0))
+                .where(*story_filters)
+                .scalar_subquery()
+                .label("total_views_received"),
             )
         )
     ).one()
@@ -197,6 +206,7 @@ async def get_current_user_dashboard(
         total_likes_received=values["total_likes_received"],
         total_comments_received=values["total_comments_received"],
         total_saves_received=values["total_saves_received"],
+        total_views_received=values["total_views_received"],
     )
 
 

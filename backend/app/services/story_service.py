@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import func, nulls_last, select
+from sqlalchemy import func, nulls_last, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -270,7 +270,17 @@ async def get_story_detail_by_id(
 
     story, author_username = row
     like_count = await _get_story_like_count(db, story.id)
-    return _map_story_detail(story, author_username, like_count)
+    response = _map_story_detail(story, author_username, like_count)
+
+    await db.execute(
+        update(Story)
+        .where(Story.id == story_id)
+        .values(view_count=Story.view_count + 1)
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+
+    return response
 
 
 async def list_comments_for_story(
