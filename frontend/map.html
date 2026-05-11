@@ -15,6 +15,8 @@
         rel="stylesheet">
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <script>
         let profileButton;
         let profileButtonIcon;
@@ -480,6 +482,7 @@
     <script src="auth.js"></script>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <script>
         profileButton = document.getElementById("btn-profile");
@@ -800,6 +803,11 @@
                 : (story.content || "");
             var placeName = story.place_name || "";
             var dateLabel = story.date_label || "";
+            var storyLat = Number(story.latitude);
+            var storyLng = Number(story.longitude);
+            var timelineLink = Number.isFinite(storyLat) && Number.isFinite(storyLng)
+                ? '<a href="timeline.html?lat=' + encodeURIComponent(storyLat) + '&lng=' + encodeURIComponent(storyLng) + '&radius_km=1" style="font-size:12px;color:#35618f;font-weight:700;text-decoration:none;">View Timeline</a>'
+                : '';
 
             var dateBadge = dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '';
 
@@ -829,18 +837,40 @@
                 (placeName ? '<span style="font-size:11px;color:#35618f;font-weight:600;">' + placeName + '</span>' : '<span></span>') +
                 '<div style="display:flex;align-items:center;gap:10px;">' +
                 reportBtn +
+                timelineLink +
                 '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read Story →</a>' +
                 '</div></div></div></div>';
         }
 
         const markers = [];
+        const markerClusterLayer = L.markerClusterGroup();
+        map.addLayer(markerClusterLayer);
+
+        markerClusterLayer.on("clusterclick", function (event) {
+            var cluster = event.layer;
+            if (!cluster || typeof cluster.getBounds !== "function") return;
+
+            var bounds = cluster.getBounds();
+            if (!bounds || !bounds.isValid()) return;
+
+            map.fitBounds(bounds, {
+                padding: [72, 72],
+                maxZoom: map.getMaxZoom()
+            });
+        });
+
+        function hasStoryCoordinates(story) {
+            return Number.isFinite(Number(story.latitude)) && Number.isFinite(Number(story.longitude));
+        }
 
         function loadStories(stories) {
             // Clear existing markers
-            markers.forEach(function (m) { map.removeLayer(m); });
+            markerClusterLayer.clearLayers();
             markers.length = 0;
 
             stories.forEach(function (story) {
+                if (!hasStoryCoordinates(story)) return;
+
                 const marker = L.marker([story.latitude, story.longitude], {
                     icon: createMarkerIcon()
                 });
@@ -882,12 +912,12 @@
                         .catch(function () { /* keep placeholder on error */ });
                 });
 
-                marker.addTo(map);
+                markerClusterLayer.addLayer(marker);
                 markers.push(marker);
             });
 
             // Update count
-            document.getElementById("story-count").textContent = stories.length + " stories on the map";
+            document.getElementById("story-count").textContent = markers.length + " stories on the map";
         }
 
         // ─── Sidebar ───
@@ -919,7 +949,9 @@
                     // Open the corresponding marker popup
                     markers.forEach(function (m) {
                         if (m.getLatLng().lat === story.latitude && m.getLatLng().lng === story.longitude) {
-                            m.openPopup();
+                            markerClusterLayer.zoomToShowLayer(m, function () {
+                                m.openPopup();
+                            });
                         }
                     });
                 });

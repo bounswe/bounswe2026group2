@@ -1,10 +1,12 @@
 FROM nginx:alpine
 
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html /usr/share/nginx/html/index.html
 COPY forgot-password.html /usr/share/nginx/html/forgot-password.html
 COPY oauth-callback.html /usr/share/nginx/html/oauth-callback.html
 COPY register.html /usr/share/nginx/html/register.html
 COPY map.html /usr/share/nginx/html/map.html
+COPY timeline.html /usr/share/nginx/html/timeline.html
 COPY story-create.html /usr/share/nginx/html/story-create.html
 COPY story-detail.html /usr/share/nginx/html/story-detail.html
 COPY search.html /usr/share/nginx/html/search.html
