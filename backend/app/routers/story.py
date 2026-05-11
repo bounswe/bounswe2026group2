@@ -118,6 +118,10 @@ async def list_stories(
     query_start: int | str | None = Query(default=None),
     query_end: int | str | None = Query(default=None),
     query_precision: str | None = Query(default=None),
+    tags: list[str] | None = Query(
+        default=None,
+        description="Filter by one or more story tags. Repeat the parameter for multiple tags.",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -167,6 +171,10 @@ async def search_stories(
     query_start: int | str | None = Query(default=None),
     query_end: int | str | None = Query(default=None),
     query_precision: str | None = Query(default=None),
+    tags: list[str] | None = Query(
+        default=None,
+        description="Filter by one or more story tags. Repeat the parameter for multiple tags.",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     try:
