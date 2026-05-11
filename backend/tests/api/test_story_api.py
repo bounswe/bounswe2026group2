@@ -1478,6 +1478,41 @@ class TestStorySearchAPI:
         assert data["stories"][0]["title"] == "Neighborhood Memory"
         assert data["stories"][0]["tags"] == ["gecekondu"]
 
+    async def test_search_by_q_matches_story_tags_with_typo(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="typosearchauthor",
+            email="typosearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Neighborhood Memory",
+            summary="A local city story",
+            content="Families remembered the old streets together.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+        await apply_ai_tags_to_story(db_session, story.id, ["gecekondu"])
+
+        resp = await client.get("/stories/search?q=gecokondi")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Neighborhood Memory"
+        assert data["stories"][0]["tags"] == ["gecekondu"]
+
     async def test_search_by_q_matches_story_content(self, client, db_session):
         from app.db.enums import StoryStatus, StoryVisibility
         from app.db.story import Story

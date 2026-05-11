@@ -69,13 +69,20 @@ def _apply_tag_relevance_filter(stmt, tag_names: list[str]):
 def _apply_hybrid_search_filter(stmt, search_query: str):
     normalized_query = search_query.strip().lower()
     query_pattern = f"%{normalized_query}%"
-    # Score priority: exact tag (30) > partial tag (15) > title (20) > place (10) > summary (12) > content (8).
+    fuzzy_threshold = 0.3
+    title_similarity = func.similarity(Story.title, search_query)
+    summary_similarity = func.similarity(Story.summary, search_query)
+    content_similarity = func.similarity(Story.content, search_query)
+    place_similarity = func.similarity(Story.place_name, search_query)
+    tag_similarity = func.similarity(Tag.name, search_query)
+    # Score priority: exact tag (30) > text/tag substring matches > fuzzy typo matches.
     # Tag scores are aggregated with MAX so a story isn't double-counted for multiple tag rows.
     tag_score = func.coalesce(
         func.max(
             case(
                 (func.lower(Tag.name) == normalized_query, 30),
                 (Tag.name.ilike(query_pattern), 15),
+                (tag_similarity >= fuzzy_threshold, 9),
                 else_=0,
             )
         ),
@@ -83,9 +90,13 @@ def _apply_hybrid_search_filter(stmt, search_query: str):
     )
     text_score = (
         case((Story.title.ilike(query_pattern), 20), else_=0)
+        + case((title_similarity >= fuzzy_threshold, 12), else_=0)
         + case((Story.summary.ilike(query_pattern), 12), else_=0)
+        + case((summary_similarity >= fuzzy_threshold, 7), else_=0)
         + case((Story.content.ilike(query_pattern), 8), else_=0)
+        + case((content_similarity >= fuzzy_threshold, 5), else_=0)
         + case((Story.place_name.ilike(query_pattern), 10), else_=0)
+        + case((place_similarity >= fuzzy_threshold, 6), else_=0)
     )
     search_score = tag_score + text_score
 
@@ -99,6 +110,11 @@ def _apply_hybrid_search_filter(stmt, search_query: str):
                 Story.content.ilike(query_pattern),
                 Story.place_name.ilike(query_pattern),
                 Tag.name.ilike(query_pattern),
+                title_similarity >= fuzzy_threshold,
+                summary_similarity >= fuzzy_threshold,
+                content_similarity >= fuzzy_threshold,
+                place_similarity >= fuzzy_threshold,
+                tag_similarity >= fuzzy_threshold,
             )
         )
         .group_by(Story.id, User.username)

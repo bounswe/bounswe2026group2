@@ -312,7 +312,7 @@ class TestSearchAvailableStoriesByPlaceService:
         db = AsyncMock()
         db.execute.return_value.all = lambda: []
 
-        await search_available_stories_by_place(db, search_query="gecek")
+        await search_available_stories_by_place(db, search_query="gecokondi")
 
         stmt = db.execute.await_args.args[0]
         sql = str(stmt)
@@ -324,6 +324,7 @@ class TestSearchAvailableStoriesByPlaceService:
         assert "stories.content" in sql
         assert "stories.place_name" in sql
         assert "tags.name" in sql
+        assert "similarity" in sql.lower()
         assert "GROUP BY stories.id, users.username" in sql
         assert "ORDER BY" in sql
         assert "stories.created_at DESC" in sql
