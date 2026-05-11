@@ -374,6 +374,30 @@ class TestSearchAvailableStoriesByPlaceService:
         assert exc_info.value.detail == "Tags cannot be blank"
         db.execute.assert_not_awaited()
 
+    async def test_search_query_includes_similarity_and_ilike(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, "istanubl")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "similarity" in sql.lower()
+        assert "like" in sql.lower()
+
+    async def test_fuzzy_search_returns_story_on_typo(self):
+        story = _make_story(place_name="Istanbul")
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "author")]
+
+        # "istanubl" is a typo — service delegates to DB; mock returns the story
+        result = await search_available_stories_by_place(db, "istanubl")
+
+        assert result.total == 1
+        assert result.stories[0].place_name == "Istanbul"
+
 
 @pytest.mark.asyncio
 class TestUploadMediaForStoryService:

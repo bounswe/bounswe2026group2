@@ -315,7 +315,12 @@ async def search_available_stories_by_place(
     if search_query is not None:
         stmt = _apply_hybrid_search_filter(stmt, search_query)
     elif place_name is not None:
-        stmt = stmt.where(Story.place_name.ilike(f"%{place_name}%"))
+        stmt = stmt.where(
+            or_(
+                Story.place_name.ilike(f"%{place_name}%"),
+                func.similarity(Story.place_name, place_name) >= 0.3,
+            )
+        )
 
     if query_start is not None and query_end is not None:
         stmt = stmt.where(
