@@ -1,3 +1,5 @@
+/* global AUTH_TOKEN_KEY, API_BASE, isLoggedIn, authFetch, logout */
+
 // Shared top navigation header.
 // Include after auth.js + config.js, then put <div id="site-header"></div>
 // where the header should appear and call mountSiteHeader().
@@ -172,7 +174,7 @@
             }
             currentUser = await resp.json();
             renderMenu();
-        } catch (err) {
+        } catch (_err) {
             els.state.textContent = "Unable to load account details right now.";
             setButtonFace(null);
         }
