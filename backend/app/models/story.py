@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import NoInspectionAvailable
 from sqlalchemy.orm.attributes import NO_VALUE
