@@ -14,6 +14,10 @@ if TYPE_CHECKING:
     from app.db.user import User
 
 
+def _badge_rule_type_values(enum_cls: type[BadgeRuleType]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class Badge(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "badges"
     __table_args__ = (Index("ix_badges_rule_type", "rule_type"),)
@@ -22,7 +26,12 @@ class Badge(UUIDPrimaryKeyMixin, Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     icon_key: Mapped[str] = mapped_column(String(100), nullable=False)
     rule_type: Mapped[BadgeRuleType] = mapped_column(
-        Enum(BadgeRuleType, name="badge_rule_type", native_enum=False),
+        Enum(
+            BadgeRuleType,
+            name="badge_rule_type",
+            native_enum=False,
+            values_callable=_badge_rule_type_values,
+        ),
         nullable=False,
         unique=True,
     )

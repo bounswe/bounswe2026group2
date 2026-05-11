@@ -17,8 +17,8 @@ _STORY_COUNT_RULES: dict[BadgeRuleType, int] = {
 }
 
 
-async def check_and_award_story_badges(db: AsyncSession, user_id: uuid.UUID) -> None:
-    """Award any story-count-based badges the user has newly earned."""
+async def check_and_award_story_badges(db: AsyncSession, user_id: uuid.UUID) -> str | None:
+    """Award story-count badges and return the newest awarded badge name, if any."""
     count_result = await db.execute(
         select(func.count(Story.id)).where(
             Story.user_id == user_id,
@@ -30,17 +30,23 @@ async def check_and_award_story_badges(db: AsyncSession, user_id: uuid.UUID) -> 
 
     qualifying_rule_types = [rt for rt, threshold in _STORY_COUNT_RULES.items() if story_count >= threshold]
     if not qualifying_rule_types:
-        return
+        return None
 
     owned_result = await db.execute(select(UserBadge.badge_id).where(UserBadge.user_id == user_id))
     owned_badge_ids = {row[0] for row in owned_result.all()}
 
     badges_result = await db.execute(select(Badge).where(Badge.rule_type.in_(qualifying_rule_types)))
     badges = badges_result.scalars().all()
+    badges_by_rule_type = {badge.rule_type: badge for badge in badges}
+    newest_awarded_badge_name: str | None = None
 
-    for badge in badges:
-        if badge.id not in owned_badge_ids:
+    for rule_type in qualifying_rule_types:
+        badge = badges_by_rule_type.get(rule_type)
+        if badge and badge.id not in owned_badge_ids:
             db.add(UserBadge(user_id=user_id, badge_id=badge.id, awarded_at=datetime.now(timezone.utc)))
+            newest_awarded_badge_name = badge.name
+
+    return newest_awarded_badge_name
 
 
 async def get_user_badges(db: AsyncSession, user_id: uuid.UUID) -> list[BadgeResponse]:

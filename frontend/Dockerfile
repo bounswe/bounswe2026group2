@@ -1,10 +1,12 @@
 FROM nginx:alpine
 
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html /usr/share/nginx/html/index.html
 COPY forgot-password.html /usr/share/nginx/html/forgot-password.html
 COPY oauth-callback.html /usr/share/nginx/html/oauth-callback.html
 COPY register.html /usr/share/nginx/html/register.html
 COPY map.html /usr/share/nginx/html/map.html
+COPY timeline.html /usr/share/nginx/html/timeline.html
 COPY story-create.html /usr/share/nginx/html/story-create.html
 COPY story-detail.html /usr/share/nginx/html/story-detail.html
 COPY search.html /usr/share/nginx/html/search.html
@@ -24,6 +26,11 @@ COPY saved.js /usr/share/nginx/html/saved.js
 COPY likes.js /usr/share/nginx/html/likes.js
 COPY comments.js /usr/share/nginx/html/comments.js
 COPY recording.js /usr/share/nginx/html/recording.js
+COPY assets/ /usr/share/nginx/html/assets/
+COPY tags.js /usr/share/nginx/html/tags.js
+COPY search-filters.js /usr/share/nginx/html/search-filters.js
+COPY story-edit.html /usr/share/nginx/html/story-edit.html
+COPY story-transcript.js /usr/share/nginx/html/story-transcript.js
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 EXPOSE 80

@@ -5,7 +5,9 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.db.badge import Badge
 from app.db.base import Base
+from app.db.enums import BadgeRuleType
 from app.db.media_file import MediaFile  # noqa: F401
 from app.db.notification import Notification  # noqa: F401
 from app.db.session import get_db
@@ -17,6 +19,27 @@ from app.db.story_save import StorySave  # noqa: F401
 
 # Import all models so Base.metadata knows about them
 from app.db.user import User  # noqa: F401
+
+BADGE_SEEDS = [
+    {
+        "name": "First Story",
+        "description": "Published your very first story.",
+        "icon_key": "badge_first_story",
+        "rule_type": BadgeRuleType.FIRST_STORY,
+    },
+    {
+        "name": "Story Teller",
+        "description": "Published 5 stories on the platform.",
+        "icon_key": "badge_story_milestone_5",
+        "rule_type": BadgeRuleType.STORY_MILESTONE_5,
+    },
+    {
+        "name": "Story Master",
+        "description": "Published 10 stories on the platform.",
+        "icon_key": "badge_story_milestone_10",
+        "rule_type": BadgeRuleType.STORY_MILESTONE_10,
+    },
+]
 
 # Build the async DB URL
 # For tests, replace 'db' hostname with 'localhost' for local development
@@ -40,6 +63,8 @@ async def db_session():
 
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
     session = session_factory()
+    session.add_all([Badge(**badge) for badge in BADGE_SEEDS])
+    await session.commit()
 
     yield session
 

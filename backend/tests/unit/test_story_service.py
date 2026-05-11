@@ -27,6 +27,7 @@ from app.services.story_service import (
     get_nearby_stories,
     get_story_detail_by_id,
     get_story_like_summary,
+    get_timeline_stories,
     like_story,
     list_available_stories,
     list_comments_for_story,
@@ -1111,7 +1112,11 @@ class TestCreateStoryWithLocationService:
             SimpleNamespace(scalar_one=lambda: 0),
         ]
 
-        with patch("app.services.story_service.check_and_award_story_badges", new_callable=AsyncMock):
+        with patch(
+            "app.services.story_service.check_and_award_story_badges",
+            new_callable=AsyncMock,
+            return_value="First Story",
+        ):
             result = await create_story_with_location(db, current_user, payload)
 
         assert result.title == "New Story"
@@ -1126,6 +1131,7 @@ class TestCreateStoryWithLocationService:
         assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
         assert result.like_count == 0
+        assert result.new_badge == "First Story"
         assert db.add.call_count == 2  # Story + auto-created StoryLocation
         assert db.commit.await_count == 2
         db.refresh.assert_not_awaited()
@@ -1389,6 +1395,100 @@ class TestGetNearbyStoriesService:
         assert "DESC" not in sql
 
 
+@pytest.mark.asyncio
+class TestGetTimelineStoriesService:
+    async def test_returns_stories_with_coord_filter(self):
+        story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "timelineauthor")]
+
+        result = await get_timeline_stories(db, center_lat=41.0082, center_lng=28.9784, radius_km=5.0)
+
+        assert result.total == 1
+        assert result.stories[0].id == story.id
+        db.execute.assert_awaited_once()
+
+    async def test_returns_stories_with_place_name_filter(self):
+        story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "timelineauthor")]
+
+        result = await get_timeline_stories(db, place_name="Istanbul")
+
+        assert result.total == 1
+        db.execute.assert_awaited_once()
+
+    async def test_returns_empty_response_when_no_matches(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await get_timeline_stories(db, place_name="Nowhere")
+
+        assert result.total == 0
+        assert result.stories == []
+
+    async def test_query_orders_by_date_start_asc_nulls_last(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="Istanbul")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "ORDER BY" in sql
+        assert "stories.date_start" in sql
+        assert "NULLS LAST" in sql
+
+    async def test_coord_filter_uses_haversine(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, center_lat=41.0, center_lng=29.0, radius_km=5.0)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "asin" in sql
+        assert "sqrt" in sql
+
+    async def test_place_name_filter_uses_ilike(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="kadikoy")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LIKE" in sql.upper()
+
+    async def test_limit_and_offset_applied(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="Istanbul", limit=5, offset=10)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LIMIT" in sql.upper()
+        assert "OFFSET" in sql.upper()
+
+    async def test_coord_lookup_takes_priority_when_both_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, center_lat=41.0, center_lng=29.0, radius_km=5.0, place_name="Istanbul")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        # Haversine present (coord path), ILIKE absent (place_name ignored)
+        assert "asin" in sql
+        assert "LIKE" not in sql.upper()
+
+
 class TestTagNormalizationHelpers:
     def test_normalize_tag_name_trims_and_lowercases(self):
         assert normalize_tag_name("  Ottoman  ") == "ottoman"
@@ -1429,17 +1529,21 @@ class TestAiTagPersistenceHelpers:
 
     async def test_get_or_create_tags_reuses_existing_and_creates_missing(self):
         existing_tag = Tag(name="bogazici", slug="bogazici")
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
         db = AsyncMock()
-        db.add = MagicMock()
         db.flush = AsyncMock()
-        db.execute.return_value = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag]))
+        db.execute.side_effect = [
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),  # SELECT existing
+            None,  # pg_insert ON CONFLICT DO NOTHING (result ignored)
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag, new_tag])),  # SELECT all
+        ]
 
         tags = await get_or_create_tags(db, [" Bogazici ", "Turkiye"])
 
         assert [tag.name for tag in tags] == ["bogazici", "turkiye"]
         assert tags[0] is existing_tag
-        assert tags[1].slug == "turkiye"
-        db.add.assert_called_once()
+        assert tags[1] is new_tag
         db.flush.assert_awaited_once()
 
     async def test_attach_tags_to_story_adds_only_missing_relations(self):
@@ -1467,14 +1571,17 @@ class TestAiTagPersistenceHelpers:
         story = _make_story(id=story_id, tags=[])
         existing_tag = Tag(name="bogazici", slug="bogazici")
         existing_tag.id = uuid.uuid4()
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
 
         db = AsyncMock()
-        db.add = MagicMock()
         db.flush = AsyncMock()
         db.refresh = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story),
-            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),
+            SimpleNamespace(scalar_one_or_none=lambda: story),  # SELECT story
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),  # SELECT existing tags
+            None,  # pg_insert ON CONFLICT DO NOTHING
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag, new_tag])),  # SELECT all
         ]
 
         updated_story = await apply_ai_tags_to_story(db, story_id, ["Bogazici", "Turkiye"])
@@ -1591,7 +1698,11 @@ class TestAnonymousStoryService:
             SimpleNamespace(scalar_one=lambda: 0),
         ]
 
-        with patch("app.services.story_service.check_and_award_story_badges", new_callable=AsyncMock):
+        with patch(
+            "app.services.story_service.check_and_award_story_badges",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
             result = await create_story_with_location(db, current_user, payload)
 
         assert result.is_anonymous is True

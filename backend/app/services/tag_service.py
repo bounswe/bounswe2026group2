@@ -3,6 +3,7 @@ import uuid
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -60,16 +61,20 @@ async def get_or_create_tags(db: AsyncSession, tag_names: list[str] | None) -> l
     tags_by_name = {tag.name: tag for tag in existing_tags}
 
     missing_names = [name for name in normalized_names if name not in tags_by_name]
-    new_tags = [Tag(name=name, slug=build_tag_slug(name)) for name in missing_names]
-
-    for tag in new_tags:
-        db.add(tag)
-
-    if new_tags:
+    if missing_names:
+        stmt = (
+            pg_insert(Tag)
+            .values([{"id": uuid.uuid4(), "name": name, "slug": build_tag_slug(name)} for name in missing_names])
+            .on_conflict_do_nothing(index_elements=["slug"])
+        )
+        await db.execute(stmt)
         await db.flush()
 
-    new_tags_by_name = {tag.name: tag for tag in new_tags}
-    return [tags_by_name.get(name) or new_tags_by_name[name] for name in normalized_names]
+        result = await db.execute(select(Tag).where(Tag.name.in_(normalized_names)))
+        all_tags = result.scalars().all()
+        return [t for name in normalized_names for t in all_tags if t.name == name]
+
+    return [tags_by_name[name] for name in normalized_names]
 
 
 def attach_tags_to_story(story: Story, tags: list[Tag]) -> None:
