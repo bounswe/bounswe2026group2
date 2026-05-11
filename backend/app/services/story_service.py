@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import func, nulls_last, select
+from sqlalchemy import and_, exists, func, nulls_last, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,6 +14,7 @@ from app.db.notification import Notification
 from app.db.story import Story
 from app.db.story_comment import StoryComment
 from app.db.story_like import StoryLike
+from app.db.story_location import StoryLocation
 from app.db.story_report import StoryReport
 from app.db.story_save import StorySave
 from app.db.user import User
@@ -33,6 +34,7 @@ from app.models.story import (
     StoryUpdateRequest,
 )
 from app.services.badge_service import check_and_award_story_badges
+from app.services.location_service import build_story_locations, replace_story_locations, validate_location_list
 from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 from app.services.storage import (
     build_public_object_url,
@@ -182,7 +184,7 @@ async def list_available_stories(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
@@ -193,12 +195,25 @@ async def list_available_stories(
 
     if all(v is not None for v in (min_lat, max_lat, min_lng, max_lng)):
         stmt = stmt.where(
-            Story.latitude.is_not(None),
-            Story.longitude.is_not(None),
-            Story.latitude >= min_lat,
-            Story.latitude <= max_lat,
-            Story.longitude >= min_lng,
-            Story.longitude <= max_lng,
+            or_(
+                and_(
+                    Story.latitude.is_not(None),
+                    Story.longitude.is_not(None),
+                    Story.latitude >= min_lat,
+                    Story.latitude <= max_lat,
+                    Story.longitude >= min_lng,
+                    Story.longitude <= max_lng,
+                ),
+                exists(
+                    select(StoryLocation.id).where(
+                        StoryLocation.story_id == Story.id,
+                        StoryLocation.latitude >= min_lat,
+                        StoryLocation.latitude <= max_lat,
+                        StoryLocation.longitude >= min_lng,
+                        StoryLocation.longitude <= max_lng,
+                    )
+                ),
+            )
         )
 
     if query_start is not None and query_end is not None:
@@ -224,7 +239,7 @@ async def search_available_stories_by_place(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
@@ -256,7 +271,7 @@ async def get_story_detail_by_id(
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
         .where(Story.id == story_id, Story.deleted_at.is_(None))
-        .options(selectinload(Story.media_files), selectinload(Story.tags))
+        .options(selectinload(Story.media_files), selectinload(Story.tags), selectinload(Story.locations))
     )
 
     result = await db.execute(stmt)
@@ -411,7 +426,7 @@ async def list_saved_stories_for_user(
         select(Story, User.username)
         .join(StorySave, StorySave.story_id == Story.id)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             StorySave.user_id == current_user.id,
             Story.status == StoryStatus.PUBLISHED,
@@ -440,7 +455,10 @@ async def create_story_with_location(
 
     normalized_date_start, normalized_date_end, normalized_date_precision = payload.normalize_date_range()
 
+    # Pre-generate the PK so StoryLocation FK is available before the first flush.
+    story_id = uuid.uuid4()
     story = Story(
+        id=story_id,
         user_id=current_user.id,
         title=payload.title,
         summary=payload.summary,
@@ -457,18 +475,28 @@ async def create_story_with_location(
     )
 
     db.add(story)
-    await db.commit()
-    await db.refresh(story)
 
+    if payload.locations is not None:
+        validate_location_list(payload.locations)
+        for loc in build_story_locations(story_id, payload.locations):
+            db.add(loc)
+    else:
+        db.add(
+            StoryLocation(
+                story_id=story_id,
+                latitude=payload.latitude,
+                longitude=payload.longitude,
+                label=place_name,
+                sort_order=0,
+            )
+        )
+
+    await db.commit()
     awarded_badge_name = await check_and_award_story_badges(db, current_user.id)
     await db.commit()
-
-    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    like_count = await _get_story_like_count(db, story.id)
-    new_badge = awarded_badge_name if isinstance(awarded_badge_name, str) else None
-    return StoryDetailResponse(
-        **story_response.model_dump(), media_files=[], like_count=like_count, new_badge=new_badge
-    )
+    story_detail = await get_story_detail_by_id(db, story_id)
+    story_detail.new_badge = awarded_badge_name if isinstance(awarded_badge_name, str) else None
+    return story_detail
 
 
 async def update_story_with_location_and_dates(
@@ -478,7 +506,9 @@ async def update_story_with_location_and_dates(
     payload: StoryUpdateRequest,
 ) -> StoryDetailResponse:
     story_result = await db.execute(
-        select(Story).where(
+        select(Story)
+        .options(selectinload(Story.locations))
+        .where(
             Story.id == story_id,
             Story.user_id == current_user.id,
             Story.deleted_at.is_(None),
@@ -512,12 +542,11 @@ async def update_story_with_location_and_dates(
     if payload.is_anonymous is not None:
         story.is_anonymous = payload.is_anonymous
 
-    await db.commit()
-    await db.refresh(story)
+    if payload.locations is not None:
+        replace_story_locations(story, payload.locations)
 
-    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    like_count = await _get_story_like_count(db, story.id)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
+    await db.commit()
+    return await get_story_detail_by_id(db, story.id)
 
 
 async def like_story(
@@ -679,7 +708,7 @@ async def get_nearby_stories(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,

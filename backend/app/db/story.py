@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.db.notification import Notification
     from app.db.story_comment import StoryComment
     from app.db.story_like import StoryLike
+    from app.db.story_location import StoryLocation
     from app.db.story_report import StoryReport
     from app.db.story_save import StorySave
     from app.db.tag import Tag
@@ -106,4 +107,9 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     tags: Mapped[list["Tag"]] = relationship(
         secondary=story_tags_table,
         back_populates="stories",
+    )
+    locations: Mapped[list["StoryLocation"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+        order_by="StoryLocation.sort_order",
     )
