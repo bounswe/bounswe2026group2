@@ -1348,17 +1348,21 @@ class TestAiTagPersistenceHelpers:
 
     async def test_get_or_create_tags_reuses_existing_and_creates_missing(self):
         existing_tag = Tag(name="bogazici", slug="bogazici")
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
         db = AsyncMock()
-        db.add = MagicMock()
         db.flush = AsyncMock()
-        db.execute.return_value = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag]))
+        db.execute.side_effect = [
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),  # SELECT existing
+            None,  # pg_insert ON CONFLICT DO NOTHING (result ignored)
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag, new_tag])),  # SELECT all
+        ]
 
         tags = await get_or_create_tags(db, [" Bogazici ", "Turkiye"])
 
         assert [tag.name for tag in tags] == ["bogazici", "turkiye"]
         assert tags[0] is existing_tag
-        assert tags[1].slug == "turkiye"
-        db.add.assert_called_once()
+        assert tags[1] is new_tag
         db.flush.assert_awaited_once()
 
     async def test_attach_tags_to_story_adds_only_missing_relations(self):
@@ -1386,14 +1390,17 @@ class TestAiTagPersistenceHelpers:
         story = _make_story(id=story_id, tags=[])
         existing_tag = Tag(name="bogazici", slug="bogazici")
         existing_tag.id = uuid.uuid4()
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
 
         db = AsyncMock()
-        db.add = MagicMock()
         db.flush = AsyncMock()
         db.refresh = AsyncMock()
         db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story),
-            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),
+            SimpleNamespace(scalar_one_or_none=lambda: story),  # SELECT story
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),  # SELECT existing tags
+            None,  # pg_insert ON CONFLICT DO NOTHING
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag, new_tag])),  # SELECT all
         ]
 
         updated_story = await apply_ai_tags_to_story(db, story_id, ["Bogazici", "Turkiye"])
