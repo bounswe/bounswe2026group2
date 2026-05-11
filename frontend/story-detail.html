@@ -151,7 +151,15 @@
         <div class="mt-4 rounded-2xl overflow-hidden border border-border/50" style="height: 224px;">
           <div id="detail-map" style="height: 100%; width: 100%;"></div>
         </div>
-        <p class="mt-3 text-sm text-textmuted">Kadikoy, Istanbul — <a href="map.html" class="text-primary font-semibold hover:underline">View on full map →</a></p>
+        <p id="detail-location-label" class="mt-3 text-sm text-textmuted">
+          Kadikoy, Istanbul
+        </p>
+        <p class="mt-1 text-sm">
+          <a id="detail-timeline-link" href="timeline.html?lat=41.015&lng=28.979&radius_km=1" class="font-semibold text-tertiary hover:underline">View Timeline →</a>
+        </p>
+        <p class="mt-1 text-sm">
+          <a id="detail-map-link" href="map.html" class="font-semibold text-primary hover:underline">View on full map →</a>
+        </p>
       </section>
 
       <section class="rounded-3xl border border-border bg-surface p-6">
@@ -338,10 +346,23 @@
     document.getElementById('story-date').textContent = story.date_label || "No Date";
     document.getElementById('story-location').textContent = story.place_name || "Istanbul";
     document.getElementById('story-content').textContent = story.content || "No content available.";
+    document.getElementById('detail-location-label').textContent = story.place_name || "Istanbul";
 
-    if (story.latitude && story.longitude) {
-      detailMap.setView([story.latitude, story.longitude], 15);
-      L.marker([story.latitude, story.longitude])
+    var storyLat = Number(story.latitude);
+    var storyLng = Number(story.longitude);
+    var hasCoordinates = Number.isFinite(storyLat) && Number.isFinite(storyLng);
+    var timelineLink = document.getElementById('detail-timeline-link');
+
+    if (hasCoordinates) {
+      timelineLink.href = "timeline.html?lat=" + encodeURIComponent(storyLat) + "&lng=" + encodeURIComponent(storyLng) + "&radius_km=1";
+      timelineLink.classList.remove("hidden");
+    } else {
+      timelineLink.classList.add("hidden");
+    }
+
+    if (hasCoordinates) {
+      detailMap.setView([storyLat, storyLng], 15);
+      L.marker([storyLat, storyLng])
         .addTo(detailMap)
         .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
         .openPopup();

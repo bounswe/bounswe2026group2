@@ -1,0 +1,183 @@
+Prompt log for messages received after the Google Auth frontend UI check request.
+
+2026-05-10 - User:
+i want you to create google signup ui. make a brief research on how websites design google signup when there are additional fields the user needs to fill besides email and password. our app has username and display name (optional).
+
+2026-05-10 - User:
+revert the changes on dev and implement them on a new branch named feat/gauth-frontend-integration
+
+2026-05-10 - User:
+actually what does our gauth singup endpoint do? i should be using that only since i am frontend dev. does it accept a display name and username?
+
+2026-05-10 - User:
+okay then discard changes in the feat branch you made. delete that branch and copy dev with that name again. i will tell further instructions
+
+2026-05-10 - User:
+change continue with google button in both index.html and register.html in accordance with google's guidelines. Add google's icon as well as other suggested changes.
+
+2026-05-10 - User:
+next: connect the endpoints to the buttons. remove story-detail page redirection from the signin button on index.html
+
+2026-05-10 - User:
+now run this app locally so i can test
+
+2026-05-10 - User:
+i started docker
+
+2026-05-10 - User:
+what do you mean gauth is not merged to this branch?
+
+2026-05-10 - User:
+create an issue for appium testing for mobile version of our app (apk).  Define Mobile E2E/Appium Plan and Template  - Document mobile E2E scope in wiki.
+ - Reuse Lab 9 UAT schema.
+      - Define env vars: ANDROID_APP_PATH, APPIUM_SERVER_URL, MOBILE_API_BASE_URL, ANDROID_DEVICE_NAME.
+      - Local only testing now. 
+      - setup ne android emulator - Creation of appium skeleton at frontend/tests/mobile-e2e/ - scenarios same as current scenarios on web with same assignees per scenario
+
+only issue now nothing else. open it on github and assign to alpervv and mustafaozturkmen
+
+2026-05-10 - User:
+create a new page in wiki for E2E testing start, specify the frameworks planned to be used for mobile and web testing. look at lab 9 report to gather info. do not mention people's name assigned for scenarios. keep it techical.
+
+2026-05-10 - User:
+you mentioned playwright for web. is that what has been decided on. look at schema/skeleton created for web E2E testing
+
+2026-05-10 - User:
+okay mention scenarios decided to be tested in lab 9 in the E2E page
+
+2026-05-10 - Prompt:
+create the appium mobile e2e skeleton for the android apk under frontend/tests/mobile-e2e. local only for now. add the basic config, env example, how to run it, one simple smoke test, and skipped placeholders for the lab 9 / current web uat scenarios. use ANDROID_APP_PATH, APPIUM_SERVER_URL, MOBILE_API_BASE_URL and ANDROID_DEVICE_NAME env vars.
+
+2026-05-10 - Prompt:
+okay ogood. move context and env to a new folder named helpers for better alignment with uat, similary lab9-... and somek.spec to /spec. create .env.example at root foder of this testing
+
+2026-05-10 - User:
+okay now you will open 8 issues for the scenarios. use the same issue format as playwright issues. each scenario for mobile app E2E scenario issue to be assigned to corresponding playwright issue assignee. briefly mention the skeleton created for appium and mark issue #318 as dependency. since this is a big task, create one issue text and put it for my approval first.
+
+2026-05-10 - User:
+looks good. next issue again for my approval
+
+2026-05-10 - User:
+looks good. you can continue with the rest of issues automatically.
+
+2026-05-10 - User:
+okay now create a pr of the skeleton branch to dev and request review of hamzaustun ibopro and mustafaozturkmen
+
+2026-05-10 - User:
+switch to gauth front integ
+
+2026-05-10 - User:
+okay now changes i want: research on google auth best practices/suggetions by GOOGLE not anything else. do this first.
+
+2026-05-10 - User:
+okay from this, isolate frontend only related things. we already have backend api, also pinpoint its location for me to confrm
+
+2026-05-10 - User:
+okay first, google auth is on dev. pull changes on dev. delete current gauth branch and copy dev to a new local branch with the same name.
+
+2026-05-10 - User:
+okay first tasks: replace whatever google auth button we have with google's suggested buttons. there are only 2 buttons: one in index and other in register
+
+2026-05-10 - User:
+commit
+
+2026-05-10 - User:
+open index on my browse
+
+2026-05-10 - User:
+are you sure this is the official gauth button? it doesn't look like what i am used to
+
+2026-05-10 - User:
+what are the complications of doing this?
+
+2026-05-10 - User:
+okay whatever keep it simple. next task: print input schema of gauth endpoints to me
+
+2026-05-10 - User:
+does it open the usual gauth popup
+
+2026-05-10 - User:
+okay that is fine. wire the endpoint to the buttons
+
+2026-05-10 - User:
+run the app locally and open index
+
+2026-05-10 - User:
+kill containers occupying designed locatios and rerun the app
+
+2026-05-10 - User:
+it doesn't show the new google buttons, shows old ones
+
+2026-05-10 - User:
+now it renders but it says Access blocked: Authorization Error in google's page. is this frontend issue?
+
+2026-05-10 - User:
+is backend api complete for E2E google auth? if not what is needed to fix
+
+2026-05-10 - User:
+okay i am not a backend dev so fix this with minimal change and best way possible
+
+2026-05-10 - User:
+Add error handling to frontend gauth. Make error messages user friendly, not technical, not too specific, e.g. something went wrong.
+
+2026-05-10 - User:
+next task is adding JEST tests.
+
+2026-05-10 - User:
+okay now i want to test it locally. how to get the env variables?
+
+2026-05-10 - User:
+is this enough: "client_id":"893040179377-skb5kic6v81qlih5jr4pjhrgcmmbkse7.apps.googleusercontent.com"
+
+2026-05-11 15:12 - User:
+okay now we will solve #338. verify the claim in the issue first
+
+2026-05-11 15:18 - User:
+when i live tested recording audio, the microphone icon didn't go away on chrome near the url bar after i stopped recording.
+
+2026-05-11 15:23 - User:
+nvm it does go away. but i found another issue.
+
+2026-05-11 15:24 - User:
+creating record video ro take photo opens up file upload on my pc
+
+2026-05-11 15:31 - User:
+create a new issue and assign alpervv. close #338 as stale. issue format consistent with latest issues. print description here before pushing
+
+2026-05-11 15:33 - User:
+description for new is fine. close as stale be much shorter
+
+2026-05-11 16:08 - User:
+we will solve issue #301. first task is clustering nearby stories. to do so use leaflet.markercluster with default params/values. map.html fetches necessary stories already. now you will apply the clustering on the fetched stories by coordinate and generate a new marker showing how many stories are inside the cliuster. this is frontend change only
+
+2026-05-11 16:16 - User:
+next step: when a cluster marker is clicked, it shall zoom in around the cluster closely AND MUST SHOW ALL SUBCLUSTER OR STORY PINS. the key point being is to prevent user having to slide to see other relevant stories. inspect the map page sent to get a similar behaviour.
+
+2026-05-11 16:25 - User:
+okay so now i want the story pins to have an option redirect to timeline pages of the format timeline?lat=41.111&lng=28.111&radius_km=1. so there will be a story detail page option as well as view timeline. the default for timeline page being 1 km when clicked redirected from storypin. the frontned shall retrieve stories with nearby endpoint, all of them as the endpoint doesn't have other filters, and display as date ASCENDING from top to bottom. For pc view, i want name of the story, location  and cover image of the story only. cover image be just above the story name and place.
+
+
+2026-05-11 16:35 - User:
+bug: clicking view timeline downloads a file to my computer and does not redirect to page.
+
+2026-05-11 16:41 - User:
+next i want the same redirect link on story detail page. specifically under the location element: body > main > section > aside > section:nth-child(1)
+there is a view on full map anchor, i want that replaced with view timeline in blue color. then readd that view on full map anchor below the line containing location info and view timeline.
+
+2026-05-11 16:45 - User:
+actually i want the three texts to be vertical, location, view timeline, view on full map. so 3 rows
+
+2026-05-11 16:49 - User:
+next: view timeline downloading a file bug continues
+
+2026-05-11 16:52 - User:
+next: make the radius_km adjustable. add a slider to adjust km, allow values from 100m to 10km. slider on timeline page, apply button to confirm the km value and redirct.
+
+2026-05-11 16:58 - User:
+next date filter: allow users to specify a starting and/or ending date. frontend shall do the filtering. for stories that have a date range instead of specific date, assume starting date is the specific date. no redirecting upon date filter.
+
+2026-05-11 17:05 - User:
+next i want the year or year range of the story being visible on the left vertical timeline bar. move the dot to the center of story element (image+title,location as a whole) and replace that dot with year info. If the story has a date range where both dates are in the same year, only write one year. otherwise if they are different years write year1-year2 (not subtraction)
+
+2026-05-11 17:10 - User:
+okay i want the uncommitted changes we made be carried to another branch and dev being reverted to what it was before.
