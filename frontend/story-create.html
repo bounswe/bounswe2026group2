@@ -241,7 +241,7 @@
                   id="recording-transcript-draft"
                   rows="4"
                   class="mt-2 w-full resize-y rounded-xl border border-border bg-white px-3 py-2 text-sm leading-6 text-textmain shadow-sm focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-                  placeholder="Transcript appears here after the server responds, or type your own."
+                  placeholder="Transcript appears here after the server responds."
                 ></textarea>
               </div>
 
@@ -846,7 +846,6 @@
         setStartRecordingLabel("Record Again");
         setRecordingStatus("Recording ready. Preview it here, then publish the story to upload it.", false);
         void fetchTranscriptionPreviewForRecordedFile(recordedFile);
-        void fetchTranscriptionPreviewForRecordedFile(recordedFile);
       });
 
       recorder.start();
@@ -1056,6 +1055,12 @@
         formData.append("file", file);
         formData.append("media_type", mediaType);
         formData.append("sort_order", String(fileIndex));
+
+        if (mediaType === "audio" && recordedFiles && recordedFiles.indexOf(file) !== -1) {
+          var transcriptDraft = document.getElementById("recording-transcript-draft");
+          var transcriptValue = transcriptDraft ? transcriptDraft.value : "";
+          formData.append("transcript", transcriptValue);
+        }
 
         var uploadResponse = await authFetch(API_BASE + "/stories/" + createdStory.id + "/media", {
           method: "POST",
