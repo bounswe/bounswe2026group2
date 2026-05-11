@@ -56,17 +56,38 @@ test.describe('TC_AUTH_1 — User Registration and Login', () => {
 });
 
 // ---------------------------------------------------------------------------
-// TC_AUTH_2 — Google OAuth Login  (placeholder until issue #238 ships)
+// TC_AUTH_2 — Google OAuth Login
+// ---------------------------------------------------------------------------
+// Real Google consent screens cannot be automated, so we intercept the backend
+// OAuth redirect and inject a test token via the oauth-callback page.  This
+// exercises the full frontend OAuth flow:
+//   button click → /auth/google/login → (intercepted) → oauth-callback.html
+//   → localStorage.setItem('auth_token', ...) → redirect to map.html
 // ---------------------------------------------------------------------------
 test.describe('TC_AUTH_2 — Google OAuth Login', () => {
-  test.skip('logs in via Google OAuth and lands on the map', async ({ page }) => {
-    // TODO: implement when issue #238 (Google OAuth backend) is complete.
-    //
-    // Suggested steps:
-    //   1. page.goto('/index.html')
-    //   2. page.click('[data-testid="login-google"]')   ← add testid to the button
-    //   3. Complete the OAuth consent flow (use a test Google account or mock)
-    //   4. await page.waitForURL('**/map.html')
-    //   5. expect(page).toHaveURL(/map\.html/)
+  const FAKE_TOKEN = 'test.jwt.token';
+
+  test('logs in via Google OAuth and lands on the map', async ({ page }) => {
+    // Intercept the backend OAuth redirect and simulate a successful token handoff.
+    await page.route('**/auth/google/login', (route) => {
+      route.fulfill({
+        status: 302,
+        headers: { Location: `/oauth-callback.html#access_token=${FAKE_TOKEN}` },
+      });
+    });
+
+    // ── Step 1: Open the login page ─────────────────────────────────────────
+    await page.goto('/index.html');
+
+    // ── Step 2: Click "Continue with Google" ────────────────────────────────
+    await page.getByTestId('login-google').click();
+
+    // ── Step 3: oauth-callback.html reads the token and redirects to map ────
+    await page.waitForURL('**/map.html', { timeout: 10_000 });
+    await expect(page).toHaveURL(/map\.html/);
+
+    // ── Step 4: Confirm the token was persisted ──────────────────────────────
+    const stored = await page.evaluate(() => localStorage.getItem('auth_token'));
+    expect(stored).toBe(FAKE_TOKEN);
   });
 });
