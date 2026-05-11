@@ -1769,6 +1769,158 @@ class TestNearbyStoriesAPI:
 
 
 @pytest.mark.asyncio
+class TestTimelineStoriesAPI:
+    def _make_user(self, username: str, email: str) -> User:
+        return User(
+            username=username,
+            email=email,
+            password_hash=hash_password("TestPass1!"),
+        )
+
+    def _make_story(self, user_id, title, lat=None, lng=None, place_name="Istanbul", date_start=None) -> Story:
+        return Story(
+            user_id=user_id,
+            title=title,
+            content="content",
+            summary="summary",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name=place_name,
+            latitude=lat,
+            longitude=lng,
+            date_start=date_start,
+        )
+
+    async def test_returns_200_with_stories_by_coords(self, client, db_session):
+        user = self._make_user("tlauthor1", "tl1@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story = self._make_story(user.id, "Timeline Story", lat=41.0739, lng=28.9606)
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?lat=41.0770&lng=28.9620&radius_km=5")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Timeline Story"
+
+    async def test_returns_200_with_stories_by_place_name(self, client, db_session):
+        user = self._make_user("tlauthor2", "tl2@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story = self._make_story(user.id, "Kadikoy Story", place_name="Kadikoy")
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Kadikoy")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Kadikoy Story"
+
+    async def test_stories_sorted_by_date_start_asc(self, client, db_session):
+        from datetime import date as date_type
+
+        user = self._make_user("tlauthor3", "tl3@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story_later = self._make_story(user.id, "Later Event", place_name="Uskudar", date_start=date_type(1900, 1, 1))
+        story_earlier = self._make_story(
+            user.id, "Earlier Event", place_name="Uskudar", date_start=date_type(1800, 1, 1)
+        )
+        db_session.add_all([story_later, story_earlier])
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Uskudar")
+
+        assert resp.status_code == 200
+        stories = resp.json()["stories"]
+        assert len(stories) == 2
+        assert stories[0]["title"] == "Earlier Event"
+        assert stories[1]["title"] == "Later Event"
+
+    async def test_null_date_start_sorted_last(self, client, db_session):
+        from datetime import date as date_type
+
+        user = self._make_user("tlauthor4", "tl4@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story_undated = self._make_story(user.id, "Undated Story", place_name="Beyoglu")
+        story_dated = self._make_story(user.id, "Dated Story", place_name="Beyoglu", date_start=date_type(1950, 6, 15))
+        db_session.add_all([story_undated, story_dated])
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Beyoglu")
+
+        assert resp.status_code == 200
+        stories = resp.json()["stories"]
+        assert len(stories) == 2
+        assert stories[0]["title"] == "Dated Story"
+        assert stories[1]["title"] == "Undated Story"
+
+    async def test_excludes_story_outside_radius(self, client, db_session):
+        user = self._make_user("tlauthor5", "tl5@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story = self._make_story(user.id, "Ankara Story", lat=39.9334, lng=32.8597, place_name="Ankara")
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?lat=41.0082&lng=28.9784&radius_km=10")
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+    async def test_returns_empty_when_no_stories_exist(self, client):
+        resp = await client.get("/stories/timeline?place_name=Nonexistent")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"stories": [], "total": 0}
+
+    async def test_missing_both_location_params_returns_422(self, client):
+        resp = await client.get("/stories/timeline")
+
+        assert resp.status_code == 422
+
+    async def test_partial_coords_without_place_name_returns_422(self, client):
+        resp = await client.get("/stories/timeline?lat=41.0082")
+
+        assert resp.status_code == 422
+
+    async def test_invalid_lat_returns_422(self, client):
+        resp = await client.get("/stories/timeline?lat=999&lng=28.9784")
+
+        assert resp.status_code == 422
+
+    async def test_pagination_limit_and_offset(self, client, db_session):
+        user = self._make_user("tlauthor6", "tl6@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        for i in range(5):
+            db_session.add(self._make_story(user.id, f"Paged Story {i}", place_name="Sisli"))
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Sisli&limit=2&offset=0")
+
+        assert resp.status_code == 200
+        assert len(resp.json()["stories"]) == 2
+
+    async def test_no_auth_required(self, client):
+        resp = await client.get("/stories/timeline?place_name=Istanbul")
+
+        assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
 class TestAnonymousStoryAPI:
     async def _create_user_and_token(self, client, username: str, email: str) -> str:
         await client.post(
