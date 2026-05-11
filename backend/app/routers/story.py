@@ -151,6 +151,7 @@ async def list_stories(
         max_lng=bounds.max_lng,
         query_start=normalized_query_start,
         query_end=normalized_query_end,
+        tags=tags,
     )
 
 
@@ -195,6 +196,7 @@ async def search_stories(
         place_name,
         query_start=normalized_query_start,
         query_end=normalized_query_end,
+        tags=tags,
     )
 
 

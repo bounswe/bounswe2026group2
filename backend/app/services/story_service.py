@@ -16,6 +16,7 @@ from app.db.story_comment import StoryComment
 from app.db.story_like import StoryLike
 from app.db.story_report import StoryReport
 from app.db.story_save import StorySave
+from app.db.tag import Tag, story_tags_table
 from app.db.user import User
 from app.models.comment import CommentAuthorResponse, CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
@@ -41,11 +42,24 @@ from app.services.storage import (
     upload_bytes,
 )
 from app.services.transcription_service import transcribe_media_file
+from app.services.tag_service import normalize_tag_list
 
 
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     stories = [StoryResponse.from_orm_with_author(story, author_username) for story, author_username in rows]
     return StoryListResponse(stories=stories, total=len(stories))
+
+
+def _apply_tag_or_filter(stmt, tag_names: list[str]):
+    if not tag_names:
+        return stmt
+
+    return (
+        stmt.join(story_tags_table, story_tags_table.c.story_id == Story.id)
+        .join(Tag, Tag.id == story_tags_table.c.tag_id)
+        .where(Tag.name.in_(tag_names))
+        .distinct()
+    )
 
 
 def _map_media_file(media: MediaFile) -> MediaFileResponse:
@@ -178,7 +192,9 @@ async def list_available_stories(
     max_lng: float | None = None,
     query_start: date | None = None,
     query_end: date | None = None,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
@@ -190,6 +206,7 @@ async def list_available_stories(
         )
         .order_by(Story.created_at.desc())
     )
+    stmt = _apply_tag_or_filter(stmt, normalized_tags)
 
     if all(v is not None for v in (min_lat, max_lat, min_lng, max_lng)):
         stmt = stmt.where(
@@ -220,7 +237,9 @@ async def search_available_stories_by_place(
     place_name: str,
     query_start: date | None = None,
     query_end: date | None = None,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
@@ -233,6 +252,7 @@ async def search_available_stories_by_place(
         )
         .order_by(Story.created_at.desc())
     )
+    stmt = _apply_tag_or_filter(stmt, normalized_tags)
 
     if query_start is not None and query_end is not None:
         stmt = stmt.where(
