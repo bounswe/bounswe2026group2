@@ -65,6 +65,7 @@ def _make_story(**overrides):
         "status": StoryStatus.PUBLISHED,
         "visibility": StoryVisibility.PUBLIC,
         "is_anonymous": False,
+        "view_count": 0,
         "created_at": datetime.now(timezone.utc),
         "story_likes": [],
     }
@@ -638,7 +639,8 @@ class TestGetStoryDetailByIdService:
         db = AsyncMock()
         db.execute.side_effect = [
             SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
-            SimpleNamespace(scalar_one=lambda: 2),
+            SimpleNamespace(scalar_one=lambda: 2),  # like_count
+            SimpleNamespace(),  # UPDATE view_count
         ]
 
         result = await get_story_detail_by_id(db, story_id)
@@ -652,7 +654,27 @@ class TestGetStoryDetailByIdService:
         assert result.media_files[0].media_url.endswith("/images/stories/key.png")
         assert result.media_files[1].media_url.endswith("/images/stories/key.png")
         assert result.like_count == 2
-        assert db.execute.await_count == 2
+        assert result.view_count == 0
+        assert db.execute.await_count == 3
+        db.commit.assert_awaited_once()
+
+    async def test_view_count_is_incremented_on_detail_fetch(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, view_count=5, media_files=[])
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 0),  # like_count
+            SimpleNamespace(),  # UPDATE view_count
+        ]
+
+        result = await get_story_detail_by_id(db, story_id)
+
+        # Response shows pre-increment count; DB increment is committed
+        assert result.view_count == 5
+        db.commit.assert_awaited_once()
+        assert db.execute.await_count == 3
 
     async def test_raises_404_when_story_not_found(self):
         db = AsyncMock()
