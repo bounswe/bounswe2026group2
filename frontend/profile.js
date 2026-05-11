@@ -39,10 +39,67 @@ async function loadProfile() {
             var options = { month: 'long', year: 'numeric' };
             joinedEl.innerHTML = '<span class="material-symbols-outlined text-[18px]">calendar_month</span> Joined ' + date.toLocaleDateString('en-US', options);
         }
+        renderBadges(data.badges || []);
         await loadUserStories(data.username);
         await loadSavedCount();
     } catch (err) {
         console.error("Error loading profile:", err);
+    }
+}
+
+var BADGE_ASSET_BY_NAME = {
+    "first story": "assets/1st story.png",
+    "1st story": "assets/1st story.png",
+    "story teller": "assets/story teller.png",
+    "story master": "assets/story master.png"
+};
+
+function getBadgeAssetPath(badge) {
+    var name = typeof badge === "string" ? badge : (badge && badge.name ? badge.name : "");
+    return BADGE_ASSET_BY_NAME[name.trim().toLowerCase()] || "";
+}
+
+function renderBadges(badges) {
+    var container = document.getElementById("profile-badges");
+    if (!container) return;
+
+    container.innerHTML = "";
+    if (!Array.isArray(badges) || badges.length === 0) {
+        var empty = document.createElement("p");
+        empty.className = "text-sm text-textmuted italic col-span-3";
+        empty.textContent = "No badges earned yet.";
+        container.appendChild(empty);
+        return;
+    }
+
+    badges.forEach(function (badge) {
+        var name = badge && badge.name ? badge.name : "";
+        var assetPath = getBadgeAssetPath(badge);
+        if (!name || !assetPath) return;
+
+        var badgeEl = document.createElement("div");
+        badgeEl.className = "flex flex-col items-center gap-2 rounded-xl border border-border bg-background p-3 text-center";
+        if (badge.description) badgeEl.title = badge.description;
+
+        var img = document.createElement("img");
+        img.src = assetPath;
+        img.alt = name;
+        img.className = "h-16 w-16 object-contain";
+
+        var label = document.createElement("span");
+        label.className = "text-xs font-semibold leading-snug text-textmain";
+        label.textContent = name;
+
+        badgeEl.appendChild(img);
+        badgeEl.appendChild(label);
+        container.appendChild(badgeEl);
+    });
+
+    if (!container.children.length) {
+        var fallback = document.createElement("p");
+        fallback.className = "text-sm text-textmuted italic col-span-3";
+        fallback.textContent = "No badges earned yet.";
+        container.appendChild(fallback);
     }
 }
 
@@ -194,6 +251,8 @@ if (typeof document !== "undefined") {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        loadProfile: loadProfile
+        loadProfile: loadProfile,
+        renderBadges: renderBadges,
+        getBadgeAssetPath: getBadgeAssetPath
     };
 }

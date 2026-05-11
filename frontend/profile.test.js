@@ -3,7 +3,7 @@ global.requireAuth = jest.fn();
 global.authFetch = jest.fn();
 global.logout = jest.fn();
 
-const { loadProfile } = require("./profile");
+const { loadProfile, renderBadges, getBadgeAssetPath } = require("./profile");
 
 describe("profile page unit tests", () => {
     beforeEach(() => {
@@ -176,5 +176,64 @@ describe("profile page unit tests", () => {
 
         await loadProfile();
         expect(document.getElementById("profile-name").textContent).toBe("fallback_user");
+    });
+
+    test("loadProfile renders badges returned from auth/me", async () => {
+        document.body.innerHTML = `
+            <h1 id="profile-name"></h1>
+            <span id="profile-joined"></span>
+            <p id="profile-bio"></p>
+            <span id="profile-location"><span class="material-symbols-outlined">location_on</span></span>
+            <div id="profile-avatar"><span class="material-symbols-outlined">person</span></div>
+            <div id="profile-badges"></div>
+            <div id="profile-stories-container"></div>
+            <div id="stat-saved"></div>
+            <div id="stat-stories"></div>
+        `;
+
+        global.authFetch
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({
+                    username: "badge_user",
+                    created_at: "2026-04-07T00:00:00Z",
+                    badges: [
+                        { name: "First Story", description: "Published your very first story." },
+                        { name: "Story Teller", description: "Published 5 stories." },
+                        { name: "Story Master", description: "Published 10 stories." }
+                    ]
+                })
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ stories: [] })
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve({ stories: [] })
+            });
+
+        await loadProfile();
+
+        var badgeImages = document.querySelectorAll("#profile-badges img");
+        expect(badgeImages).toHaveLength(3);
+        expect(badgeImages[0].getAttribute("src")).toBe("assets/1st story.png");
+        expect(badgeImages[1].getAttribute("src")).toBe("assets/story teller.png");
+        expect(badgeImages[2].getAttribute("src")).toBe("assets/story master.png");
+        expect(document.getElementById("profile-badges").textContent).toContain("First Story");
+    });
+
+    test("renderBadges keeps empty state when there are no badges", () => {
+        document.body.innerHTML = '<div id="profile-badges"></div>';
+
+        renderBadges([]);
+
+        expect(document.getElementById("profile-badges").textContent).toBe("No badges earned yet.");
+    });
+
+    test("getBadgeAssetPath maps known badge names to assets", () => {
+        expect(getBadgeAssetPath({ name: "First Story" })).toBe("assets/1st story.png");
+        expect(getBadgeAssetPath({ name: "Story Teller" })).toBe("assets/story teller.png");
+        expect(getBadgeAssetPath({ name: "Story Master" })).toBe("assets/story master.png");
     });
 });

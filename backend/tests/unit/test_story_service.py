@@ -1097,7 +1097,11 @@ class TestCreateStoryWithLocationService:
         db.refresh.side_effect = _refresh_side_effect
         db.execute.return_value.scalar_one = lambda: 0
 
-        with patch("app.services.story_service.check_and_award_story_badges", new_callable=AsyncMock):
+        with patch(
+            "app.services.story_service.check_and_award_story_badges",
+            new_callable=AsyncMock,
+            return_value="First Story",
+        ):
             result = await create_story_with_location(db, current_user, payload)
 
         assert result.title == "New Story"
@@ -1112,6 +1116,7 @@ class TestCreateStoryWithLocationService:
         assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
         assert result.like_count == 0
+        assert result.new_badge == "First Story"
         db.add.assert_called_once()
         assert db.commit.await_count == 2
         db.refresh.assert_awaited_once()
@@ -1496,7 +1501,11 @@ class TestAnonymousStoryService:
         db.refresh.side_effect = _refresh_side_effect
         db.execute.return_value.scalar_one = lambda: 0
 
-        with patch("app.services.story_service.check_and_award_story_badges", new_callable=AsyncMock):
+        with patch(
+            "app.services.story_service.check_and_award_story_badges",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
             result = await create_story_with_location(db, current_user, payload)
 
         assert result.is_anonymous is True

@@ -769,6 +769,7 @@ class TestStoryCreateAPI:
         assert data["status"] == "published"
         assert data["visibility"] == "public"
         assert data["media_files"] == []
+        assert data["new_badge"] == "First Story"
         assert "id" in data
         assert "created_at" in data
 

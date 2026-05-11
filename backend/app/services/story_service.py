@@ -460,12 +460,13 @@ async def create_story_with_location(
     await db.commit()
     await db.refresh(story)
 
-    await check_and_award_story_badges(db, current_user.id)
+    awarded_badge_name = await check_and_award_story_badges(db, current_user.id)
     await db.commit()
 
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
     like_count = await _get_story_like_count(db, story.id)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
+    new_badge = awarded_badge_name if isinstance(awarded_badge_name, str) else None
+    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count, new_badge=new_badge)
 
 
 async def update_story_with_location_and_dates(

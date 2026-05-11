@@ -17,7 +17,7 @@ from app.models.user import (
     UserPublicProfileResponse,
     UserStoryListResponse,
 )
-from app.services.badge_service import get_user_badges
+from app.services.badge_service import check_and_award_story_badges, get_user_badges
 from app.services.storage import build_public_object_url
 
 
@@ -215,6 +215,10 @@ async def get_user_public_profile(
             bucket_name=user.avatar_bucket_name,
             storage_key=user.avatar_storage_key,
         )
+
+    awarded_badge_name = await check_and_award_story_badges(db, user_id)
+    if awarded_badge_name:
+        await db.commit()
 
     badges = await get_user_badges(db, user_id)
     return UserPublicProfileResponse(

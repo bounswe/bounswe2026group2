@@ -24,7 +24,7 @@ from app.models.user import (
     UserRegisterRequest,
     UserResponse,
 )
-from app.services.badge_service import get_user_badges
+from app.services.badge_service import check_and_award_story_badges, get_user_badges
 from app.services.storage import build_public_object_url, delete_object, get_bucket_for_media_type, upload_bytes
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -84,6 +84,10 @@ def get_user_profile(user: User) -> UserProfileResponse:
 
 async def get_full_user_profile(db: AsyncSession, user: User) -> UserProfileResponse:
     """Return the user profile including earned badges."""
+    awarded_badge_name = await check_and_award_story_badges(db, user.id)
+    if awarded_badge_name:
+        await db.commit()
+
     badges: list[BadgeResponse] = await get_user_badges(db, user.id)
     profile = get_user_profile(user)
     return profile.model_copy(update={"badges": badges})

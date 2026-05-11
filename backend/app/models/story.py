@@ -278,6 +278,7 @@ class StoryLikeResponse(BaseModel):
 class StoryDetailResponse(StoryResponse):
     media_files: list[MediaFileResponse] = Field(default_factory=list)
     like_count: int = Field(default=0, ge=0)
+    new_badge: str | None = None
 
 
 class StoryReportRequest(BaseModel):
