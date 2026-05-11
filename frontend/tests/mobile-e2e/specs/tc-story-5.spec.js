@@ -54,8 +54,7 @@ async function registerAndLogin(username, email, password) {
 
 async function clearSession() {
   await browser.execute(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('access_token');
+    localStorage.removeItem('auth_token');
   });
 }
 
@@ -76,6 +75,12 @@ describe.skip('TC_STORY_5 — Anonymous Story Sharing', () => {
     await $('#story').setValue('A forgotten fountain in the heart of the old city.');
     await $('#location').setValue('Istanbul');
     await $('#date-single').setValue('01/01/2024');
+    // Set hidden lat/lng fields directly — the submit handler validates that
+    // both are non-empty before allowing the form to proceed.
+    await browser.execute(() => {
+      document.getElementById('latitude').value = '41.0082';
+      document.getElementById('longitude').value = '28.9784';
+    });
 
     // ── Step 4: Enable anonymous toggle — assert it is visually selected ─────
     // TODO: uncomment once #242 adds the anonymous toggle with data-testid
@@ -95,11 +100,14 @@ describe.skip('TC_STORY_5 — Anonymous Story Sharing', () => {
     //         { timeout: 8_000 }
     //       );
 
-    // ── Step 6: Capture the story URL (contains story ID for later navigation)
-    // TODO: once the post-submit redirect lands on story-detail.html, remove the
-    // comment below and use browser.getUrl() directly.
-    // const storyUrl = await browser.getUrl();
-    const storyUrl = await browser.getUrl(); // placeholder — likely map.html until #242
+    // ── Step 6: Capture the story URL for later navigation ───────────────────
+    // Currently story-create.html redirects to map.html after a successful publish
+    // (not to story-detail.html), so this will capture the wrong URL until #242
+    // changes the redirect. When #242 ships, either:
+    //   a) wait for redirect to story-detail.html?id=<uuid> and read browser.getUrl(), or
+    //   b) intercept the POST /stories/ response via browser.mock() to extract the
+    //      story ID, then build: `${await getAppOrigin()}/story-detail.html?id=${id}`
+    const storyUrl = await browser.getUrl();
 
     // ── Step 7: Clear author session and register/login as reader ────────────
     await clearSession();
