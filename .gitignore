@@ -32,6 +32,10 @@ dist/
 *.log
 logs/
 
+# Jest reports
+test-report.html
+test-report.xml
+
 # Docker
 docker-compose.override.yml
 
