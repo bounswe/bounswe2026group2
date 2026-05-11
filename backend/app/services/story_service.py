@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, nulls_last, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -682,6 +682,56 @@ async def get_nearby_stories(
             distance_km <= radius_km,
         )
         .order_by(distance_km)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return _map_story_rows(rows)
+
+
+async def get_timeline_stories(
+    db: AsyncSession,
+    center_lat: float | None = None,
+    center_lng: float | None = None,
+    radius_km: float = 5.0,
+    place_name: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> StoryListResponse:
+    base_filters = [
+        Story.status == StoryStatus.PUBLISHED,
+        Story.visibility == StoryVisibility.PUBLIC,
+        Story.deleted_at.is_(None),
+    ]
+
+    if center_lat is not None and center_lng is not None:
+        lat1 = func.radians(center_lat)
+        lat2 = func.radians(Story.latitude)
+        lon1 = func.radians(center_lng)
+        lon2 = func.radians(Story.longitude)
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = func.pow(func.sin(dlat / 2), 2) + func.cos(lat1) * func.cos(lat2) * func.pow(func.sin(dlon / 2), 2)
+        distance_km = func.asin(func.sqrt(a)) * (_EARTH_RADIUS_KM * 2)
+        location_filters = [
+            Story.latitude.is_not(None),
+            Story.longitude.is_not(None),
+            distance_km <= radius_km,
+        ]
+    else:
+        location_filters = [
+            Story.place_name.ilike(f"%{place_name}%"),
+        ]
+
+    stmt = (
+        select(Story, User.username)
+        .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
+        .where(*base_filters, *location_filters)
+        .order_by(nulls_last(Story.date_start.asc()))
+        .limit(limit)
+        .offset(offset)
     )
 
     result = await db.execute(stmt)
