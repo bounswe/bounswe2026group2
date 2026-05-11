@@ -266,6 +266,31 @@ class TestSearchAvailableStoriesByPlaceService:
         assert result.stories == []
         db.execute.assert_awaited_once()
 
+    async def test_general_search_returns_mapped_stories_and_total(self):
+        story = _make_story(title="Gecekondu Memory", place_name="Istanbul")
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "storyauthor")]
+
+        result = await search_available_stories_by_place(db, search_query="gecek")
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+        assert result.stories[0].id == story.id
+        assert result.stories[0].title == "Gecekondu Memory"
+        assert result.stories[0].author == "storyauthor"
+        db.execute.assert_awaited_once()
+
+    async def test_general_search_returns_empty_response_when_no_match(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await search_available_stories_by_place(db, search_query="unknown")
+
+        assert result.total == 0
+        assert result.stories == []
+        db.execute.assert_awaited_once()
+
     async def test_search_query_includes_date_overlap_filters(self):
         db = AsyncMock()
         db.execute.return_value.all = lambda: []
@@ -299,6 +324,26 @@ class TestSearchAvailableStoriesByPlaceService:
         assert "stories.content" in sql
         assert "stories.place_name" in sql
         assert "tags.name" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY" in sql
+        assert "stories.created_at DESC" in sql
+
+    async def test_general_search_query_with_tags_keeps_hybrid_search_and_applies_tag_filter(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, search_query="gecek", tags=["history"])
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LEFT OUTER JOIN story_tags" in sql
+        assert "LEFT OUTER JOIN tags" in sql
+        assert "stories.title" in sql
+        assert "stories.summary" in sql
+        assert "stories.content" in sql
+        assert "stories.place_name" in sql
+        assert "tags.name IN" in sql
         assert "GROUP BY stories.id, users.username" in sql
         assert "ORDER BY" in sql
         assert "stories.created_at DESC" in sql
