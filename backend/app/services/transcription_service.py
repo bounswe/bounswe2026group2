@@ -1,7 +1,9 @@
 import asyncio
+import functools
 import logging
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from tempfile import NamedTemporaryFile
 
@@ -16,6 +18,11 @@ from app.services.ai_tagging_system import is_ai_tagging_configured, run_ai_tagg
 from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 
 logger = logging.getLogger(__name__)
+
+# Single-worker executor: all transcription work is serialised before a thread is
+# allocated, so no threadpool slots are wasted waiting and only one WhisperModel
+# is ever active. Both preview and background calls share this queue.
+_TRANSCRIPTION_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
 
 async def transcribe_media_file(
@@ -91,13 +98,9 @@ async def _transcribe_with_whisper(
     content: bytes,
     mime_type: str | None,
 ) -> str | None:
-    # Model inference is synchronous and CPU-heavy, so run it off the event loop.
-    return await asyncio.to_thread(
-        _transcribe_with_whisper_sync,
-        filename=filename,
-        content=content,
-        mime_type=mime_type,
-    )
+    loop = asyncio.get_running_loop()
+    fn = functools.partial(_transcribe_with_whisper_sync, filename=filename, content=content, mime_type=mime_type)
+    return await loop.run_in_executor(_TRANSCRIPTION_EXECUTOR, fn)
 
 
 @lru_cache(maxsize=1)
