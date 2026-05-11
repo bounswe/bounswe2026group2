@@ -507,14 +507,6 @@
       });
   }
 
-      })
-      .catch(function (err) {
-         console.error("Error loading story details:", err);
-         document.getElementById('story-title').textContent = "Failed to load story";
-         document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";
-      });
-  }
-
   // ─── Report functionality ───────────────────────────────────────────────────
   var selectedReportReason = null;
   var reportReasonsList = [
