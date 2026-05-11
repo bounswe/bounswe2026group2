@@ -1,7 +1,7 @@
 """Add badges and user_badges tables with initial badge seed data.
 
 Revision ID: 20260510_0019
-Revises: 20260510_0018
+Revises: 20260510_0017
 Create Date: 2026-05-10 00:00:00
 """
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "20260510_0019"
-down_revision: Union[str, Sequence[str], None] = "20260510_0018"
+down_revision: Union[str, Sequence[str], None] = "20260510_0017"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
