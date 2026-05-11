@@ -218,6 +218,21 @@ class TestListAvailableStoriesService:
         assert "stories.date_start <=" in sql
         assert "stories.date_end >=" in sql
 
+    async def test_query_includes_tag_or_filter_and_relevance_sorting_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await list_available_stories(db, tags=[" Spor ", "history", "spor"])
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "JOIN story_tags" in sql
+        assert "JOIN tags" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY count(tags.id) DESC, stories.created_at DESC" in sql
+
 
 @pytest.mark.asyncio
 class TestSearchAvailableStoriesByPlaceService:
@@ -266,6 +281,32 @@ class TestSearchAvailableStoriesByPlaceService:
 
         assert "stories.date_start <=" in sql
         assert "stories.date_end >=" in sql
+
+    async def test_search_query_includes_tag_or_filter_and_relevance_sorting_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, "istanbul", tags=["spor", "history"])
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.place_name" in sql
+        assert "JOIN story_tags" in sql
+        assert "JOIN tags" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY count(tags.id) DESC, stories.created_at DESC" in sql
+
+    async def test_search_rejects_blank_tag_without_querying_db(self):
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await search_available_stories_by_place(db, "istanbul", tags=[" "])
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "Tags cannot be blank"
+        db.execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio
