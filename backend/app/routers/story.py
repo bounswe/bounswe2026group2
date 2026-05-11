@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_optional_user
 from app.db.enums import MediaType, ReportStatus, UserRole
 from app.db.session import get_db
 from app.db.story import Story
@@ -283,9 +283,11 @@ async def list_timeline_stories(
 )
 async def get_story_by_id(
     story_id: uuid.UUID,
+    track_view: bool = Query(default=False, description="Set to true only when rendering the story detail page"),
+    current_user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_story_detail_by_id(db, story_id)
+    return await get_story_detail_by_id(db, story_id, viewer=current_user, track_view=track_view)
 
 
 @router.get(

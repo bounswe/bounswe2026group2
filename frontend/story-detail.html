@@ -393,7 +393,7 @@
       setupSaveButton(API_BASE, storyId);
     }
 
-    fetch(API_BASE + "/stories/" + storyId)
+    fetch(API_BASE + "/stories/" + storyId + "?track_view=true")
       .then(function (res) { return res.json(); })
       .then(function (story) {
          applyStoryDetail(story);
