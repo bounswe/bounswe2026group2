@@ -70,7 +70,9 @@ def _apply_hybrid_search_filter(stmt, search_query: str):
     normalized_query = search_query.strip().lower()
     query_pattern = f"%{normalized_query}%"
     fuzzy_threshold = 0.3
-    title_similarity = func.greatest(func.similarity(Story.title, search_query), func.word_similarity(search_query, Story.title))
+    title_similarity = func.greatest(
+        func.similarity(Story.title, search_query), func.word_similarity(search_query, Story.title)
+    )
     summary_similarity = func.greatest(
         func.similarity(Story.summary, search_query), func.word_similarity(search_query, Story.summary)
     )
@@ -80,7 +82,9 @@ def _apply_hybrid_search_filter(stmt, search_query: str):
     place_similarity = func.greatest(
         func.similarity(Story.place_name, search_query), func.word_similarity(search_query, Story.place_name)
     )
-    tag_similarity = func.greatest(func.similarity(Tag.name, search_query), func.word_similarity(search_query, Tag.name))
+    tag_similarity = func.greatest(
+        func.similarity(Tag.name, search_query), func.word_similarity(search_query, Tag.name)
+    )
     # Score priority: exact tag (30) > text/tag substring matches > fuzzy typo matches.
     # Tag scores are aggregated with MAX so a story isn't double-counted for multiple tag rows.
     tag_score = func.coalesce(
