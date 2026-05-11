@@ -1777,7 +1777,6 @@ class TestTimelineStoriesAPI:
         )
 
     def _make_story(self, user_id, title, lat=None, lng=None, place_name="Istanbul", date_start=None) -> Story:
-        from datetime import date as date_type
         return Story(
             user_id=user_id,
             title=title,
@@ -1897,7 +1896,6 @@ class TestTimelineStoriesAPI:
         assert resp.status_code == 422
 
     async def test_pagination_limit_and_offset(self, client, db_session):
-        from datetime import date as date_type
         user = self._make_user("tlauthor6", "tl6@example.com")
         db_session.add(user)
         await db_session.flush()
