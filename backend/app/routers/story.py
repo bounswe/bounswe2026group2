@@ -103,7 +103,8 @@ async def update_story(
     summary="List public stories",
     description=(
         "Return all published public stories. Optionally filter by geographic bounding box "
-        "(min_lat/max_lat/min_lng/max_lng) and/or date range (query_start/query_end/query_precision). "
+        "(min_lat/max_lat/min_lng/max_lng), date range (query_start/query_end/query_precision), "
+        "and/or tags. Multiple tags use OR matching; stories matching more requested tags rank higher. "
         "query_precision accepts 'year' or 'date'."
     ),
     responses={
@@ -120,7 +121,10 @@ async def list_stories(
     query_precision: str | None = Query(default=None),
     tags: list[str] | None = Query(
         default=None,
-        description="Filter by one or more story tags. Repeat the parameter for multiple tags.",
+        description=(
+            "Filter by one or more story tags. Repeat the parameter for multiple tags "
+            "(for example, ?tags=spor&tags=tarih). Multiple tags use OR matching."
+        ),
     ),
     db: AsyncSession = Depends(get_db),
 ):
@@ -161,7 +165,8 @@ async def list_stories(
     summary="Search stories by place name",
     description=(
         "Search published public stories by place name (case-insensitive substring match). "
-        "Optionally filter by date range using query_start/query_end/query_precision."
+        "Optionally filter by date range using query_start/query_end/query_precision and by tags. "
+        "Multiple tags use OR matching; stories matching more requested tags rank higher."
     ),
     responses={
         422: {"description": "Validation error for place_name or date filter parameters"},
@@ -174,7 +179,10 @@ async def search_stories(
     query_precision: str | None = Query(default=None),
     tags: list[str] | None = Query(
         default=None,
-        description="Filter by one or more story tags. Repeat the parameter for multiple tags.",
+        description=(
+            "Filter by one or more story tags. Repeat the parameter for multiple tags "
+            "(for example, ?tags=spor&tags=tarih). Multiple tags use OR matching."
+        ),
     ),
     db: AsyncSession = Depends(get_db),
 ):
