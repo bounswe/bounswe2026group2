@@ -476,7 +476,7 @@ async def create_story_with_location(
 
     db.add(story)
 
-    if payload.locations:
+    if payload.locations is not None:
         validate_location_list(payload.locations)
         for loc in build_story_locations(story_id, payload.locations):
             db.add(loc)

@@ -1116,6 +1116,37 @@ class TestCreateStoryWithLocationService:
         assert db.commit.await_count == 2
         db.refresh.assert_awaited_once()
 
+    async def test_create_story_with_empty_locations_list_adds_no_story_locations(self):
+        payload = StoryCreateRequest(
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            locations=[],
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser")
+
+        db = AsyncMock()
+        db.add = MagicMock()
+
+        async def _refresh_side_effect(story_obj):
+            story_obj.id = uuid.uuid4()
+            story_obj.created_at = datetime.now(timezone.utc)
+            story_obj.status = StoryStatus.PUBLISHED
+            story_obj.visibility = StoryVisibility.PUBLIC
+
+        db.refresh.side_effect = _refresh_side_effect
+        db.execute.return_value.scalar_one = lambda: 0
+
+        result = await create_story_with_location(db, current_user, payload)
+
+        # Only the Story is added; no auto-created StoryLocation for an explicit empty list
+        assert result.title == "New Story"
+        assert db.add.call_count == 1
+        db.commit.assert_awaited_once()
+
     async def test_create_story_rejects_missing_place_name(self):
         payload = StoryCreateRequest(
             title="New Story",
