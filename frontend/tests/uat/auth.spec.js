@@ -68,25 +68,27 @@ test.describe('TC_AUTH_2 — Google OAuth Login', () => {
   const FAKE_TOKEN = 'test.jwt.token';
 
   test('logs in via Google OAuth and lands on the map', async ({ page }) => {
-    // Intercept the backend OAuth redirect and simulate a successful token handoff.
-    await page.route('**/auth/google/login', (route) => {
-      route.fulfill({
-        status: 302,
-        headers: { Location: `/oauth-callback.html#access_token=${FAKE_TOKEN}` },
-      });
-    });
-
     // ── Step 1: Open the login page ─────────────────────────────────────────
     await page.goto('/index.html');
 
-    // ── Step 2: Click "Continue with Google" ────────────────────────────────
+    // ── Step 2: Rewrite the OAuth button href to the callback page ───────────
+    // Avoids going through Google's consent screen while still exercising the
+    // full frontend OAuth callback flow (token extraction → localStorage → redirect).
+    // Using evaluate() keeps the navigation on the frontend origin so the
+    // relative /oauth-callback.html URL resolves correctly.
+    await page.evaluate((token) => {
+      const btn = document.getElementById('google-auth-button');
+      if (btn) btn.href = `/oauth-callback.html#access_token=${token}`;
+    }, FAKE_TOKEN);
+
+    // ── Step 3: Click "Continue with Google" ────────────────────────────────
     await page.getByTestId('login-google').click();
 
-    // ── Step 3: oauth-callback.html reads the token and redirects to map ────
+    // ── Step 4: oauth-callback.html reads the token and redirects to map ────
     await page.waitForURL('**/map.html', { timeout: 10_000 });
     await expect(page).toHaveURL(/map\.html/);
 
-    // ── Step 4: Confirm the token was persisted ──────────────────────────────
+    // ── Step 5: Confirm the token was persisted ──────────────────────────────
     const stored = await page.evaluate(() => localStorage.getItem('auth_token'));
     expect(stored).toBe(FAKE_TOKEN);
   });

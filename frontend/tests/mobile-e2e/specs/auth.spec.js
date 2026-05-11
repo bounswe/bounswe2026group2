@@ -97,12 +97,15 @@ describe('TC_AUTH_2 — Google OAuth Login', () => {
       return this.skip();
     }
 
-    // ── Step 2: Rewrite the Google auth button's href to the callback page ──
-    // This simulates the backend redirect without hitting Google's servers.
+    // ── Step 2: Rewrite the OAuth button href to the callback page ──────────
+    // Avoids going through Google's consent screen while still exercising the
+    // full frontend OAuth callback flow (token extraction → localStorage → redirect).
+    // Using execute() keeps the navigation on the WebView origin so the
+    // relative /oauth-callback.html URL resolves correctly.
     await browser.execute((token) => {
       const btn = document.getElementById('google-auth-button');
       if (btn) {
-        btn.href = `oauth-callback.html#access_token=${token}`;
+        btn.href = `/oauth-callback.html#access_token=${token}`;
       }
     }, FAKE_TOKEN);
 
