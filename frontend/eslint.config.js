@@ -30,6 +30,12 @@ module.exports = [
                 Blob: "readonly",
                 File: "readonly",
                 MediaRecorder: "readonly",
+                MouseEvent: "readonly",
+                KeyboardEvent: "readonly",
+                setTimeout: "readonly",
+                clearTimeout: "readonly",
+                setInterval: "readonly",
+                clearInterval: "readonly",
                 // CommonJS exports used by some source files for testing
                 module: "readonly",
                 // Libraries loaded via <script>
@@ -65,16 +71,49 @@ module.exports = [
                 afterEach: "readonly",
                 jest: "readonly",
                 global: "readonly",
+                MouseEvent: "readonly",
+                KeyboardEvent: "readonly",
             },
         },
     },
     {
-        files: ["eslint.config.js"],
+        files: ["eslint.config.js", "playwright.config.js"],
         languageOptions: {
             sourceType: "commonjs",
             globals: {
                 module: "readonly",
                 require: "readonly",
+                process: "readonly",
+            },
+        },
+    },
+    {
+        files: ["tests/uat/**/*.spec.js"],
+        languageOptions: {
+            sourceType: "commonjs",
+            globals: {
+                require: "readonly",
+                process: "readonly",
+                test: "readonly",
+                expect: "readonly",
+                describe: "readonly",
+            },
+        },
+    },
+    {
+        files: ["tests/mobile-e2e/**/*.js"],
+        languageOptions: {
+            sourceType: "commonjs",
+            globals: {
+                require: "readonly",
+                exports: "readonly",
+                module: "readonly",
+                process: "readonly",
+                __dirname: "readonly",
+                describe: "readonly",
+                it: "readonly",
+                expect: "readonly",
+                browser: "readonly",
             },
         },
     },

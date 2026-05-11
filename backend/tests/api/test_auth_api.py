@@ -425,3 +425,51 @@ class TestPasswordChangeAPI:
         )
 
         assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+class TestGoogleOAuthCallbackAPI:
+    """API-level tests for OAuth state (CSRF) validation on the callback endpoint."""
+
+    async def test_callback_rejects_missing_state_cookie(self, client):
+        resp = await client.get("/auth/google/callback?code=fake-code&state=some-state")
+        assert resp.status_code == 400
+
+    async def test_callback_rejects_mismatched_state(self, client):
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code&state=attacker-state",
+            cookies={"oauth_state": "real-state"},
+        )
+        assert resp.status_code == 400
+
+    async def test_callback_rejects_missing_state_query_param(self, client):
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code",
+            cookies={"oauth_state": "real-state"},
+        )
+        assert resp.status_code == 422
+
+    async def test_callback_redirects_to_frontend_with_token_fragment(self, client, monkeypatch):
+        from app.models.user import TokenResponse
+
+        async def fake_google_oauth_login(db, code):
+            assert code == "fake-code"
+            return TokenResponse(access_token="app-jwt-token")
+
+        monkeypatch.setattr("app.routers.auth.google_oauth_login", fake_google_oauth_login)
+        monkeypatch.setattr(
+            "app.routers.auth.settings.FRONTEND_GOOGLE_CALLBACK_URL",
+            "http://localhost:3000/oauth-callback.html",
+        )
+
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code&state=real-state",
+            cookies={"oauth_state": "real-state"},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code in (302, 307)
+        assert (
+            resp.headers["location"]
+            == "http://localhost:3000/oauth-callback.html#access_token=app-jwt-token&token_type=bearer"
+        )

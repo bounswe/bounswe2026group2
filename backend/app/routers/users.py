@@ -1,13 +1,21 @@
+import uuid
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.db.user import User
-from app.models.user import UserDashboardResponse, UserEngagementStatsResponse, UserStoryListResponse
+from app.models.user import (
+    UserDashboardResponse,
+    UserEngagementStatsResponse,
+    UserPublicProfileResponse,
+    UserStoryListResponse,
+)
 from app.services.user_service import (
     get_current_user_dashboard,
     get_current_user_engagement_stats,
+    get_user_public_profile,
     list_current_user_saved_stories,
     list_current_user_stories,
 )
@@ -105,3 +113,19 @@ async def get_my_dashboard(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_current_user_dashboard(db, current_user)
+
+
+@router.get(
+    "/{user_id}/profile",
+    response_model=UserPublicProfileResponse,
+    summary="Get a user's public profile",
+    description="Return the public profile and earned badges for any user by their UUID.",
+    responses={
+        404: {"description": "User not found"},
+    },
+)
+async def get_profile(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_user_public_profile(db, user_id)

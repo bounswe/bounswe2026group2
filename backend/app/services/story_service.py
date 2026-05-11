@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, nulls_last, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -32,6 +32,8 @@ from app.models.story import (
     StorySaveResponse,
     StoryUpdateRequest,
 )
+from app.services.badge_service import check_and_award_story_badges
+from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 from app.services.storage import (
     build_public_object_url,
     delete_object,
@@ -39,63 +41,6 @@ from app.services.storage import (
     upload_bytes,
 )
 from app.services.transcription_service import transcribe_media_file
-
-MAX_MEDIA_UPLOAD_BYTES = 20 * 1024 * 1024  # 20 MB
-
-ALLOWED_MIME_TYPES = {
-    "image": {"image/jpeg", "image/png", "image/webp", "image/gif"},
-    "audio": {"audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4", "audio/webm"},
-    "video": {"video/mp4", "video/webm", "video/quicktime"},
-    "document": {
-        "application/pdf",
-        "text/plain",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
-}
-
-MIME_TYPE_ALIASES = {
-    "image/jpg": "image/jpeg",
-    "audio/x-wav": "audio/wav",
-    "audio/wave": "audio/wav",
-    "audio/vnd.wave": "audio/wav",
-    "audio/x-m4a": "audio/mp4",
-    "audio/m4a": "audio/mp4",
-    "video/x-m4v": "video/mp4",
-    "application/x-pdf": "application/pdf",
-}
-
-GENERIC_BINARY_MIME_TYPES = {"application/octet-stream", "binary/octet-stream"}
-
-MIME_TYPE_FALLBACKS_BY_EXTENSION = {
-    "image": {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-        ".gif": "image/gif",
-    },
-    "audio": {
-        ".mp3": "audio/mpeg",
-        ".wav": "audio/wav",
-        ".ogg": "audio/ogg",
-        ".m4a": "audio/mp4",
-        ".mp4": "audio/mp4",
-        ".webm": "audio/webm",
-    },
-    "video": {
-        ".mp4": "video/mp4",
-        ".m4v": "video/mp4",
-        ".webm": "video/webm",
-        ".mov": "video/quicktime",
-    },
-    "document": {
-        ".pdf": "application/pdf",
-        ".txt": "text/plain",
-        ".doc": "application/msword",
-        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    },
-}
 
 
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
@@ -182,43 +127,6 @@ def _map_comment_row(comment: StoryComment, author: User) -> CommentResponse:
     )
 
 
-def _normalize_media_content_type(file: UploadFile, payload: MediaUploadRequest) -> str:
-    raw_content_type = (file.content_type or "").split(";")[0].strip().lower()
-    normalized_content_type = MIME_TYPE_ALIASES.get(raw_content_type, raw_content_type)
-
-    if normalized_content_type in GENERIC_BINARY_MIME_TYPES:
-        extension = Path(file.filename or "").suffix.lower()
-        fallback_content_type = MIME_TYPE_FALLBACKS_BY_EXTENSION[payload.media_type.value].get(extension)
-        if fallback_content_type:
-            return fallback_content_type
-
-    return normalized_content_type
-
-
-def _validate_media_upload(file: UploadFile, payload: MediaUploadRequest) -> str:
-    if not file.filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Filename is required",
-        )
-
-    if not file.content_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Content type is required",
-        )
-
-    allowed_for_type = ALLOWED_MIME_TYPES[payload.media_type.value]
-    normalized_content_type = _normalize_media_content_type(file, payload)
-    if normalized_content_type not in allowed_for_type:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=(f"Unsupported mime type '{normalized_content_type}' for media type '{payload.media_type.value}'"),
-        )
-
-    return normalized_content_type
-
-
 def _build_media_storage_key(story_id: uuid.UUID, filename: str) -> str:
     ext = Path(filename).suffix.lower()
     return f"stories/{story_id}/media/{uuid.uuid4()}{ext}"
@@ -274,6 +182,7 @@ async def list_available_stories(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
@@ -315,6 +224,7 @@ async def search_available_stories_by_place(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
@@ -346,7 +256,7 @@ async def get_story_detail_by_id(
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
         .where(Story.id == story_id, Story.deleted_at.is_(None))
-        .options(selectinload(Story.media_files))
+        .options(selectinload(Story.media_files), selectinload(Story.tags))
     )
 
     result = await db.execute(stmt)
@@ -501,6 +411,7 @@ async def list_saved_stories_for_user(
         select(Story, User.username)
         .join(StorySave, StorySave.story_id == Story.id)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             StorySave.user_id == current_user.id,
             Story.status == StoryStatus.PUBLISHED,
@@ -549,9 +460,15 @@ async def create_story_with_location(
     await db.commit()
     await db.refresh(story)
 
+    awarded_badge_name = await check_and_award_story_badges(db, current_user.id)
+    await db.commit()
+
     story_response = StoryResponse.from_orm_with_author(story, current_user.username)
     like_count = await _get_story_like_count(db, story.id)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
+    new_badge = awarded_badge_name if isinstance(awarded_badge_name, str) else None
+    return StoryDetailResponse(
+        **story_response.model_dump(), media_files=[], like_count=like_count, new_badge=new_badge
+    )
 
 
 async def update_story_with_location_and_dates(
@@ -668,7 +585,7 @@ async def upload_media_for_story(
     payload: MediaUploadRequest,
     background_tasks: BackgroundTasks | None = None,
 ) -> MediaUploadResponse:
-    normalized_content_type = _validate_media_upload(file, payload)
+    normalized_content_type = validate_media_upload(file, payload.media_type)
 
     story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))
     story = story_result.scalar_one_or_none()
@@ -678,19 +595,8 @@ async def upload_media_for_story(
             detail="Story not found",
         )
 
-    file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is empty",
-        )
-
+    file_bytes = await read_uploaded_file_content(file)
     file_size = len(file_bytes)
-    if file_size > MAX_MEDIA_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size exceeds {MAX_MEDIA_UPLOAD_BYTES} bytes",
-        )
 
     bucket_name = get_bucket_for_media_type(payload.media_type)
     storage_key = _build_media_storage_key(story_id, file.filename)
@@ -708,6 +614,7 @@ async def upload_media_for_story(
             detail="Failed to upload media to storage",
         )
 
+    transcript = payload.transcript if payload.media_type == MediaType.AUDIO else None
     media = MediaFile(
         story_id=story_id,
         bucket_name=bucket_name,
@@ -719,6 +626,7 @@ async def upload_media_for_story(
         sort_order=payload.sort_order,
         alt_text=payload.alt_text,
         caption=payload.caption,
+        transcript=transcript,
     )
 
     try:
@@ -736,7 +644,7 @@ async def upload_media_for_story(
             detail="Failed to persist media metadata",
         )
 
-    if payload.media_type == MediaType.AUDIO and background_tasks is not None:
+    if payload.media_type == MediaType.AUDIO and transcript is None and background_tasks is not None:
         background_tasks.add_task(
             transcribe_media_file,
             media_file_id=media.id,
@@ -771,6 +679,7 @@ async def get_nearby_stories(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
@@ -780,6 +689,56 @@ async def get_nearby_stories(
             distance_km <= radius_km,
         )
         .order_by(distance_km)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return _map_story_rows(rows)
+
+
+async def get_timeline_stories(
+    db: AsyncSession,
+    center_lat: float | None = None,
+    center_lng: float | None = None,
+    radius_km: float = 5.0,
+    place_name: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> StoryListResponse:
+    base_filters = [
+        Story.status == StoryStatus.PUBLISHED,
+        Story.visibility == StoryVisibility.PUBLIC,
+        Story.deleted_at.is_(None),
+    ]
+
+    if center_lat is not None and center_lng is not None:
+        lat1 = func.radians(center_lat)
+        lat2 = func.radians(Story.latitude)
+        lon1 = func.radians(center_lng)
+        lon2 = func.radians(Story.longitude)
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = func.pow(func.sin(dlat / 2), 2) + func.cos(lat1) * func.cos(lat2) * func.pow(func.sin(dlon / 2), 2)
+        distance_km = func.asin(func.sqrt(a)) * (_EARTH_RADIUS_KM * 2)
+        location_filters = [
+            Story.latitude.is_not(None),
+            Story.longitude.is_not(None),
+            distance_km <= radius_km,
+        ]
+    else:
+        location_filters = [
+            Story.place_name.ilike(f"%{place_name}%"),
+        ]
+
+    stmt = (
+        select(Story, User.username)
+        .join(User, Story.user_id == User.id)
+        .options(selectinload(Story.tags))
+        .where(*base_filters, *location_filters)
+        .order_by(nulls_last(Story.date_start.asc()))
+        .limit(limit)
+        .offset(offset)
     )
 
     result = await db.execute(stmt)

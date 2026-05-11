@@ -1,3 +1,6 @@
+import uuid
+
+from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +11,14 @@ from app.db.story_like import StoryLike
 from app.db.story_save import StorySave
 from app.db.user import User
 from app.models.story import StoryResponse
-from app.models.user import UserDashboardResponse, UserEngagementStatsResponse, UserStoryListResponse
+from app.models.user import (
+    UserDashboardResponse,
+    UserEngagementStatsResponse,
+    UserPublicProfileResponse,
+    UserStoryListResponse,
+)
+from app.services.badge_service import check_and_award_story_badges, get_user_badges
+from app.services.storage import build_public_object_url
 
 
 def _map_user_story_rows(
@@ -187,4 +197,37 @@ async def get_current_user_dashboard(
         total_likes_received=values["total_likes_received"],
         total_comments_received=values["total_comments_received"],
         total_saves_received=values["total_saves_received"],
+    )
+
+
+async def get_user_public_profile(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+) -> UserPublicProfileResponse:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    avatar_url = None
+    if user.avatar_bucket_name and user.avatar_storage_key:
+        avatar_url = build_public_object_url(
+            bucket_name=user.avatar_bucket_name,
+            storage_key=user.avatar_storage_key,
+        )
+
+    awarded_badge_name = await check_and_award_story_badges(db, user_id)
+    if awarded_badge_name:
+        await db.commit()
+
+    badges = await get_user_badges(db, user_id)
+    return UserPublicProfileResponse(
+        id=user.id,
+        username=user.username,
+        display_name=user.display_name,
+        bio=user.bio,
+        location=user.location,
+        avatar_url=avatar_url,
+        badges=badges,
+        created_at=user.created_at,
     )

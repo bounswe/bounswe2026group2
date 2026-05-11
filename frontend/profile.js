@@ -11,17 +11,95 @@ async function loadProfile() {
 
         var nameEl = document.getElementById("profile-name");
         var joinedEl = document.getElementById("profile-joined");
+        var bioEl = document.getElementById("profile-bio");
+        var locationEl = document.getElementById("profile-location");
+        var avatarEl = document.getElementById("profile-avatar");
 
         if (nameEl) nameEl.textContent = data.display_name || data.username;
+        if (bioEl) bioEl.textContent = data.bio || "";
+        if (locationEl) {
+            // Keep the icon span but replace the trailing text
+            var iconSpan = locationEl.querySelector(".material-symbols-outlined");
+            locationEl.textContent = "";
+            if (iconSpan) locationEl.appendChild(iconSpan);
+            var text = document.createTextNode(" " + (data.location || ""));
+            locationEl.appendChild(text);
+            if (!data.location) locationEl.style.display = "none";
+        }
+        if (avatarEl && data.avatar_url) {
+            avatarEl.style.backgroundImage = "url('" + data.avatar_url + "')";
+            avatarEl.style.backgroundSize = "cover";
+            avatarEl.style.backgroundPosition = "center";
+            avatarEl.style.backgroundRepeat = "no-repeat";
+            var icon = avatarEl.querySelector(".material-symbols-outlined");
+            if (icon) icon.style.opacity = "0";
+        }
         if (joinedEl && data.created_at) {
             var date = new Date(data.created_at);
             var options = { month: 'long', year: 'numeric' };
             joinedEl.innerHTML = '<span class="material-symbols-outlined text-[18px]">calendar_month</span> Joined ' + date.toLocaleDateString('en-US', options);
         }
+        renderBadges(data.badges || []);
         await loadUserStories(data.username);
         await loadSavedCount();
     } catch (err) {
         console.error("Error loading profile:", err);
+    }
+}
+
+var BADGE_ASSET_BY_NAME = {
+    "first story": "assets/1st story.png",
+    "1st story": "assets/1st story.png",
+    "story teller": "assets/story teller.png",
+    "story master": "assets/story master.png"
+};
+
+function getBadgeAssetPath(badge) {
+    var name = typeof badge === "string" ? badge : (badge && badge.name ? badge.name : "");
+    return BADGE_ASSET_BY_NAME[name.trim().toLowerCase()] || "";
+}
+
+function renderBadges(badges) {
+    var container = document.getElementById("profile-badges");
+    if (!container) return;
+
+    container.innerHTML = "";
+    if (!Array.isArray(badges) || badges.length === 0) {
+        var empty = document.createElement("p");
+        empty.className = "text-sm text-textmuted italic col-span-3";
+        empty.textContent = "No badges earned yet.";
+        container.appendChild(empty);
+        return;
+    }
+
+    badges.forEach(function (badge) {
+        var name = badge && badge.name ? badge.name : "";
+        var assetPath = getBadgeAssetPath(badge);
+        if (!name || !assetPath) return;
+
+        var badgeEl = document.createElement("div");
+        badgeEl.className = "flex flex-col items-center gap-2 rounded-xl border border-border bg-background p-3 text-center";
+        if (badge.description) badgeEl.title = badge.description;
+
+        var img = document.createElement("img");
+        img.src = assetPath;
+        img.alt = name;
+        img.className = "h-16 w-16 object-contain";
+
+        var label = document.createElement("span");
+        label.className = "text-xs font-semibold leading-snug text-textmain";
+        label.textContent = name;
+
+        badgeEl.appendChild(img);
+        badgeEl.appendChild(label);
+        container.appendChild(badgeEl);
+    });
+
+    if (!container.children.length) {
+        var fallback = document.createElement("p");
+        fallback.className = "text-sm text-textmuted italic col-span-3";
+        fallback.textContent = "No badges earned yet.";
+        container.appendChild(fallback);
     }
 }
 
@@ -56,6 +134,9 @@ async function loadUserStories(username) {
         // Update the Stories Activity Counter
         const statStoriesEl = document.getElementById("stat-stories");
         if (statStoriesEl) statStoriesEl.textContent = myStories.length;
+
+        // Update likes/comments received on my stories (best-effort; may be slow for many stories)
+        void updateEngagementStatsForStories(myStories);
 
         // EĞER HİKAYE YOKSA: Senin orijinal güzel tasarımını göster
         if (myStories.length === 0) {
@@ -96,12 +177,82 @@ async function loadUserStories(username) {
     }
 }
 
+async function updateEngagementStatsForStories(stories) {
+    var likesEl = document.getElementById("stat-likes");
+    var commentsEl = document.getElementById("stat-comments");
+    if (!likesEl && !commentsEl) return;
+
+    if (likesEl) likesEl.textContent = "…";
+    if (commentsEl) commentsEl.textContent = "…";
+
+    var totalLikes = 0;
+    var totalComments = 0;
+
+    // Limit concurrency to avoid spamming the API.
+    var concurrency = 4;
+    var index = 0;
+
+    async function worker() {
+        while (index < stories.length) {
+            var i = index;
+            index++;
+            var story = stories[i];
+            if (!story || !story.id) continue;
+
+            try {
+                // Likes: use story detail's like_count
+                if (likesEl) {
+                    var detailRes = await authFetch(API_BASE + "/stories/" + story.id);
+                    if (detailRes.ok) {
+                        var detail = await detailRes.json();
+                        if (detail && typeof detail.like_count === "number") {
+                            totalLikes += detail.like_count;
+                        }
+                    }
+                }
+            } catch (err) {
+                // ignore per-story failures
+                void err;
+            }
+
+            try {
+                // Comments: use comments list response total
+                if (commentsEl) {
+                    var commentsRes = await authFetch(API_BASE + "/stories/" + story.id + "/comments");
+                    if (commentsRes.ok) {
+                        var commentsData = await commentsRes.json();
+                        if (commentsData && typeof commentsData.total === "number") {
+                            totalComments += commentsData.total;
+                        } else if (commentsData && Array.isArray(commentsData.comments)) {
+                            totalComments += commentsData.comments.length;
+                        }
+                    }
+                }
+            } catch (err) {
+                void err;
+            }
+        }
+    }
+
+    var workers = [];
+    for (var w = 0; w < Math.min(concurrency, stories.length || 0); w++) {
+        workers.push(worker());
+    }
+
+    await Promise.all(workers);
+
+    if (likesEl) likesEl.textContent = String(totalLikes);
+    if (commentsEl) commentsEl.textContent = String(totalComments);
+}
+
 if (typeof document !== "undefined") {
     document.addEventListener("DOMContentLoaded", loadProfile);
 }
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        loadProfile: loadProfile
+        loadProfile: loadProfile,
+        renderBadges: renderBadges,
+        getBadgeAssetPath: getBadgeAssetPath
     };
 }

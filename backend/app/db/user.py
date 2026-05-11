@@ -8,6 +8,7 @@ from app.db.enums import UserRole
 from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.db.badge import UserBadge
     from app.db.notification import Notification
     from app.db.story import Story
     from app.db.story_comment import StoryComment
@@ -25,8 +26,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     username: Mapped[str] = mapped_column(String(50), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    google_sub: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True)
     location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     avatar_bucket_name: Mapped[str | None] = mapped_column(String(63), nullable=True)
     avatar_storage_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -71,6 +73,10 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         foreign_keys="Notification.actor_user_id",
     )
     reports: Mapped[list["StoryReport"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    user_badges: Mapped[list["UserBadge"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )

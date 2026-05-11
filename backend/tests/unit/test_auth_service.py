@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +12,7 @@ from starlette.datastructures import Headers, UploadFile
 from app.db.enums import UserRole
 from app.models.user import UserLoginRequest, UserPasswordChangeRequest, UserProfileUpdateRequest, UserRegisterRequest
 from app.services.auth_service import (
+    build_google_auth_url,
     change_user_password,
     get_user_profile,
     login_user,
@@ -338,3 +340,30 @@ class TestChangeUserPassword:
         assert exc_info.value.detail == "Current password is incorrect"
         mock_verify.assert_called_once_with("WrongPass1!", "old-hash")
         db.commit.assert_not_awaited()
+
+
+@pytest.fixture()
+def _patch_google_settings(monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(settings, "GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback")
+
+
+class TestBuildGoogleAuthUrl:
+    def test_includes_state_param(self, _patch_google_settings):
+        url = build_google_auth_url("my-state-token")
+        qs = parse_qs(urlparse(url).query)
+        assert qs["state"] == ["my-state-token"]
+
+    def test_redirect_uri_is_encoded(self, _patch_google_settings):
+        url = build_google_auth_url("s")
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+        assert "redirect_uri" in qs
+
+    def test_required_params_present(self, _patch_google_settings):
+        url = build_google_auth_url("s")
+        qs = parse_qs(urlparse(url).query)
+        for key in ("client_id", "redirect_uri", "response_type", "scope", "state"):
+            assert key in qs, f"missing param: {key}"

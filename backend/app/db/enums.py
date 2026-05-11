@@ -47,3 +47,9 @@ class ReportStatus(str, Enum):
     REVIEWED = "reviewed"
     REMOVED = "removed"
     RESOLVED = "reviewed"
+
+
+class BadgeRuleType(str, Enum):
+    FIRST_STORY = "first_story"
+    STORY_MILESTONE_5 = "story_milestone_5"
+    STORY_MILESTONE_10 = "story_milestone_10"

@@ -53,6 +53,11 @@
     }
 
     @keyframes like-pop {
+      0% { transform: scale(1); }
+      55% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
     .material-symbols-outlined {
       font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
     }
@@ -65,8 +70,7 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .like-button[data-animating="true"] { animation: none; }
-    @media (prefers-reduced-motion: reduce) {
+      .like-button[data-animating="true"],
       .save-button[data-animating="true"] { animation: none; }
     }
   </style>
@@ -114,6 +118,8 @@
           </span>
         </div>
 
+        <div id="story-tags" class="mt-3 flex flex-wrap gap-2" style="display:none"></div>
+
         <div id="story-content" class="mt-6 space-y-5 text-base leading-8 text-textmain whitespace-pre-wrap">
           <!-- Content injected via JS -->
         </div>
@@ -125,6 +131,10 @@
         <div class="mt-8 flex flex-wrap items-center gap-3">
           <a href="map.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Back to Map</a>
           <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Create Another Story</a>
+          <a id="btn-edit" href="story-edit.html" class="hidden inline-flex items-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-stone-50">
+            <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">edit</span>
+            Edit Story
+          </a>
           <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
           <button id="btn-report" class="hidden inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50" onclick="openReportModal()">
             <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">flag</span>
@@ -147,7 +157,15 @@
         <div class="mt-4 rounded-2xl overflow-hidden border border-border/50" style="height: 224px;">
           <div id="detail-map" style="height: 100%; width: 100%;"></div>
         </div>
-        <p class="mt-3 text-sm text-textmuted">Kadikoy, Istanbul — <a href="map.html" class="text-primary font-semibold hover:underline">View on full map →</a></p>
+        <p id="detail-location-label" class="mt-3 text-sm text-textmuted">
+          Kadikoy, Istanbul
+        </p>
+        <p class="mt-1 text-sm">
+          <a id="detail-timeline-link" href="timeline.html?lat=41.015&lng=28.979&radius_km=1" class="font-semibold text-tertiary hover:underline">View Timeline →</a>
+        </p>
+        <p class="mt-1 text-sm">
+          <a id="detail-map-link" href="map.html" class="font-semibold text-primary hover:underline">View on full map →</a>
+        </p>
       </section>
 
       <section class="rounded-3xl border border-border bg-surface p-6">
@@ -198,9 +216,10 @@
 <script src="likes.js"></script>
 <script src="config.js"></script>
 <script src="comments.js"></script>
-<script src="auth.js"></script>
 <script src="saves.js"></script>
 <script src="anonymous.js"></script>
+<script src="tags.js"></script>
+<script src="story-transcript.js"></script>
 <script>
   // Initialize mini-map with arbitrary center initially
   var detailMap = L.map("detail-map", {
@@ -218,7 +237,155 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const storyId = urlParams.get('id');
-  
+
+  var TRANSCRIPT_POLL_INTERVAL_MS = 2000;
+  var TRANSCRIPT_POLL_MAX_ATTEMPTS = 30;
+  var transcriptPollTimer = null;
+  var transcriptPollAttempts = 0;
+
+  function renderStoryMedia(story) {
+    var pollExhausted = transcriptPollAttempts >= TRANSCRIPT_POLL_MAX_ATTEMPTS;
+    var mediaContainer = document.getElementById('story-media');
+    mediaContainer.innerHTML = "";
+
+    if (!story.media_files || story.media_files.length === 0) {
+      return;
+    }
+
+    var images = story.media_files.filter(function (m) { return m.media_type === "image"; });
+    if (images.length > 0) {
+      document.getElementById('story-cover').style.backgroundImage = "url('" + images[0].media_url + "')";
+    }
+
+    story.media_files.forEach(function (m) {
+      if (m.media_type === "image") {
+        var img = document.createElement("img");
+        img.src = m.media_url;
+        img.className = "w-full rounded-2xl border border-border shadow-sm object-cover";
+        img.style.maxHeight = "300px";
+        img.alt = m.alt_text || "";
+        mediaContainer.appendChild(img);
+      } else if (m.media_type === "video") {
+        var vid = document.createElement("video");
+        vid.src = m.media_url;
+        vid.setAttribute("controls", "controls");
+        vid.className = "w-full rounded-2xl border border-border shadow-sm object-cover";
+        vid.style.maxHeight = "300px";
+        mediaContainer.appendChild(vid);
+      } else if (m.media_type === "audio") {
+        var wrap = document.createElement("div");
+        wrap.className = "p-4 bg-background border border-border rounded-xl w-full flex flex-col gap-2";
+
+        var icon = document.createElement("span");
+        icon.className = "text-sm font-semibold material-symbols-outlined text-primary";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = "audio";
+
+        var aud = document.createElement("audio");
+        aud.src = m.media_url;
+        aud.setAttribute("controls", "controls");
+        aud.className = "w-full";
+
+        var details = document.createElement("details");
+        details.className = "mt-2 rounded-xl border border-border/80 bg-white/70";
+
+        var summary = document.createElement("summary");
+        summary.className =
+          "cursor-pointer select-none px-3 py-2 text-sm font-semibold text-textmain";
+        summary.textContent = "Transcript";
+
+        var bodyWrap = document.createElement("div");
+        bodyWrap.className = "px-3 pb-3";
+
+        var inner = document.createElement("div");
+        if (typeof StoryTranscript !== "undefined") {
+          var state = StoryTranscript.transcriptDisplayState(m, pollExhausted);
+          StoryTranscript.applyTranscriptBody(inner, state);
+        } else {
+          inner.textContent = m.transcript || "Transcript unavailable";
+          inner.className = "mt-2 text-sm text-textmain whitespace-pre-wrap break-words";
+        }
+
+        bodyWrap.appendChild(inner);
+        details.appendChild(summary);
+        details.appendChild(bodyWrap);
+        wrap.appendChild(icon);
+        wrap.appendChild(aud);
+        wrap.appendChild(details);
+        mediaContainer.appendChild(wrap);
+      }
+    });
+  }
+
+  function startTranscriptPolling(id, mediaFiles) {
+    if (transcriptPollTimer) {
+      clearInterval(transcriptPollTimer);
+      transcriptPollTimer = null;
+    }
+    transcriptPollAttempts = 0;
+    if (typeof StoryTranscript === "undefined" || !StoryTranscript.needsAudioTranscriptPoll(mediaFiles)) {
+      return;
+    }
+    transcriptPollTimer = setInterval(function () {
+      transcriptPollAttempts++;
+      fetch(API_BASE + "/stories/" + id)
+        .then(function (res) { return res.json(); })
+        .then(function (story) {
+          renderStoryMedia(story);
+          var stillNeed =
+            typeof StoryTranscript !== "undefined" &&
+            StoryTranscript.needsAudioTranscriptPoll(story.media_files);
+          var timedOut = transcriptPollAttempts >= TRANSCRIPT_POLL_MAX_ATTEMPTS;
+          if (!stillNeed || timedOut) {
+            if (transcriptPollTimer) {
+              clearInterval(transcriptPollTimer);
+              transcriptPollTimer = null;
+            }
+          }
+        })
+        .catch(function () { /* ignore transient poll errors */ });
+    }, TRANSCRIPT_POLL_INTERVAL_MS);
+  }
+
+  function applyStoryDetail(story) {
+    document.getElementById('story-title').textContent = story.title || "Untitled";
+    document.getElementById('story-summary').textContent = story.summary || "";
+    document.getElementById('story-author').innerHTML = 'by ' + (story.author || "Unknown");
+    document.getElementById('story-date').textContent = story.date_label || "No Date";
+    document.getElementById('story-location').textContent = story.place_name || "Istanbul";
+    document.getElementById('story-content').textContent = story.content || "No content available.";
+    document.getElementById('detail-location-label').textContent = story.place_name || "Istanbul";
+
+    var storyLat = Number(story.latitude);
+    var storyLng = Number(story.longitude);
+    var hasCoordinates = Number.isFinite(storyLat) && Number.isFinite(storyLng);
+    var timelineLink = document.getElementById('detail-timeline-link');
+
+    if (hasCoordinates) {
+      timelineLink.href = "timeline.html?lat=" + encodeURIComponent(storyLat) + "&lng=" + encodeURIComponent(storyLng) + "&radius_km=1";
+      timelineLink.classList.remove("hidden");
+    } else {
+      timelineLink.classList.add("hidden");
+    }
+
+    if (hasCoordinates) {
+      detailMap.setView([storyLat, storyLng], 15);
+      L.marker([storyLat, storyLng])
+        .addTo(detailMap)
+        .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
+        .openPopup();
+    } else {
+      document.getElementById('detail-map').parentElement.style.display = 'none';
+    }
+
+    renderStoryMedia(story);
+    startTranscriptPolling(String(story.id || storyId), story.media_files);
+
+    setupComments(API_BASE, String(story.id || storyId));
+    var likeSeed = { like_count: typeof story.like_count === "number" ? story.like_count : 0 };
+    setupLikes(API_BASE, String(story.id || storyId), likeSeed);
+  }
+
   if (!storyId) {
     document.getElementById('story-title').textContent = "Story not found";
     document.getElementById('story-summary').textContent = "No ID provided in the URL.";
@@ -228,52 +395,88 @@
     }
 
     fetch(API_BASE + "/stories/" + storyId)
-      .then(res => res.json())
-      .then(story => {
-          document.getElementById('story-title').textContent = story.title || "Untitled";
-          document.getElementById('story-summary').textContent = story.summary || "";
-          document.getElementById('story-author').textContent = getAuthorByLine(story);
-          if (isAnonymousStory(story)) {
-            document.getElementById('story-author').classList.add('italic');
-          }
-          document.getElementById('story-date').textContent = story.date_label || "No Date";
-          document.getElementById('story-location').textContent = story.place_name || "Istanbul";
-          document.getElementById('story-content').textContent = story.content || "No content available.";
-          
-          if (story.latitude && story.longitude) {
-            detailMap.setView([story.latitude, story.longitude], 15);
-            L.marker([story.latitude, story.longitude])
-              .addTo(detailMap)
-              .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
-              .openPopup();
-          } else {
-             document.getElementById('detail-map').parentElement.style.display = 'none';
-          }
-          
-          if (story.media_files && story.media_files.length > 0) {
-             const images = story.media_files.filter(m => m.media_type === "image");
-             if (images.length > 0) {
-                 document.getElementById('story-cover').style.backgroundImage = "url('" + images[0].media_url + "')";
-             }
-             
-             let mediaHtml = "";
-             story.media_files.forEach(m => {
-                 if (m.media_type === "image") {
-                     mediaHtml += '<img src="' + m.media_url + '" class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;">';
-                 } else if (m.media_type === "video") {
-                     mediaHtml += '<video src="' + m.media_url + '" controls class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;"></video>';
-                 } else if (m.media_type === "audio") {
-                     mediaHtml += '<div class="p-4 bg-background border border-border rounded-xl w-full flex flex-col gap-2"><span class="text-sm font-semibold material-symbols-outlined text-primary">audio</span><audio src="' + m.media_url + '" controls class="w-full"></audio></div>';
-                 }
-             });
-             document.getElementById('story-media').innerHTML = mediaHtml;
-          }
+     function applyStoryDetail(story) {
+    document.getElementById('story-title').textContent = story.title || "Untitled";
+    document.getElementById('story-summary').textContent = story.summary || "";
 
-          setupComments(API_BASE, String(story.id || storyId));
-          var likeSeed = { like_count: typeof story.like_count === "number" ? story.like_count : 0 };
-          setupLikes(API_BASE, String(story.id || storyId), likeSeed);
+    var authorEl = document.getElementById('story-author');
+    authorEl.textContent = getAuthorByLine(story);
+    authorEl.classList.toggle('italic', isAnonymousStory(story));
+
+    document.getElementById('story-date').textContent = story.date_label || "No Date";
+    document.getElementById('story-location').textContent = story.place_name || "Istanbul";
+    document.getElementById('story-content').textContent = story.content || "No content available.";
+    document.getElementById('detail-location-label').textContent = story.place_name || "Istanbul";
+
+    var storyLat = Number(story.latitude);
+    var storyLng = Number(story.longitude);
+    var hasCoordinates = Number.isFinite(storyLat) && Number.isFinite(storyLng);
+    var timelineLink = document.getElementById('detail-timeline-link');
+
+    if (hasCoordinates) {
+      timelineLink.href = "timeline.html?lat=" + encodeURIComponent(storyLat) + "&lng=" + encodeURIComponent(storyLng) + "&radius_km=1";
+      timelineLink.classList.remove("hidden");
+    } else {
+      timelineLink.classList.add("hidden");
+    }
+
+    if (hasCoordinates) {
+      detailMap.setView([storyLat, storyLng], 15);
+      L.marker([storyLat, storyLng])
+        .addTo(detailMap)
+        .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
+        .openPopup();
+    } else {
+      document.getElementById('detail-map').parentElement.style.display = 'none';
+    }
+
+    renderStoryMedia(story);
+    startTranscriptPolling(String(story.id || storyId), story.media_files);
+
+    setupComments(API_BASE, String(story.id || storyId));
+    var likeSeed = { like_count: typeof story.like_count === "number" ? story.like_count : 0 };
+    setupLikes(API_BASE, String(story.id || storyId), likeSeed);
+  }
+
+  if (!storyId) {
+    document.getElementById('story-title').textContent = "Story not found";
+    document.getElementById('story-summary').textContent = "No ID provided in the URL.";
+  } else {
+    if (typeof setupSaveButton === "function") {
+      setupSaveButton(API_BASE, storyId);
+    }
+
+    fetch(API_BASE + "/stories/" + storyId)
+      .then(function (res) { return res.json(); })
+      .then(function (story) {
+         applyStoryDetail(story);
+
+         if (typeof renderTagChips === "function") {
+           renderTagChips(document.getElementById("story-tags"), story.tags || []);
+         }
+
+         if (isLoggedIn() && story.author) {
+           authFetch(API_BASE + "/auth/me")
+             .then(function (r) { return r.ok ? r.json() : null; })
+             .then(function (me) {
+               if (me && me.username === story.author) {
+                 var btnEdit = document.getElementById("btn-edit");
+                 btnEdit.href = "story-edit.html?id=" + encodeURIComponent(story.id || storyId);
+                 btnEdit.classList.remove("hidden");
+               }
+             })
+             .catch(function () {});
+         }
       })
-      .catch(err => {
+      .catch(function (err) {
+         console.error("Error loading story details:", err);
+         document.getElementById('story-title').textContent = "Failed to load story";
+         document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";
+      });
+  }
+
+      })
+      .catch(function (err) {
          console.error("Error loading story details:", err);
          document.getElementById('story-title').textContent = "Failed to load story";
          document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";

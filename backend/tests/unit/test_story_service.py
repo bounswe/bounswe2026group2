@@ -8,8 +8,16 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 from starlette.datastructures import Headers, UploadFile
 
-from app.db.enums import DatePrecision, MediaType, NotificationEventType, ReportStatus, StoryStatus, StoryVisibility
+from app.db.enums import (
+    DatePrecision,
+    MediaType,
+    NotificationEventType,
+    ReportStatus,
+    StoryStatus,
+    StoryVisibility,
+)
 from app.db.notification import Notification
+from app.db.tag import Tag
 from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryResponse, StoryUpdateRequest
 from app.services.story_service import (
@@ -19,6 +27,7 @@ from app.services.story_service import (
     get_nearby_stories,
     get_story_detail_by_id,
     get_story_like_summary,
+    get_timeline_stories,
     like_story,
     list_available_stories,
     list_comments_for_story,
@@ -30,6 +39,14 @@ from app.services.story_service import (
     unsave_story_for_user,
     update_story_with_location_and_dates,
     upload_media_for_story,
+)
+from app.services.tag_service import (
+    apply_ai_tags_to_story,
+    attach_tags_to_story,
+    build_tag_slug,
+    get_or_create_tags,
+    normalize_tag_list,
+    normalize_tag_name,
 )
 
 
@@ -350,6 +367,65 @@ class TestUploadMediaForStoryService:
         assert task.kwargs["filename"] == "recording.webm"
         assert task.kwargs["content"] == b"audio-bytes"
         assert task.kwargs["mime_type"] == "audio/webm"
+
+    async def test_upload_audio_with_transcript_persists_and_skips_background_transcription(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO, transcript="  Reviewed transcript  ")
+        file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm")
+        background_tasks = BackgroundTasks()
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(
+                db,
+                story_id,
+                file,
+                payload,
+                background_tasks=background_tasks,
+            )
+
+        assert result.media.media_type == MediaType.AUDIO
+        assert result.media.transcript == "Reviewed transcript"
+        assert background_tasks.tasks == []
+
+    async def test_upload_audio_with_blank_transcript_queues_background_transcription(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id)
+        payload = MediaUploadRequest(media_type=MediaType.AUDIO, transcript="   ")
+        file = _make_upload_file("recording.webm", b"audio-bytes", "audio/webm")
+        background_tasks = BackgroundTasks()
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value.scalar_one_or_none = lambda: story
+
+        async def _refresh_side_effect(media_obj):
+            media_obj.id = uuid.uuid4()
+            media_obj.created_at = datetime.now(timezone.utc)
+
+        db.refresh.side_effect = _refresh_side_effect
+
+        with patch("app.services.story_service.upload_bytes"):
+            result = await upload_media_for_story(
+                db,
+                story_id,
+                file,
+                payload,
+                background_tasks=background_tasks,
+            )
+
+        assert result.media.transcript is None
+        assert len(background_tasks.tasks) == 1
 
     async def test_upload_image_does_not_queue_background_transcription(self):
         story_id = uuid.uuid4()
@@ -1022,7 +1098,12 @@ class TestCreateStoryWithLocationService:
         db.refresh.side_effect = _refresh_side_effect
         db.execute.return_value.scalar_one = lambda: 0
 
-        result = await create_story_with_location(db, current_user, payload)
+        with patch(
+            "app.services.story_service.check_and_award_story_badges",
+            new_callable=AsyncMock,
+            return_value="First Story",
+        ):
+            result = await create_story_with_location(db, current_user, payload)
 
         assert result.title == "New Story"
         assert result.author == "authoruser"
@@ -1036,8 +1117,9 @@ class TestCreateStoryWithLocationService:
         assert result.visibility == StoryVisibility.PUBLIC
         assert result.media_files == []
         assert result.like_count == 0
+        assert result.new_badge == "First Story"
         db.add.assert_called_once()
-        db.commit.assert_awaited_once()
+        assert db.commit.await_count == 2
         db.refresh.assert_awaited_once()
 
     async def test_create_story_rejects_missing_place_name(self):
@@ -1233,6 +1315,214 @@ class TestGetNearbyStoriesService:
 
 
 @pytest.mark.asyncio
+class TestGetTimelineStoriesService:
+    async def test_returns_stories_with_coord_filter(self):
+        story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "timelineauthor")]
+
+        result = await get_timeline_stories(db, center_lat=41.0082, center_lng=28.9784, radius_km=5.0)
+
+        assert result.total == 1
+        assert result.stories[0].id == story.id
+        db.execute.assert_awaited_once()
+
+    async def test_returns_stories_with_place_name_filter(self):
+        story = _make_story()
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "timelineauthor")]
+
+        result = await get_timeline_stories(db, place_name="Istanbul")
+
+        assert result.total == 1
+        db.execute.assert_awaited_once()
+
+    async def test_returns_empty_response_when_no_matches(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await get_timeline_stories(db, place_name="Nowhere")
+
+        assert result.total == 0
+        assert result.stories == []
+
+    async def test_query_orders_by_date_start_asc_nulls_last(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="Istanbul")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "ORDER BY" in sql
+        assert "stories.date_start" in sql
+        assert "NULLS LAST" in sql
+
+    async def test_coord_filter_uses_haversine(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, center_lat=41.0, center_lng=29.0, radius_km=5.0)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "asin" in sql
+        assert "sqrt" in sql
+
+    async def test_place_name_filter_uses_ilike(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="kadikoy")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LIKE" in sql.upper()
+
+    async def test_limit_and_offset_applied(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, place_name="Istanbul", limit=5, offset=10)
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LIMIT" in sql.upper()
+        assert "OFFSET" in sql.upper()
+
+    async def test_coord_lookup_takes_priority_when_both_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_timeline_stories(db, center_lat=41.0, center_lng=29.0, radius_km=5.0, place_name="Istanbul")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        # Haversine present (coord path), ILIKE absent (place_name ignored)
+        assert "asin" in sql
+        assert "LIKE" not in sql.upper()
+
+
+class TestTagNormalizationHelpers:
+    def test_normalize_tag_name_trims_and_lowercases(self):
+        assert normalize_tag_name("  Ottoman  ") == "ottoman"
+
+    def test_normalize_tag_name_rejects_blank_value(self):
+        with pytest.raises(HTTPException) as exc_info:
+            normalize_tag_name("   ")
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "Tags cannot be blank"
+
+    def test_normalize_tag_list_deduplicates_after_normalization(self):
+        assert normalize_tag_list(["  History ", "history", "OTTOMAN "]) == ["history", "ottoman"]
+
+    def test_normalize_tag_list_returns_empty_for_none(self):
+        assert normalize_tag_list(None) == []
+
+    def test_build_tag_slug_replaces_spaces_and_symbols(self):
+        assert build_tag_slug("  Bogazici Universitesi!  ") == "bogazici-universitesi"
+
+    def test_normalize_tag_name_rejects_values_longer_than_max_length(self):
+        with pytest.raises(HTTPException) as exc_info:
+            normalize_tag_name("a" * 101)
+
+        assert exc_info.value.status_code == 422
+        assert "at most 100 characters" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+class TestAiTagPersistenceHelpers:
+    async def test_get_or_create_tags_returns_empty_without_hitting_db_for_empty_input(self):
+        db = AsyncMock()
+
+        tags = await get_or_create_tags(db, None)
+
+        assert tags == []
+        db.execute.assert_not_awaited()
+
+    async def test_get_or_create_tags_reuses_existing_and_creates_missing(self):
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
+        db = AsyncMock()
+        db.flush = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),  # SELECT existing
+            None,  # pg_insert ON CONFLICT DO NOTHING (result ignored)
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag, new_tag])),  # SELECT all
+        ]
+
+        tags = await get_or_create_tags(db, [" Bogazici ", "Turkiye"])
+
+        assert [tag.name for tag in tags] == ["bogazici", "turkiye"]
+        assert tags[0] is existing_tag
+        assert tags[1] is new_tag
+        db.flush.assert_awaited_once()
+
+    async def test_attach_tags_to_story_adds_only_missing_relations(self):
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        existing_tag.id = uuid.uuid4()
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
+        story = _make_story(tags=[existing_tag])
+
+        attach_tags_to_story(story, [existing_tag, new_tag])
+
+        assert [tag.name for tag in story.tags] == ["bogazici", "turkiye"]
+
+    async def test_attach_tags_to_story_keeps_existing_tag_only_once(self):
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        existing_tag.id = uuid.uuid4()
+        story = _make_story(tags=[existing_tag])
+
+        attach_tags_to_story(story, [existing_tag])
+
+        assert [tag.name for tag in story.tags] == ["bogazici"]
+
+    async def test_apply_ai_tags_to_story_attaches_tags_and_commits(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, tags=[])
+        existing_tag = Tag(name="bogazici", slug="bogazici")
+        existing_tag.id = uuid.uuid4()
+        new_tag = Tag(name="turkiye", slug="turkiye")
+        new_tag.id = uuid.uuid4()
+
+        db = AsyncMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(scalar_one_or_none=lambda: story),  # SELECT story
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag])),  # SELECT existing tags
+            None,  # pg_insert ON CONFLICT DO NOTHING
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [existing_tag, new_tag])),  # SELECT all
+        ]
+
+        updated_story = await apply_ai_tags_to_story(db, story_id, ["Bogazici", "Turkiye"])
+
+        assert updated_story is story
+        assert [tag.name for tag in story.tags] == ["bogazici", "turkiye"]
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once_with(story, attribute_names=["tags"])
+
+    async def test_apply_ai_tags_to_story_raises_404_when_story_missing(self):
+        db = AsyncMock()
+        db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await apply_ai_tags_to_story(db, uuid.uuid4(), ["bogazici"])
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "Story not found"
+        db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 class TestAdminRemoveStoryService:
     async def test_soft_deletes_story_and_marks_pending_reports_removed(self):
         story_id = uuid.uuid4()
@@ -1313,7 +1603,12 @@ class TestAnonymousStoryService:
         db.refresh.side_effect = _refresh_side_effect
         db.execute.return_value.scalar_one = lambda: 0
 
-        result = await create_story_with_location(db, current_user, payload)
+        with patch(
+            "app.services.story_service.check_and_award_story_badges",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await create_story_with_location(db, current_user, payload)
 
         assert result.is_anonymous is True
         assert result.author is None

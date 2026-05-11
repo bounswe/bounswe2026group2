@@ -2,9 +2,19 @@ import uuid
 from datetime import date, datetime
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import NoInspectionAvailable
+from sqlalchemy.orm.attributes import NO_VALUE
 
 from app.db.enums import DatePrecision, MediaType, ReportReason, ReportStatus, StoryStatus, StoryVisibility
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 class StoryDateInput(BaseModel):
@@ -79,6 +89,7 @@ class StoryCreateRequest(StoryDateInput):
     title: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
     summary: str | None = None
+    tags: list[str] | None = None
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
@@ -89,6 +100,7 @@ class StoryUpdateRequest(StoryDateInput):
     title: str = Field(min_length=1, max_length=255)
     content: str = Field(min_length=1)
     summary: str | None = None
+    tags: list[str] | None = None
     latitude: float = Field(ge=-90.0, le=90.0)
     longitude: float = Field(ge=-180.0, le=180.0)
     place_name: str | None = Field(default=None, max_length=255)
@@ -136,6 +148,7 @@ class StoryResponse(BaseModel):
     title: str
     summary: str | None
     content: str
+    tags: list[str] = Field(default_factory=list)
     author: str | None
     is_anonymous: bool
     place_name: str | None
@@ -150,6 +163,20 @@ class StoryResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @staticmethod
+    def _extract_loaded_tag_names(story: object) -> list[str]:
+        try:
+            inspected_story = sa_inspect(story)
+        except NoInspectionAvailable:
+            tags = getattr(story, "tags", [])
+            return [tag.name for tag in tags]
+
+        tags_attr = inspected_story.attrs.tags
+        if tags_attr.loaded_value is NO_VALUE:
+            return []
+
+        return [tag.name for tag in tags_attr.loaded_value]
 
     @classmethod
     def from_orm_with_author(cls, story: object, author_username: str) -> "StoryResponse":
@@ -173,12 +200,14 @@ class StoryResponse(BaseModel):
             date_label = None
 
         is_anonymous = getattr(story, "is_anonymous", False)
+        tags = cls._extract_loaded_tag_names(story)
 
         return cls(
             id=story.id,
             title=story.title,
             summary=story.summary,
             content=story.content,
+            tags=tags,
             author=None if is_anonymous else author_username,
             is_anonymous=is_anonymous,
             place_name=story.place_name,
@@ -203,7 +232,13 @@ class MediaUploadRequest(BaseModel):
     media_type: MediaType
     alt_text: str | None = Field(default=None, max_length=500)
     caption: str | None = Field(default=None, max_length=500)
+    transcript: str | None = None
     sort_order: int = Field(default=0, ge=0)
+
+    @field_validator("transcript", mode="before")
+    @classmethod
+    def normalize_transcript(cls, value: str | None) -> str | None:
+        return _normalize_optional_text(value)
 
 
 class MediaFileResponse(BaseModel):
@@ -243,6 +278,7 @@ class StoryLikeResponse(BaseModel):
 class StoryDetailResponse(StoryResponse):
     media_files: list[MediaFileResponse] = Field(default_factory=list)
     like_count: int = Field(default=0, ge=0)
+    new_badge: str | None = None
 
 
 class StoryReportRequest(BaseModel):

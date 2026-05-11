@@ -44,3 +44,11 @@ android-sdk/
 
 # APK artifacts
 *.apk
+
+# Playwright
+playwright-report/
+test-results/
+uat-report.xml
+
+# Appium
+frontend/tests/mobile-e2e/reports/

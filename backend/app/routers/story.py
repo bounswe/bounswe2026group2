@@ -28,6 +28,7 @@ from app.models.story import (
     StoryUpdateRequest,
     UpdateReportStatusRequest,
 )
+from app.services.ai_tagging_system import is_ai_tagging_configured, run_ai_tagging_for_story
 from app.services.story_service import (
     create_comment_for_story,
     create_report_for_story,
@@ -36,6 +37,7 @@ from app.services.story_service import (
     get_nearby_stories,
     get_story_detail_by_id,
     get_story_like_summary,
+    get_timeline_stories,
     like_story,
     list_available_stories,
     list_comments_for_story,
@@ -65,10 +67,14 @@ router = APIRouter(prefix="/stories", tags=["stories"])
 )
 async def create_story(
     payload: StoryCreateRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await create_story_with_location(db, current_user, payload)
+    story = await create_story_with_location(db, current_user, payload)
+    if is_ai_tagging_configured():
+        background_tasks.add_task(run_ai_tagging_for_story, story.id)
+    return story
 
 
 @router.put(
@@ -221,6 +227,49 @@ async def list_nearby_stories(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_nearby_stories(db, center_lat=lat, center_lng=lng, radius_km=radius_km)
+
+
+@router.get(
+    "/timeline",
+    response_model=StoryListResponse,
+    summary="Timeline view of stories near a location",
+    description=(
+        "Return published public stories sorted by historical date (date_start ASC, undated last). "
+        "Accepts lat+lng+radius_km for coordinate-based lookup or place_name for name-based lookup. "
+        "At least one of lat+lng or place_name must be provided. "
+        "When both are given, coordinate-based lookup takes priority."
+    ),
+    responses={
+        422: {"description": "Neither lat+lng nor place_name provided, or validation error"},
+    },
+)
+async def list_timeline_stories(
+    lat: float | None = Query(default=None, ge=-90.0, le=90.0),
+    lng: float | None = Query(default=None, ge=-180.0, le=180.0),
+    radius_km: float = Query(default=5.0, gt=0.0, le=500.0),
+    place_name: str | None = Query(default=None, min_length=1, max_length=255),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    has_coords = lat is not None and lng is not None
+    has_place = place_name is not None
+
+    if not has_coords and not has_place:
+        raise HTTPException(
+            status_code=422,
+            detail="Provide lat+lng or place_name to scope the timeline.",
+        )
+
+    return await get_timeline_stories(
+        db,
+        center_lat=lat if has_coords else None,
+        center_lng=lng if has_coords else None,
+        radius_km=radius_km,
+        place_name=None if has_coords else place_name,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -408,6 +457,7 @@ async def upload_story_media(
     media_type: MediaType = Form(...),
     alt_text: str | None = Form(default=None),
     caption: str | None = Form(default=None),
+    transcript: str | None = Form(default=None),
     sort_order: int = Form(default=0),
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -416,6 +466,7 @@ async def upload_story_media(
         media_type=media_type,
         alt_text=alt_text,
         caption=caption,
+        transcript=transcript,
         sort_order=sort_order,
     )
     return await upload_media_for_story(
