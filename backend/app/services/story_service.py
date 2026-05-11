@@ -17,6 +17,7 @@ from app.db.story_like import StoryLike
 from app.db.story_location import StoryLocation
 from app.db.story_report import StoryReport
 from app.db.story_save import StorySave
+from app.db.tag import Tag, story_tags_table
 from app.db.user import User
 from app.models.comment import CommentAuthorResponse, CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
@@ -42,12 +43,27 @@ from app.services.storage import (
     get_bucket_for_media_type,
     upload_bytes,
 )
+from app.services.tag_service import normalize_tag_list
 from app.services.transcription_service import transcribe_media_file
 
 
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     stories = [StoryResponse.from_orm_with_author(story, author_username) for story, author_username in rows]
     return StoryListResponse(stories=stories, total=len(stories))
+
+
+def _apply_tag_relevance_filter(stmt, tag_names: list[str]):
+    if not tag_names:
+        return stmt
+
+    tag_match_count = func.count(Tag.id)
+    return (
+        stmt.join(story_tags_table, story_tags_table.c.story_id == Story.id)
+        .join(Tag, Tag.id == story_tags_table.c.tag_id)
+        .where(Tag.name.in_(tag_names))
+        .group_by(Story.id, User.username)
+        .order_by(tag_match_count.desc(), Story.created_at.desc())
+    )
 
 
 def _map_media_file(media: MediaFile) -> MediaFileResponse:
@@ -180,7 +196,9 @@ async def list_available_stories(
     max_lng: float | None = None,
     query_start: date | None = None,
     query_end: date | None = None,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
@@ -190,7 +208,6 @@ async def list_available_stories(
             Story.visibility == StoryVisibility.PUBLIC,
             Story.deleted_at.is_(None),
         )
-        .order_by(Story.created_at.desc())
     )
 
     if all(v is not None for v in (min_lat, max_lat, min_lng, max_lng)):
@@ -224,6 +241,11 @@ async def list_available_stories(
             Story.date_end >= query_start,
         )
 
+    if normalized_tags:
+        stmt = _apply_tag_relevance_filter(stmt, normalized_tags)
+    else:
+        stmt = stmt.order_by(Story.created_at.desc())
+
     result = await db.execute(stmt)
     rows = result.all()
 
@@ -235,7 +257,9 @@ async def search_available_stories_by_place(
     place_name: str,
     query_start: date | None = None,
     query_end: date | None = None,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
@@ -246,7 +270,6 @@ async def search_available_stories_by_place(
             Story.deleted_at.is_(None),
             Story.place_name.ilike(f"%{place_name}%"),
         )
-        .order_by(Story.created_at.desc())
     )
 
     if query_start is not None and query_end is not None:
@@ -256,6 +279,11 @@ async def search_available_stories_by_place(
             Story.date_start <= query_end,
             Story.date_end >= query_start,
         )
+
+    if normalized_tags:
+        stmt = _apply_tag_relevance_filter(stmt, normalized_tags)
+    else:
+        stmt = stmt.order_by(Story.created_at.desc())
 
     result = await db.execute(stmt)
     rows = result.all()

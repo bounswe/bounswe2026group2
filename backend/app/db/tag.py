@@ -26,6 +26,7 @@ story_tags_table = Table(
     ),
     Index("ix_story_tags_story_id", "story_id"),
     Index("ix_story_tags_tag_id", "tag_id"),
+    Index("ix_story_tags_tag_id_story_id", "tag_id", "story_id"),
 )
 
 if TYPE_CHECKING:

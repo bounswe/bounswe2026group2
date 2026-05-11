@@ -13,6 +13,7 @@ from app.db.story_like import StoryLike
 from app.db.story_save import StorySave
 from app.db.user import User
 from app.services.auth_service import hash_password
+from app.services.tag_service import apply_ai_tags_to_story
 
 
 @pytest.mark.asyncio
@@ -192,6 +193,67 @@ class TestStoryListingAPI:
         resp = await client.get("/stories?min_lat=41.1&max_lat=40.9&min_lng=28.9&max_lng=29.1")
 
         assert resp.status_code == 422
+
+    async def test_list_stories_filters_by_tags_with_or_matching_and_relevance_ranking(self, client, db_session):
+        user = User(
+            username="tagfilterauthor",
+            email="tagfilterauthor@example.com",
+            password_hash=hash_password("StoryPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        multi_tag_story = Story(
+            user_id=user.id,
+            title="Sport History Story",
+            summary="Matches both requested tags",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        sport_story = Story(
+            user_id=user.id,
+            title="Sport Story",
+            summary="Matches one requested tag",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        music_story = Story(
+            user_id=user.id,
+            title="Music Story",
+            summary="Does not match requested tags",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        hidden_story = Story(
+            user_id=user.id,
+            title="Hidden Sport Story",
+            summary="Should not be listed",
+            content="content",
+            status=StoryStatus.DRAFT,
+            visibility=StoryVisibility.PRIVATE,
+            place_name="Istanbul",
+        )
+        db_session.add_all([multi_tag_story, sport_story, music_story, hidden_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, multi_tag_story.id, ["spor", "tarih"])
+        await apply_ai_tags_to_story(db_session, sport_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, music_story.id, ["muzik"])
+        await apply_ai_tags_to_story(db_session, hidden_story.id, ["spor"])
+
+        resp = await client.get("/stories?tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert data["total"] == 2
+        assert titles == ["Sport History Story", "Sport Story"]
 
 
 @pytest.mark.asyncio
@@ -1454,6 +1516,73 @@ class TestStorySearchAPI:
         resp = await client.get("/stories/search?place_name=")
 
         assert resp.status_code == 422
+
+    async def test_search_filters_by_place_and_tags_with_relevance_ranking(self, client, db_session):
+        from datetime import date
+
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="tagsearchauthor",
+            email="tagsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        multi_tag_istanbul_story = Story(
+            user_id=user.id,
+            title="Istanbul Sport History Story",
+            summary="Matches both requested tags",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        single_tag_istanbul_story = Story(
+            user_id=user.id,
+            title="Istanbul Sport Story",
+            summary="Matches one requested tag",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2021, 1, 1),
+            date_end=date(2021, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        ankara_story = Story(
+            user_id=user.id,
+            title="Ankara Sport History Story",
+            summary="Matches tags but not place",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            date_start=date(2022, 1, 1),
+            date_end=date(2022, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add_all([multi_tag_istanbul_story, single_tag_istanbul_story, ankara_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, multi_tag_istanbul_story.id, ["spor", "tarih"])
+        await apply_ai_tags_to_story(db_session, single_tag_istanbul_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, ankara_story.id, ["spor", "tarih"])
+
+        resp = await client.get("/stories/search?place_name=Istanbul&tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert data["total"] == 2
+        assert titles == ["Istanbul Sport History Story", "Istanbul Sport Story"]
 
 
 @pytest.mark.asyncio

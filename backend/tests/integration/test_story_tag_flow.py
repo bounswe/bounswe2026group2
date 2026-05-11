@@ -80,6 +80,78 @@ class TestStoryTagFlow:
         nearby = next(story for story in nearby_resp.json()["stories"] if story["id"] == story_id)
         assert nearby["tags"] == ["bogazici", "spor"]
 
+    async def test_story_listing_filters_by_tags_with_or_matching_and_relevance_ranking(self, client, db_session):
+        token = await self._register_and_login(client, "tagfilter", "tagfilter@example.com")
+        multi_tag_story_id = await self._create_story(client, token, title="Sport History Story")
+        single_tag_story_id = await self._create_story(client, token, title="Sport Story")
+        non_matching_story_id = await self._create_story(client, token, title="Music Story")
+
+        await apply_ai_tags_to_story(
+            db_session,
+            uuid.UUID(multi_tag_story_id),
+            ["Spor", "Tarih"],
+        )
+        await apply_ai_tags_to_story(
+            db_session,
+            uuid.UUID(single_tag_story_id),
+            ["Spor"],
+        )
+        await apply_ai_tags_to_story(
+            db_session,
+            uuid.UUID(non_matching_story_id),
+            ["Muzik"],
+        )
+
+        resp = await client.get("/stories?tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        titles = [story["title"] for story in resp.json()["stories"]]
+        assert titles == ["Sport History Story", "Sport Story"]
+
+    async def test_story_search_filters_by_place_and_tags_with_relevance_ranking(self, client, db_session):
+        token = await self._register_and_login(client, "tagsearch", "tagsearch@example.com")
+        multi_tag_story_id = await self._create_story(client, token, title="Istanbul Sport History Story")
+        single_tag_story_id = await self._create_story(client, token, title="Istanbul Sport Story")
+
+        ankara_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Ankara Sport History Story",
+                "content": "Story content about sports history in Ankara.",
+                "summary": "Tagged Ankara summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+                "date_start": 2024,
+                "date_end": 2024,
+            },
+        )
+        assert ankara_resp.status_code == 201
+        ankara_story_id = ankara_resp.json()["id"]
+
+        await apply_ai_tags_to_story(
+            db_session,
+            uuid.UUID(multi_tag_story_id),
+            ["Spor", "Tarih"],
+        )
+        await apply_ai_tags_to_story(
+            db_session,
+            uuid.UUID(single_tag_story_id),
+            ["Spor"],
+        )
+        await apply_ai_tags_to_story(
+            db_session,
+            uuid.UUID(ankara_story_id),
+            ["Spor", "Tarih"],
+        )
+
+        resp = await client.get("/stories/search?place_name=Istanbul&tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        titles = [story["title"] for story in resp.json()["stories"]]
+        assert titles == ["Istanbul Sport History Story", "Istanbul Sport Story"]
+
     async def test_saved_stories_returns_tags(self, client, db_session):
         author_token = await self._register_and_login(client, "tagsaveauthor", "tagsaveauthor@example.com")
         saver_token = await self._register_and_login(client, "tagsaver", "tagsaver@example.com")
