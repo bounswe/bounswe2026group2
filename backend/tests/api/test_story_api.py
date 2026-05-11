@@ -1674,8 +1674,21 @@ class TestStorySearchAPI:
     async def test_search_missing_place_name_returns_422(self, client):
         resp = await client.get("/stories/search")
 
-        assert resp.status_code == 422
+        assert resp.status_code == 400
         assert resp.json()["detail"] == "Either q or place_name is required"
+
+    async def test_search_q_takes_precedence_over_place_name(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        # q=istanbul matches the Istanbul story; place_name=Ankara would have returned
+        # the Ankara story if it took precedence. Only Istanbul results should appear.
+        resp = await client.get("/stories/search?q=istanbul&place_name=Ankara")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [s["title"] for s in data["stories"]]
+        assert "Istanbul Story" in titles
+        assert "Ankara Story" not in titles
 
     async def test_search_empty_place_name_returns_422(self, client):
         resp = await client.get("/stories/search?place_name=")

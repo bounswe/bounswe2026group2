@@ -218,7 +218,7 @@ async def search_stories(
 
     if q is None and place_name is None:
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail="Either q or place_name is required",
         )
 

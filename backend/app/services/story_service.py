@@ -69,6 +69,8 @@ def _apply_tag_relevance_filter(stmt, tag_names: list[str]):
 def _apply_hybrid_search_filter(stmt, search_query: str):
     normalized_query = search_query.strip().lower()
     query_pattern = f"%{normalized_query}%"
+    # Score priority: exact tag (30) > partial tag (15) > title (20) > place (10) > summary (12) > content (8).
+    # Tag scores are aggregated with MAX so a story isn't double-counted for multiple tag rows.
     tag_score = func.coalesce(
         func.max(
             case(

@@ -268,4 +268,4 @@ class TestStorySearchByPlaceNameFlow:
     async def test_search_missing_place_name_returns_422(self, client):
         resp = await client.get("/stories/search")
 
-        assert resp.status_code == 422
+        assert resp.status_code == 400
