@@ -150,13 +150,14 @@
         sortSelect.value = sortOrder;
         renderFilterChips();
         if (initialQuery) performSearch(initialQuery);
+        else if (filterTags.length > 0) performSearch("");
 
         // ─── Search form ──────────────────────────────────────────────────────
 
         searchForm.addEventListener("submit", function (e) {
             e.preventDefault();
             var query = searchInput.value.trim();
-            if (query.length < 1) return;
+            if (query.length < 1 && filterTags.length === 0) return;
             updateUrlParams(query);
             performSearch(query);
         });
@@ -180,7 +181,8 @@
                 filterTags.push(val);
                 renderFilterChips();
                 updateUrlParams(lastQuery);
-                applyFiltersAndSort();
+                if (allStories.length > 0) applyFiltersAndSort();
+                else performSearch(lastQuery);
             }
             inputEl.value = "";
             inputEl.focus();
@@ -194,14 +196,16 @@
             filterTags.push(name);
             renderFilterChips();
             updateUrlParams(lastQuery);
-            applyFiltersAndSort();
+            if (allStories.length > 0) applyFiltersAndSort();
+            else performSearch(lastQuery);
         }
 
         function removeFilterTag(name) {
             filterTags = filterTags.filter(function (t) { return t !== name; });
             renderFilterChips();
             updateUrlParams(lastQuery);
-            applyFiltersAndSort();
+            if (allStories.length > 0) applyFiltersAndSort();
+            else performSearch(lastQuery);
         }
 
         function renderFilterChips() {
@@ -257,12 +261,11 @@
             loadingEl.classList.remove("hidden");
 
             try {
-                var searchUrl = API_BASE + "/stories/search?place_name=" + encodeURIComponent(query);
-                if (filterTags.length > 0) {
-                    searchUrl += "&tags=" + encodeURIComponent(serializeTagsToUrl(filterTags));
-                }
+                var fetchUrl = query
+                    ? API_BASE + "/stories/search?place_name=" + encodeURIComponent(query)
+                    : API_BASE + "/stories";
 
-                var response = await fetch(searchUrl);
+                var response = await fetch(fetchUrl);
                 if (!response.ok) throw new Error("Search request failed");
                 var data = await response.json();
                 var stories = data.stories || [];
@@ -272,7 +275,9 @@
                 if (stories.length === 0) {
                     allStories = [];
                     emptyEl.classList.remove("hidden");
-                    emptyDetail.textContent = 'No stories found for "' + query + '". Try a different place name.';
+                    emptyDetail.textContent = query
+                        ? 'No stories found for "' + query + '". Try a different place name.'
+                        : 'No stories found matching the selected tags.';
                     return;
                 }
 
@@ -334,9 +339,14 @@
                 return;
             }
 
-            var countText = filterTags.length > 0
-                ? '<strong class="text-textmain">' + count + '</strong> of <strong class="text-textmain">' + total + '</strong> ' + (total === 1 ? 'story' : 'stories') + ' matching filters for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"'
-                : '<strong class="text-textmain">' + count + '</strong> ' + (count === 1 ? 'story' : 'stories') + ' for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"';
+            var countText;
+            if (lastQuery && filterTags.length > 0) {
+                countText = '<strong class="text-textmain">' + count + '</strong> of <strong class="text-textmain">' + total + '</strong> ' + (total === 1 ? 'story' : 'stories') + ' matching filters for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"';
+            } else if (lastQuery) {
+                countText = '<strong class="text-textmain">' + count + '</strong> ' + (count === 1 ? 'story' : 'stories') + ' for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"';
+            } else {
+                countText = '<strong class="text-textmain">' + count + '</strong> ' + (count === 1 ? 'story' : 'stories') + ' matching selected tags';
+            }
             statusEl.innerHTML = '<p class="text-textmuted text-sm">Found ' + countText + '</p>';
 
             sorted.forEach(function (story) {

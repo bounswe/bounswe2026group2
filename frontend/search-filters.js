@@ -24,7 +24,9 @@ function filterStoriesByTags(stories, selectedTags) {
             return typeof t === "string" ? t.toLowerCase() : ((t && t.name) || "").toLowerCase();
         });
         return selectedTags.every(function (tag) {
-            return storyTags.indexOf(tag) !== -1;
+            return storyTags.some(function (storyTag) {
+                return storyTag.indexOf(tag) !== -1;
+            });
         });
     });
 }

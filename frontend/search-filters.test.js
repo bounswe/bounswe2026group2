@@ -159,6 +159,22 @@ describe("filterStoriesByTags", () => {
         expect(filterStoriesByTags(mixedCase, ["history"])).toHaveLength(1);
     });
 
+    test("matches substring: filter 'ottoman' matches story tag 'ottoman empire'", () => {
+        var result = filterStoriesByTags(
+            [{ id: "1", tags: ["ottoman empire", "architecture"] }],
+            ["ottoman"]
+        );
+        expect(result).toHaveLength(1);
+    });
+
+    test("matches substring: filter 'arch' matches story tag 'architecture'", () => {
+        var result = filterStoriesByTags(
+            [{ id: "1", tags: ["architecture"] }, { id: "2", tags: ["history"] }],
+            ["arch"]
+        );
+        expect(result.map(function (s) { return s.id; })).toEqual(["1"]);
+    });
+
     test("handles stories without a tags field", () => {
         var noTagStories = [{ id: "1", title: "No tags" }];
         expect(filterStoriesByTags(noTagStories, ["history"])).toHaveLength(0);
