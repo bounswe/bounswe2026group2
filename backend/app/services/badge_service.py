@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.badge import Badge, UserBadge
-from app.db.enums import BadgeRuleType
+from app.db.enums import BadgeRuleType, StoryStatus
 from app.db.story import Story
 from app.models.user import BadgeResponse
 
@@ -22,6 +22,7 @@ async def check_and_award_story_badges(db: AsyncSession, user_id: uuid.UUID) -> 
     count_result = await db.execute(
         select(func.count(Story.id)).where(
             Story.user_id == user_id,
+            Story.status == StoryStatus.PUBLISHED,
             Story.deleted_at.is_(None),
         )
     )
