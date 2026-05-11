@@ -41,7 +41,7 @@ async function loadProfile() {
         }
         renderBadges(data.badges || []);
         await loadUserStories(data.username);
-        await loadSavedCount();
+        await loadUserStats();
     } catch (err) {
         console.error("Error loading profile:", err);
     }
@@ -103,17 +103,18 @@ function renderBadges(badges) {
     }
 }
 
-async function loadSavedCount() {
-    var el = document.getElementById("stat-saved");
+async function loadUserStats() {
+    var el = document.getElementById("stat-views");
     if (!el) return;
     try {
-        var res = await authFetch(API_BASE + "/stories/saved");
+        var res = await authFetch(API_BASE + "/users/me/stats");
         if (!res.ok) return;
         var data = await res.json();
-        var n = ((data && data.stories) || []).length;
-        el.textContent = String(n);
+        if (data && typeof data.total_views_received === "number") {
+            el.textContent = String(data.total_views_received);
+        }
     } catch (err) {
-        console.error("Error loading saved count:", err);
+        console.error("Error loading user stats:", err);
     }
 }
 
@@ -161,12 +162,18 @@ async function loadUserStories(username) {
                     </span>
                 </div>
                 <p class="text-textmuted text-sm line-clamp-2 mb-4">${story.content}</p>
-                <div class="flex items-center justify-between text-xs text-textmuted">
-                    <span class="flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm">location_on</span> 
-                        ${story.location_name || 'Galata, Istanbul'}
-                    </span>
-                    <a href="story-detail.html?id=${story.id}" class="text-primary font-semibold hover:underline">Read more</a>
+                <div class="flex items-center justify-between text-xs text-textmuted gap-2 flex-wrap">
+                    <div class="flex items-center gap-4 min-w-0">
+                        <span class="flex items-center gap-1 min-w-0">
+                            <span class="material-symbols-outlined text-sm shrink-0">location_on</span>
+                            <span class="truncate">${story.location_name || 'Galata, Istanbul'}</span>
+                        </span>
+                        <span class="flex items-center gap-1 shrink-0" title="Views on this story">
+                            <span class="material-symbols-outlined text-sm">visibility</span>
+                            ${typeof story.view_count === "number" ? story.view_count : 0}
+                        </span>
+                    </div>
+                    <a href="story-detail.html?id=${story.id}" class="text-primary font-semibold hover:underline shrink-0">Read more</a>
                 </div>
             </article>
         `).join('');
