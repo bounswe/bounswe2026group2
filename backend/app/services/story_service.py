@@ -492,14 +492,9 @@ async def create_story_with_location(
         )
 
     await db.commit()
-    await db.refresh(story)
-
     await check_and_award_story_badges(db, current_user.id)
     await db.commit()
-
-    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    like_count = await _get_story_like_count(db, story.id)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
+    return await get_story_detail_by_id(db, story_id)
 
 
 async def update_story_with_location_and_dates(
@@ -549,11 +544,7 @@ async def update_story_with_location_and_dates(
         replace_story_locations(story, payload.locations)
 
     await db.commit()
-    await db.refresh(story)
-
-    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    like_count = await _get_story_like_count(db, story.id)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
+    return await get_story_detail_by_id(db, story.id)
 
 
 async def like_story(
