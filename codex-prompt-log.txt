@@ -181,3 +181,12 @@ next i want the year or year range of the story being visible on the left vertic
 
 2026-05-11 17:10 - User:
 okay i want the uncommitted changes we made be carried to another branch and dev being reverted to what it was before.
+
+2026-05-11 17:14 - User:
+PUSH TO REMOTE
+
+2026-05-11 17:15 - User:
+did you create a pr?
+
+2026-05-11 17:16 - User:
+create the pr on dev. summarize changes shortly. assign hamzaustun iboprobaba and akifemrebicen as reviewers
