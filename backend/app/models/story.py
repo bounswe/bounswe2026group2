@@ -220,7 +220,7 @@ class StoryResponse(BaseModel):
             date_label=date_label,
             status=story.status,
             visibility=story.visibility,
-            view_count=getattr(story, "view_count", 0),
+            view_count=getattr(story, "view_count", None) or 0,
             created_at=story.created_at,
         )
 
