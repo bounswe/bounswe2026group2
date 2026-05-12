@@ -570,9 +570,6 @@
 
         function applyMapFilters(stories) {
             var result = stories || [];
-            if (mapFilterYearFrom !== "" || mapFilterYearTo !== "") {
-                result = filterStoriesByYear(result, mapFilterYearFrom, mapFilterYearTo);
-            }
             if (mapFilterDistance !== "" && !nearMeActive) {
                 var maxKm = parseFloat(mapFilterDistance) / 1000;
                 var center = map.getCenter();
@@ -604,6 +601,8 @@
                 max_lng: Math.min(180, bounds.getNorthEast().lng)
             });
             mapFilterTags.forEach(function (t) { params.append("tags", t); });
+            if (mapFilterYearFrom !== "") params.append("query_start", mapFilterYearFrom);
+            if (mapFilterYearTo !== "") params.append("query_end", mapFilterYearTo);
 
             try {
                 var response = await fetch(API_BASE + "/stories?" + params.toString());
@@ -738,6 +737,8 @@
         async function fetchNearbyStories(lat, lng, radiusKm) {
             var params = new URLSearchParams({ lat: lat, lng: lng, radius_km: radiusKm });
             mapFilterTags.forEach(function (t) { params.append("tags", t); });
+            if (mapFilterYearFrom !== "") params.append("query_start", mapFilterYearFrom);
+            if (mapFilterYearTo !== "") params.append("query_end", mapFilterYearTo);
             try {
                 var response = await fetch(API_BASE + "/stories/nearby?" + params.toString());
                 if (!response.ok) throw new Error("Failed to fetch nearby stories");
