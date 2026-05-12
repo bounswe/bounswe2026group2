@@ -4,9 +4,11 @@
 //   UAT_BASE_URL=http://localhost:3000 npx playwright test tests/uat/dashboard.spec.js
 
 const { test, expect } = require('@playwright/test');
+const { execSync } = require('node:child_process');
+const path = require('node:path');
 
-/** Deployed dev frontend; env UAT_BASE_URL overrides for local Docker, staging, etc. */
-const DEFAULT_UAT_BASE_URL = 'https://localhistorymap-dev.onrender.com';
+/** CI default frontend origin; env UAT_BASE_URL overrides for remote runs. */
+const DEFAULT_UAT_BASE_URL = 'http://localhost:3000';
 
 const UAT_EMAIL = process.env.UAT_OWNER_EMAIL || 'test@gmail.com';
 const UAT_PASSWORD = process.env.UAT_OWNER_PASSWORD || 'Test1234%';
@@ -86,6 +88,25 @@ async function leaveStoryDetailToMap(page) {
 
 test.describe('TC_DASH — Profile view count (UAT script)', () => {
   test.use({ baseURL: DEFAULT_UAT_BASE_URL });
+
+  test.beforeAll(() => {
+    if (process.env.SKIP_UAT_SEED === '1') return;
+    const repoRoot = path.resolve(__dirname, '../../..');
+    execSync(
+      [
+        'docker compose run --rm -T',
+        `-e SEED_EMAIL="${UAT_EMAIL}"`,
+        `-e SEED_PASSWORD="${UAT_PASSWORD}"`,
+        `-e SEED_STORY_ID="${SEEDED_STORY_ID}"`,
+        "backend sh -c 'cd /app && PYTHONPATH=/app python scripts/seed_test_account.py'",
+      ].join(' '),
+      {
+        cwd: repoRoot,
+        stdio: 'inherit',
+        env: { ...process.env },
+      }
+    );
+  });
 
   test('view count after anonymous story visit matches manual UAT steps', async ({ page }) => {
     // 1–2
