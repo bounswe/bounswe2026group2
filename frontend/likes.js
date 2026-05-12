@@ -135,7 +135,7 @@ function setupLikes(apiBase, storyId, seed) {
             } else {
                 setLikeUi(state);
             }
-        } catch (err) {
+        } catch (_err) {
             setLikeUi(state);
             setLikeStatus("Unable to save like yet.");
         } finally {
