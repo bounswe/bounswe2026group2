@@ -15,5 +15,5 @@ describe('Lab 9 mobile E2E scenario placeholders', () => {
 
   it.skip('TC_DASH_1 - user dashboard view count', async () => {});
 
-  it.skip('TC_BADGE_1 - first post badge awarded', async () => {});
+  // TC_BADGE_1 has its own spec file: tc-badge-1.spec.js
 });
