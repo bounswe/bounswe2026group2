@@ -47,8 +47,10 @@ android-sdk/
 
 # Playwright
 playwright-report/
+playwright-e2e-report/
 test-results/
 uat-report.xml
+e2e-report.xml
 
 # Appium
 frontend/tests/mobile-e2e/reports/
