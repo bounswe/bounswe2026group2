@@ -117,7 +117,7 @@ function setupSaveButton(apiBase, storyId) {
                 state = optimistic;
                 setSaveUi(state);
             }
-        } catch (err) {
+        } catch (_err) {
             setSaveUi(state);
             setSaveStatus("Unable to update saved state.");
         } finally {

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     # Set to "true" in .env to write every SQL query to logs/sql.log
     LOG_SQL: bool = False
+    LOG_LEVEL: str = "INFO"
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Comma-separated list of allowed origins
@@ -39,9 +40,8 @@ class Settings(BaseSettings):
     FRONTEND_GOOGLE_CALLBACK_URL: str = "http://localhost:3000/oauth-callback.html"
 
     # ── Speech-to-Text ───────────────────────────────────────────────────────
-    TRANSCRIPTION_MODEL: str = "base"
-    TRANSCRIPTION_DEVICE: str = "cpu"
-    TRANSCRIPTION_COMPUTE_TYPE: str = "int8"
+    OPENAI_API_KEY: str = ""
+    AI_WHISPER_MODEL: str = "whisper-1"
     GEMINI_API_KEY: str = ""
     AI_TAGGING_MODEL: str = "gemini-2.5-flash"
 

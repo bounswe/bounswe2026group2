@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import and_, case, exists, func, nulls_last, or_, select
+from sqlalchemy import and_, case, exists, func, nulls_last, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -372,6 +372,8 @@ async def search_available_stories_by_place(
 async def get_story_detail_by_id(
     db: AsyncSession,
     story_id: uuid.UUID,
+    viewer: "User | None" = None,
+    track_view: bool = False,
 ) -> StoryDetailResponse:
     stmt = (
         select(Story, User.username)
@@ -391,7 +393,19 @@ async def get_story_detail_by_id(
 
     story, author_username = row
     like_count = await _get_story_like_count(db, story.id)
-    return _map_story_detail(story, author_username, like_count)
+    response = _map_story_detail(story, author_username, like_count)
+
+    is_owner = viewer is not None and viewer.id == story.user_id
+    if track_view and not is_owner:
+        await db.execute(
+            update(Story)
+            .where(Story.id == story_id)
+            .values(view_count=Story.view_count + 1)
+            .execution_options(synchronize_session=False)
+        )
+        await db.commit()
+
+    return response
 
 
 async def list_comments_for_story(

@@ -18,168 +18,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <script>
-        let profileButton;
-        let profileButtonIcon;
-        let profileButtonInitials;
-        let profileMenu;
-        let profileMenuState;
-        let profileMenuActions;
-        let profileMenuUser;
-        let profileMenuName;
-        let profileMenuEmail;
-        let currentUser = null;
-
-        function getProfileLabel(user) {
-            if (!user) return "";
-            return (user.display_name || user.username || user.email || "").trim();
-        }
-
-        function getProfileInitials(user) {
-            var label = getProfileLabel(user);
-            if (!label) return "";
-
-            return label
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map(function (part) {
-                    return part.charAt(0).toUpperCase();
-                })
-                .join("");
-        }
-
-        function setProfileButton(user) {
-            // Prefer avatar when available.
-            var avatarUrl = user && user.avatar_url;
-            if (avatarUrl) {
-                var avatarImg = document.getElementById("profile-button-avatar");
-                if (avatarImg) {
-                    avatarImg.src = avatarUrl;
-                    avatarImg.classList.remove("hidden");
-                }
-
-                profileButtonIcon.classList.add("hidden");
-                profileButtonInitials.textContent = "";
-                profileButtonInitials.classList.add("hidden");
-                profileButtonInitials.classList.remove("inline-flex");
-                profileButton.setAttribute("aria-label", "Open account menu for " + getProfileLabel(user));
-                return;
-            }
-
-            var avatarImg = document.getElementById("profile-button-avatar");
-            if (avatarImg) {
-                avatarImg.removeAttribute("src");
-                avatarImg.classList.add("hidden");
-            }
-
-            var initials = getProfileInitials(user);
-
-            if (initials) {
-                profileButtonIcon.classList.add("hidden");
-                profileButtonInitials.textContent = initials;
-                profileButtonInitials.classList.remove("hidden");
-                profileButtonInitials.classList.add("inline-flex");
-                profileButton.setAttribute("aria-label", "Open account menu for " + getProfileLabel(user));
-                return;
-            }
-
-            profileButtonIcon.classList.remove("hidden");
-            profileButtonInitials.textContent = "";
-            profileButtonInitials.classList.add("hidden");
-            profileButtonInitials.classList.remove("inline-flex");
-            profileButton.setAttribute("aria-label", "Open account menu");
-        }
-
-        function closeProfileMenu() {
-            profileMenu.hidden = true;
-            profileButton.setAttribute("aria-expanded", "false");
-        }
-
-        function openProfileMenu() {
-            profileMenu.hidden = false;
-            profileButton.setAttribute("aria-expanded", "true");
-        }
-
-        function toggleProfileMenu() {
-            if (profileMenu.hidden) {
-                openProfileMenu();
-                return;
-            }
-
-            closeProfileMenu();
-        }
-
-        function renderProfileMenu() {
-            profileMenuActions.innerHTML = "";
-
-            if (!currentUser) {
-                profileMenuState.textContent = "Sign in to create stories and manage your account.";
-                profileMenuUser.classList.add("hidden");
-
-                var signInLink = document.createElement("a");
-                signInLink.href = "index.html";
-                signInLink.className = "flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95";
-                signInLink.textContent = "Sign In";
-                signInLink.setAttribute("role", "menuitem");
-                profileMenuActions.appendChild(signInLink);
-                setProfileButton(null);
-                return;
-            }
-
-            profileMenuState.textContent = "Signed in";
-            profileMenuUser.classList.remove("hidden");
-            profileMenuName.textContent = getProfileLabel(currentUser);
-            profileMenuEmail.textContent = currentUser.email || "";
-
-            var profileLink = document.createElement("a");
-            profileLink.href = "profile.html";
-            profileLink.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-primary transition hover:bg-stone-50";
-            profileLink.textContent = "View Profile";
-            profileLink.setAttribute("role", "menuitem");
-            profileMenuActions.appendChild(profileLink);
-
-            var savedLink = document.createElement("a");
-            savedLink.href = "saved.html";
-            savedLink.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-primary transition hover:bg-stone-50";
-            savedLink.textContent = "Saved Stories";
-            savedLink.setAttribute("role", "menuitem");
-            profileMenuActions.appendChild(savedLink);
-
-            var signOutButton = document.createElement("button");
-            signOutButton.type = "button";
-            signOutButton.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50";
-            signOutButton.textContent = "Sign Out";
-            signOutButton.setAttribute("role", "menuitem");
-            signOutButton.addEventListener("click", function () {
-                logout();
-            });
-            profileMenuActions.appendChild(signOutButton);
-            setProfileButton(currentUser);
-        }
-
-        async function loadCurrentUser() {
-            currentUser = null;
-            renderProfileMenu();
-
-            if (!isLoggedIn()) {
-                return;
-            }
-
-            try {
-                var response = await authFetch(API_BASE + "/auth/me");
-                if (!response.ok) {
-                    localStorage.removeItem(AUTH_TOKEN_KEY);
-                    renderProfileMenu();
-                    return;
-                }
-
-                currentUser = await response.json();
-                renderProfileMenu();
-            } catch (err) {
-                profileMenuState.textContent = "Unable to load account details right now.";
-                setProfileButton(null);
-            }
-        }
+        // Profile button + dropdown live in site-header.js (shared across pages).
         tailwind.config = {
             theme: {
                 extend: {
@@ -257,6 +96,139 @@
             border-color: #35618f;
             box-shadow: 0 0 0 4px rgba(53, 97, 143, 0.2), 0 4px 12px rgba(0, 0, 0, 0.2);
             transform: scale(1.1);
+        }
+
+        /* ── Custom cluster styles ── */
+        /* Strip the default Leaflet.markercluster look so our custom HTML wins */
+        .marker-cluster,
+        .marker-cluster div,
+        .marker-cluster-small,
+        .marker-cluster-medium,
+        .marker-cluster-large,
+        .marker-cluster-small div,
+        .marker-cluster-medium div,
+        .marker-cluster-large div {
+            background: none !important;
+            background-color: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+        .marker-cluster span {
+            line-height: 1 !important;
+        }
+
+        /* Style 1: warm brown disc with gold ring + serif count */
+        .cluster-warm {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            background: #775a19;
+            color: #fff8e6;
+            border: 2px solid #c5a059;
+            box-shadow: 0 8px 24px rgba(119, 90, 25, 0.35), inset 0 0 0 3px rgba(255, 255, 255, 0.08);
+            font-family: "Noto Serif", serif;
+            font-weight: 700;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .cluster-warm:hover {
+            transform: scale(1.07);
+            box-shadow: 0 12px 28px rgba(119, 90, 25, 0.45), inset 0 0 0 3px rgba(255, 255, 255, 0.12);
+        }
+        .cluster-warm.tier-sm { width: 38px; height: 38px; font-size: 14px; }
+        .cluster-warm.tier-md { width: 46px; height: 46px; font-size: 16px; }
+        .cluster-warm.tier-lg { width: 56px; height: 56px; font-size: 18px; }
+
+        /* Style 2: outlined cream chip */
+        .cluster-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px 6px 8px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(6px);
+            border: 1.5px solid #775a19;
+            border-radius: 9999px;
+            color: #775a19;
+            font-family: "Inter", sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+            transition: transform 0.18s ease, background 0.18s ease;
+            white-space: nowrap;
+        }
+        .cluster-chip:hover {
+            transform: translateY(-1px);
+            background: #fff;
+        }
+        .cluster-chip .cluster-chip-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 9999px;
+            background: #775a19;
+            box-shadow: 0 0 0 3px rgba(119, 90, 25, 0.18);
+            flex: 0 0 auto;
+        }
+
+        /* Style 3: stacked stories — looks like a small stack of paper cards */
+        .cluster-stack {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cluster-stack-card {
+            position: absolute;
+            inset: 0;
+            background: #fff8e6;
+            border: 1.5px solid #775a19;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+        }
+        .cluster-stack-card.back2 {
+            transform: translate(6px, 6px) rotate(6deg);
+            background: #f3e7c8;
+            opacity: 0.7;
+        }
+        .cluster-stack-card.back1 {
+            transform: translate(3px, 3px) rotate(-4deg);
+            background: #f6ecd4;
+            opacity: 0.85;
+        }
+        .cluster-stack-count {
+            position: relative;
+            z-index: 2;
+            font-family: "Noto Serif", serif;
+            font-weight: 800;
+            font-size: 14px;
+            color: #1d1c16;
+        }
+        .cluster-stack-badge {
+            position: absolute;
+            top: -6px;
+            right: -8px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 9999px;
+            background: #c5a059;
+            color: #1d1c16;
+            font-size: 10px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #fff;
+            z-index: 3;
+            line-height: 1;
+        }
+        .cluster-stack:hover .cluster-stack-card.back2 {
+            transform: translate(8px, 8px) rotate(8deg);
+        }
+        .cluster-stack:hover .cluster-stack-card.back1 {
+            transform: translate(4px, 4px) rotate(-6deg);
         }
 
         /* Multi-location story marker — tertiary blue with a route badge */
@@ -375,10 +347,6 @@
             border-radius: 4px;
         }
 
-        #profile-menu[hidden] {
-            display: none;
-        }
-
         /* User location: pulsing blue dot like Google/Apple Maps */
         .user-location-dot {
             width: 18px;
@@ -429,111 +397,63 @@
 
 <body class="bg-background text-textmain font-body md:overflow-hidden">
 
-    <!-- Top Navigation Bar -->
-    <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
-        <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
-            <div class="flex items-center">
-                <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
+    <!-- Top Navigation Bar (rendered by site-header.js) -->
+    <div id="site-header"></div>
+
+    <!-- Map Filter Panel (fixed below header, toggled by the Filters button in the header) -->
+    <div id="map-filter-panel" class="hidden fixed right-4 sm:right-8 top-[76px] w-72 rounded-2xl border border-border bg-white shadow-soft z-[1050] p-5">
+        <div class="flex flex-col gap-5">
+            <!-- Year Range -->
+            <div>
+                <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Year Range</label>
+                <div class="flex items-center gap-2">
+                    <input id="map-filter-year-from" type="number" placeholder="from" min="1" max="9999"
+                        class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
+                    <span class="text-textmuted shrink-0 text-sm">—</span>
+                    <input id="map-filter-year-to" type="number" placeholder="to" min="1" max="9999"
+                        class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
+                </div>
             </div>
-            <div class="flex items-center gap-3 sm:gap-4">
-                <!-- Search -->
-                <form id="search-form" class="relative hidden sm:flex items-center gap-2" action="search.html" method="get">
-                    <div class="relative">
-                        <span
-                            class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl">search</span>
-                        <input id="search-input" name="q"
-                            class="pl-10 pr-4 py-2 bg-white border border-border rounded-xl w-72 text-sm focus:border-primary focus:ring-primary transition-all"
-                            placeholder="Search stories by location..." type="text" autocomplete="off" />
-                    </div>
-                </form>
-                <div class="relative">
-                    <button id="map-filters-toggle-btn" type="button"
-                        class="inline-flex items-center gap-1.5 bg-white border border-border text-textmuted px-4 py-2 rounded-xl text-sm font-semibold hover:border-primary/50 hover:text-textmain transition-all">
-                        <span class="material-symbols-outlined text-xl">tune</span>
-                        <span class="hidden sm:inline">Filters</span>
-                    </button>
-                    <!-- Map Filter Panel (dropdown) -->
-                    <div id="map-filter-panel" class="hidden absolute right-0 top-[calc(100%+0.5rem)] w-72 rounded-2xl border border-border bg-white shadow-soft z-50 p-5">
-                    <div class="flex flex-col gap-5">
-                        <!-- Year Range -->
-                        <div>
-                            <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Year Range</label>
-                            <div class="flex items-center gap-2">
-                                <input id="map-filter-year-from" type="number" placeholder="from" min="1" max="9999"
-                                    class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
-                                <span class="text-textmuted shrink-0 text-sm">—</span>
-                                <input id="map-filter-year-to" type="number" placeholder="to" min="1" max="9999"
-                                    class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
-                            </div>
-                        </div>
-                        <!-- Distance -->
-                        <div>
-                            <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Distance</label>
-                            <div class="flex flex-wrap gap-1.5">
-                                <button type="button" class="map-distance-btn distance-btn active" data-value="">Anywhere</button>
-                                <button type="button" class="map-distance-btn distance-btn" data-value="1000">1 km</button>
-                                <button type="button" class="map-distance-btn distance-btn" data-value="5000">5 km</button>
-                                <button type="button" class="map-distance-btn distance-btn" data-value="10000">10 km</button>
-                                <button type="button" class="map-distance-btn distance-btn" data-value="25000">25 km</button>
-                            </div>
-                            <p class="mt-2 text-[11px] text-textmuted">Uses your current location</p>
-                        </div>
-                        <!-- Tags -->
-                        <div>
-                            <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Tags</label>
-                            <div id="map-filter-panel-tags" class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]"></div>
-                            <div class="flex items-center gap-2">
-                                <input id="map-filter-panel-tag-input" type="text" placeholder="Tag name..."
-                                    class="hidden text-xs border border-border rounded-full px-3 py-1.5 outline-none focus:border-primary w-28 text-textmain placeholder:text-textmuted/50"
-                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addMapPanelTag();}" />
-                                <button id="map-filter-panel-add-tag-btn" type="button"
-                                    class="inline-flex items-center gap-1 text-xs font-semibold text-primary border border-primary/30 bg-[rgba(119,90,25,0.05)] rounded-full px-3 py-1.5 hover:bg-[rgba(119,90,25,0.1)] transition-colors">
-                                    <span class="material-symbols-outlined" style="font-size:14px;line-height:1.2;">add</span>
-                                    Add tag
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Actions -->
-                        <div class="pt-4 border-t border-border/30 flex items-center justify-end gap-3">
-                            <button id="map-filter-reset-btn" type="button"
-                                class="px-4 py-2 text-sm font-semibold text-textmuted border border-border rounded-xl hover:border-primary/50 hover:text-textmain transition-all">
-                                Reset
-                            </button>
-                            <button id="map-filter-apply-btn" type="button"
-                                class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-xl hover:opacity-95 transition-all shadow-sm">
-                                Apply
-                            </button>
-                        </div>
-                    </div>
-                    </div>
+            <!-- Distance -->
+            <div>
+                <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Distance</label>
+                <div class="flex flex-wrap gap-1.5">
+                    <button type="button" class="map-distance-btn distance-btn active" data-value="">Anywhere</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="1000">1 km</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="5000">5 km</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="10000">10 km</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="25000">25 km</button>
                 </div>
-                <div class="relative">
-                    <button id="btn-profile" type="button"
-                        class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
-                        aria-label="Open account menu" aria-haspopup="menu" aria-expanded="false">
-                        <img id="profile-button-avatar" alt="" class="hidden h-9 w-9 rounded-full object-cover" />
-                        <span id="profile-button-icon"
-                            class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
-                        <span id="profile-button-initials"
-                            class="hidden h-7 min-w-7 items-center justify-center rounded-full bg-primary text-xs font-bold uppercase text-white"></span>
+                <p class="mt-2 text-[11px] text-textmuted">Uses your current location</p>
+            </div>
+            <!-- Tags -->
+            <div>
+                <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Tags</label>
+                <div id="map-filter-panel-tags" class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]"></div>
+                <div class="flex items-center gap-2">
+                    <input id="map-filter-panel-tag-input" type="text" placeholder="Tag name..."
+                        class="hidden text-xs border border-border rounded-full px-3 py-1.5 outline-none focus:border-primary w-28 text-textmain placeholder:text-textmuted/50"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addMapPanelTag();}" />
+                    <button id="map-filter-panel-add-tag-btn" type="button"
+                        class="inline-flex items-center gap-1 text-xs font-semibold text-primary border border-primary/30 bg-[rgba(119,90,25,0.05)] rounded-full px-3 py-1.5 hover:bg-[rgba(119,90,25,0.1)] transition-colors">
+                        <span class="material-symbols-outlined" style="font-size:14px;line-height:1.2;">add</span>
+                        Add tag
                     </button>
-                    <div id="profile-menu" hidden
-                        class="absolute right-0 top-[calc(100%+0.75rem)] w-72 rounded-2xl border border-border bg-white p-2 shadow-soft"
-                        role="menu" aria-labelledby="btn-profile">
-                        <div id="profile-menu-state" class="px-4 py-3 text-sm text-textmuted">
-                            Checking account status...
-                        </div>
-                        <div id="profile-menu-actions" class="space-y-1"></div>
-                        <div id="profile-menu-user" class="hidden border-t border-border/70 px-4 py-3">
-                            <p id="profile-menu-name" class="text-sm font-semibold text-textmain"></p>
-                            <p id="profile-menu-email" class="mt-1 text-xs text-textmuted break-all"></p>
-                        </div>
-                    </div>
                 </div>
+            </div>
+            <!-- Actions -->
+            <div class="pt-4 border-t border-border/30 flex items-center justify-end gap-3">
+                <button id="map-filter-reset-btn" type="button"
+                    class="px-4 py-2 text-sm font-semibold text-textmuted border border-border rounded-xl hover:border-primary/50 hover:text-textmain transition-all">
+                    Reset
+                </button>
+                <button id="map-filter-apply-btn" type="button"
+                    class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-xl hover:opacity-95 transition-all shadow-sm">
+                    Apply
+                </button>
             </div>
         </div>
-
-    </header>
+    </div>
 
     <!-- Map Container -->
     <main class="relative w-full pt-[68px] md:h-screen">
@@ -605,6 +525,7 @@
 
     <script src="config.js"></script>
     <script src="auth.js"></script>
+    <script src="site-header.js"></script>
     <script src="anonymous.js"></script>
     <script src="multi-location.js"></script>
     <script src="search-filters.js"></script>
@@ -613,15 +534,22 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <script>
-        profileButton = document.getElementById("btn-profile");
-        profileButtonIcon = document.getElementById("profile-button-icon");
-        profileButtonInitials = document.getElementById("profile-button-initials");
-        profileMenu = document.getElementById("profile-menu");
-        profileMenuState = document.getElementById("profile-menu-state");
-        profileMenuActions = document.getElementById("profile-menu-actions");
-        profileMenuUser = document.getElementById("profile-menu-user");
-        profileMenuName = document.getElementById("profile-menu-name");
-        profileMenuEmail = document.getElementById("profile-menu-email");
+        mountSiteHeader({
+            extraCenter:
+                '<form id="search-form" class="relative flex w-full max-w-md items-center" action="search.html" method="get">' +
+                '<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl pointer-events-none">search</span>' +
+                '<input id="search-input" name="q" type="text" autocomplete="off"' +
+                ' class="w-full pl-10 pr-4 py-2 bg-white border border-border rounded-xl text-sm focus:border-primary focus:ring-primary transition-all"' +
+                ' placeholder="Search stories by location..." />' +
+                '</form>',
+            extraRight:
+                '<button id="map-filters-toggle-btn" type="button"' +
+                ' class="inline-flex items-center gap-1.5 bg-white border border-border text-textmuted px-4 py-2 rounded-xl text-sm font-semibold hover:border-primary/50 hover:text-textmain transition-all">' +
+                '<span class="material-symbols-outlined text-xl">tune</span>' +
+                '<span class="hidden sm:inline">Filters</span>' +
+                '</button>'
+        });
+
         // ─── Map filter state ───
         var mapFilterYearFrom = "";
         var mapFilterYearTo = "";
@@ -834,7 +762,7 @@
 
         function fitToRadius(latlng, radiusKm) {
             try {
-                map.setView(latlng, zoomForRadiusKm(radiusKm), { animate: true });
+                map.flyTo(latlng, zoomForRadiusKm(radiusKm), { duration: FLY_DURATION });
             } catch (err) {
                 console.error("fitToRadius failed:", err);
             }
@@ -893,19 +821,6 @@
             fetchStoriesInBounds();
         }
 
-
-        // ─── Geolocation ───
-        document.getElementById("btn-locate").addEventListener("click", function () {
-            if (!navigator.geolocation) return;
-            navigator.geolocation.getCurrentPosition(
-                function (pos) {
-                    map.setView([pos.coords.latitude, pos.coords.longitude], 15);
-                },
-                function () {
-                    alert("Unable to access your location.");
-                }
-            );
-        });
 
         // ─── Create Markers ───
         function createMarkerIcon(story) {
@@ -979,19 +894,138 @@
         }
 
         const markers = [];
-        const markerClusterLayer = L.markerClusterGroup();
+
+        // ─── Custom cluster icon builders (3 styles — swap via setClusterStyle) ───
+        var CLUSTER_STYLES = {
+            warm: function (cluster) {
+                var count = cluster.getChildCount();
+                var size = count < 10 ? 38 : count < 50 ? 46 : 56;
+                var tier = count < 10 ? "tier-sm" : count < 50 ? "tier-md" : "tier-lg";
+                return L.divIcon({
+                    html: '<div class="cluster-warm ' + tier + '">' + count + '</div>',
+                    className: "",
+                    iconSize: [size, size],
+                    iconAnchor: [size / 2, size / 2]
+                });
+            },
+            chip: function (cluster) {
+                var count = cluster.getChildCount();
+                // Width varies with the count text — estimate it so the anchor
+                // sits at the chip's visual center instead of its top-left.
+                var label = count + " " + (count === 1 ? "story" : "stories");
+                var width = Math.max(96, 36 + label.length * 7);
+                return L.divIcon({
+                    html:
+                        '<div class="cluster-chip">' +
+                        '<span class="cluster-chip-dot" aria-hidden="true"></span>' +
+                        '<span>' + label + '</span>' +
+                        '</div>',
+                    className: "",
+                    iconSize: [width, 30],
+                    iconAnchor: [width / 2, 15]
+                });
+            },
+            stack: function (cluster) {
+                var count = cluster.getChildCount();
+                return L.divIcon({
+                    html:
+                        '<div class="cluster-stack">' +
+                        '<div class="cluster-stack-card back2"></div>' +
+                        '<div class="cluster-stack-card back1"></div>' +
+                        '<div class="cluster-stack-card"></div>' +
+                        '<span class="cluster-stack-count">' + count + '</span>' +
+                        (count > 9 ? '<span class="cluster-stack-badge">' + (count > 99 ? "99+" : count) + '</span>' : "") +
+                        '</div>',
+                    className: "",
+                    iconSize: [56, 56],
+                    iconAnchor: [24, 24]
+                });
+            }
+        };
+
+        var activeClusterStyle = "warm"; // default
+
+        // Camera animation duration (seconds). Tune live in the console with
+        // setFlyDuration(0.45) — snappier, setFlyDuration(1.2) — cinematic.
+        var FLY_DURATION = 0.7;
+        window.setFlyDuration = function (seconds) {
+            var n = Number(seconds);
+            if (!isFinite(n) || n <= 0) {
+                console.warn("[fly] invalid duration:", seconds, "— pass a positive number of seconds");
+                return FLY_DURATION;
+            }
+            FLY_DURATION = n;
+            console.log("[fly] duration →", FLY_DURATION + "s");
+            return FLY_DURATION;
+        };
+
+        const markerClusterLayer = L.markerClusterGroup({
+            iconCreateFunction: CLUSTER_STYLES[activeClusterStyle],
+            showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
+            // Keep zoom-in/out cluster merging animated, but skip the
+            // "fly from center" animation when markers are inserted by a
+            // bounds refetch — that's what made the grouping flicker.
+            animate: true,
+            animateAddingMarkers: false,
+            chunkedLoading: true
+        });
         map.addLayer(markerClusterLayer);
+
+        // Console hook: setClusterStyle("warm" | "chip" | "stack")
+        window.setClusterStyle = function (name) {
+            if (!CLUSTER_STYLES[name]) {
+                console.warn("[clusters] unknown style:", name, "— try one of:", Object.keys(CLUSTER_STYLES).join(", "));
+                return;
+            }
+            activeClusterStyle = name;
+            markerClusterLayer.options.iconCreateFunction = CLUSTER_STYLES[name];
+            markerClusterLayer.refreshClusters();
+            console.log("[clusters] style →", name);
+        };
+
+        // Fade the marker pane during long camera animations. flyTo does
+        // continuous zoom interpolation but markercluster only re-renders at
+        // zoomend, so the cluster "pops" open at the end. Hiding the pane
+        // during the fly means we never show the in-between state — the user
+        // sees a smooth camera glide, then markers fade in at their final
+        // positions.
+        function flyWithMarkerFade(flyFn) {
+            var pane = map.getPane("markerPane");
+            if (pane) {
+                pane.style.transition = "opacity 180ms ease-out";
+                pane.style.opacity = "0";
+            }
+            flyFn();
+            map.once("moveend", function () {
+                if (!pane) return;
+                pane.style.transition = "opacity 260ms ease-in";
+                pane.style.opacity = "1";
+                setTimeout(function () {
+                    pane.style.transition = "";
+                }, 280);
+            });
+        }
 
         markerClusterLayer.on("clusterclick", function (event) {
             var cluster = event.layer;
             if (!cluster || typeof cluster.getBounds !== "function") return;
 
+            if (map.getZoom() >= map.getMaxZoom() && typeof cluster.spiderfy === "function") {
+                clearTimeout(fetchTimeout);
+                cluster.spiderfy();
+                return;
+            }
+
             var bounds = cluster.getBounds();
             if (!bounds || !bounds.isValid()) return;
 
-            map.fitBounds(bounds, {
-                padding: [72, 72],
-                maxZoom: map.getMaxZoom()
+            flyWithMarkerFade(function () {
+                map.flyToBounds(bounds, {
+                    padding: [72, 72],
+                    maxZoom: map.getMaxZoom(),
+                    duration: FLY_DURATION
+                });
             });
         });
 
@@ -1044,7 +1078,7 @@
             focusLayer.addTo(map);
 
             var bounds = L.latLngBounds(locs.map(function (l) { return [l.latitude, l.longitude]; }));
-            map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+            map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 16, duration: FLY_DURATION });
 
             var banner = document.getElementById("focus-banner");
             document.getElementById("focus-banner-title").textContent = story.title || "Story focus";
@@ -1066,27 +1100,82 @@
 
         document.getElementById("btn-exit-focus").addEventListener("click", exitFocusMode);
 
+        function sameStorySet(prev, next) {
+            if (!prev || !next || prev.length !== next.length) return false;
+            var prevIds = {};
+            for (var i = 0; i < prev.length; i++) prevIds[prev[i].id] = true;
+            for (var j = 0; j < next.length; j++) {
+                if (!prevIds[next[j].id]) return false;
+            }
+            return true;
+        }
+
         function loadStories(stories) {
-            lastStoriesSnapshot = stories || [];
+            var nextSnapshot = stories || [];
 
             // If we're in focus mode, don't disturb it — the user is reading
             // one story, the underlying data refresh will be re-applied when
             // they exit focus mode.
             if (focusStoryId) {
-                document.getElementById("story-count").textContent = (stories || []).length + " stories on the map";
+                lastStoriesSnapshot = nextSnapshot;
+                document.getElementById("story-count").textContent = nextSnapshot.length + " stories on the map";
                 return;
             }
 
-            // Clear existing markers
-            markerClusterLayer.clearLayers();
-            markers.length = 0;
+            // Skip the rebuild when the story set hasn't actually changed. This
+            // is the common case after a popup's autoPan triggers a redundant
+            // bounds refetch — without this guard we'd destroy the marker that
+            // owns the open popup right after the user clicked it.
+            if (sameStorySet(lastStoriesSnapshot, nextSnapshot) && markers.length > 0) {
+                lastStoriesSnapshot = nextSnapshot;
+                document.getElementById("story-count").textContent = markers.length + " stories on the map";
+                return;
+            }
 
-            stories.forEach(function (story) {
+            lastStoriesSnapshot = nextSnapshot;
+
+            // Incremental diff: only remove markers whose story is gone and
+            // only build markers for stories we don't already have on the map.
+            // Without this, every refetch destroyed every marker and the
+            // cluster plugin replayed its merge animation from scratch — the
+            // visible flicker.
+            var existingById = {};
+            for (var mi = 0; mi < markers.length; mi++) {
+                existingById[markers[mi]._storyId] = markers[mi];
+            }
+            var nextById = {};
+            for (var si = 0; si < nextSnapshot.length; si++) {
+                if (hasStoryCoordinates(nextSnapshot[si])) {
+                    nextById[nextSnapshot[si].id] = nextSnapshot[si];
+                }
+            }
+
+            var toRemove = [];
+            var keptMarkers = [];
+            for (var ki = 0; ki < markers.length; ki++) {
+                if (nextById[markers[ki]._storyId]) {
+                    keptMarkers.push(markers[ki]);
+                } else {
+                    toRemove.push(markers[ki]);
+                }
+            }
+            if (toRemove.length > 0) {
+                markerClusterLayer.removeLayers(toRemove);
+            }
+            markers.length = 0;
+            for (var kj = 0; kj < keptMarkers.length; kj++) {
+                markers.push(keptMarkers[kj]);
+            }
+
+            var toAdd = [];
+            nextSnapshot.forEach(function (story) {
                 if (!hasStoryCoordinates(story)) return;
+                if (existingById[story.id]) return; // already on map
 
                 const marker = L.marker([story.latitude, story.longitude], {
                     icon: createMarkerIcon(story)
                 });
+                marker._storyId = story.id;
 
                 var isMulti = hasMultipleLocations(story);
 
@@ -1094,7 +1183,8 @@
                     marker.bindPopup(buildPopupHtml(story, null), {
                         maxWidth: 300,
                         minWidth: 300,
-                        closeButton: true
+                        closeButton: true,
+                        autoPan: false  // we'll center the camera ourselves
                     });
                 }
 
@@ -1103,6 +1193,16 @@
                         enterFocusMode(story);
                         return;
                     }
+
+                    // Center the camera on the clicked story so the popup
+                    // never opens near the edge — that was the source of the
+                    // popup-closing bug (popup autoPan → moveend → refetch →
+                    // marker rebuild → popup destroyed).
+                    map.flyTo(
+                        [story.latitude, story.longitude],
+                        Math.max(map.getZoom(), 15),
+                        { duration: FLY_DURATION }
+                    );
 
                     // Highlight active marker
                     document.querySelectorAll(".story-marker").forEach(function (el) {
@@ -1134,9 +1234,15 @@
                         .catch(function () { /* keep placeholder on error */ });
                 });
 
-                markerClusterLayer.addLayer(marker);
+                toAdd.push(marker);
                 markers.push(marker);
             });
+
+            if (toAdd.length > 0) {
+                // Bulk insert — markercluster batches the cluster reflow into
+                // a single pass instead of animating once per marker.
+                markerClusterLayer.addLayers(toAdd);
+            }
 
             // Update count
             document.getElementById("story-count").textContent = markers.length + " stories on the map";
@@ -1168,7 +1274,7 @@
 
                 div.addEventListener("click", function (e) {
                     if (e.target.tagName === "A") return;
-                    map.setView([story.latitude, story.longitude], 16);
+                    map.flyTo([story.latitude, story.longitude], 16, { duration: FLY_DURATION });
                     // Open the corresponding marker popup
                     markers.forEach(function (m) {
                         if (m.getLatLng().lat === story.latitude && m.getLatLng().lng === story.longitude) {
@@ -1189,31 +1295,40 @@
             syncMapSize();
         });
 
-        // Close profile menu when clicking outside
-        document.addEventListener("click", function (e) {
-            if (!profileMenu.hidden && !profileMenu.contains(e.target) && !profileButton.contains(e.target)) {
-                closeProfileMenu();
-            }
-        });
-
-        profileButton.addEventListener("click", function () {
-            toggleProfileMenu();
-        });
-
-        document.addEventListener("keydown", function (e) {
-            if (e.key === "Escape") {
-                closeProfileMenu();
-            }
-        });
-
         // ─── Initialize ───
+        // Pause bounds refetches while a popup is open so the rebuild can't
+        // destroy the marker the user is reading. Resume on popup close.
+        var popupOpen = false;
+        var openPopupRef = null;
+        map.on("popupopen", function (e) {
+            popupOpen = true;
+            openPopupRef = e.popup || null;
+        });
+        map.on("popupclose", function () {
+            popupOpen = false;
+            openPopupRef = null;
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
+        });
+
         map.on("moveend", function () {
+            // If a popup is open but its anchor has been panned out of view,
+            // close it. Without this the diff-based loadStories preserves the
+            // marker, the popup stays anchored off-screen, and the popupOpen
+            // guard below permanently blocks refetches.
+            if (popupOpen && openPopupRef) {
+                var latlng = openPopupRef.getLatLng && openPopupRef.getLatLng();
+                if (latlng && !map.getBounds().contains(latlng)) {
+                    map.closePopup(openPopupRef);
+                    return; // popupclose handler will schedule the refetch
+                }
+            }
+            if (popupOpen) return;
             clearTimeout(fetchTimeout);
             fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
         });
         fetchStoriesInBounds();
 
-        loadCurrentUser();
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
 
