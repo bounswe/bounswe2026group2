@@ -1,3 +1,4 @@
+import os
 from unittest.mock import MagicMock
 
 import pytest_asyncio
@@ -42,13 +43,18 @@ BADGE_SEEDS = [
     },
 ]
 
-# Build the async DB URL
-# For tests, replace 'db' hostname with 'localhost' for local development
-_url = settings.DATABASE_URL.replace("@db:", "@localhost:")
-if _url.startswith("postgresql://"):
-    _url = _url.replace("postgresql://", "postgresql+asyncpg://", 1)
-elif _url.startswith("postgres://"):
-    _url = _url.replace("postgres://", "postgresql+asyncpg://", 1)
+# Build the async DB URL.
+# TEST_DATABASE_URL env var overrides everything (useful when running tests
+# inside Docker where 'db' is the correct hostname, not 'localhost').
+# Otherwise, replace 'db' with 'localhost' for running tests on the host
+# against the port-forwarded postgres container.
+_raw = os.environ.get("TEST_DATABASE_URL") or settings.DATABASE_URL.replace("@db:", "@localhost:")
+if _raw.startswith("postgresql://"):
+    _url = _raw.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif _raw.startswith("postgres://"):
+    _url = _raw.replace("postgres://", "postgresql+asyncpg://", 1)
+else:
+    _url = _raw
 
 
 @pytest_asyncio.fixture
@@ -117,7 +123,8 @@ async def seeded_db(db_session):
     """
     from datetime import date
 
-    from app.db.enums import DatePrecision, StoryStatus, StoryVisibility, UserRole
+    from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility, UserRole
+    from tests.factories.media_file_factory import make_media_file_entity
     from tests.factories.story_factory import make_story_entity
     from tests.factories.user_factory import make_user_entity
 
@@ -198,9 +205,51 @@ async def seeded_db(db_session):
             status=StoryStatus.PUBLISHED,
             visibility=StoryVisibility.PRIVATE,
         ),
+        # DATE-precision story — exercises exact-date filter queries
+        make_story_entity(
+            user_id=bob.id,
+            title="Battle of Gallipoli",
+            content="The Allied campaign against the Ottoman Empire at Gallipoli in 1915.",
+            summary="WWI campaign at Gallipoli.",
+            place_name="Çanakkale",
+            latitude=40.1553,
+            longitude=26.4142,
+            date_start=date(1915, 4, 25),
+            date_end=date(1915, 4, 25),
+            date_precision=DatePrecision.DATE,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+        ),
+        # Admin-owned story — supports admin moderation test scenarios
+        make_story_entity(
+            user_id=admin.id,
+            title="Admin's Historical Note",
+            content="A public story created by the admin user.",
+            summary="Admin-authored story.",
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+        ),
     ]
 
     db_session.add_all(stories_data)
+    await db_session.flush()
+
+    # Attach a media file to "Fall of Constantinople" for story-detail media assertions
+    constantinople = next(s for s in stories_data if s.title == "Fall of Constantinople")
+    media = make_media_file_entity(
+        story_id=constantinople.id,
+        original_filename="constantinople.png",
+        alt_text="Map of the siege",
+        caption="Ottoman forces surrounding Constantinople, 1453",
+        media_type=MediaType.IMAGE,
+    )
+    db_session.add(media)
     await db_session.commit()
 
     stories_by_title = {s.title: s for s in stories_data}
@@ -210,4 +259,5 @@ async def seeded_db(db_session):
         "users": {"admin": admin, "alice": alice, "bob": bob},
         "stories": stories_by_title,
         "public": public,
+        "media": {"constantinople_image": media},
     }
