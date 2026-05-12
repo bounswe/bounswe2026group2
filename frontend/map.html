@@ -435,6 +435,26 @@
             background: #35618f !important;
             color: #ffffff !important;
         }
+        .distance-btn {
+            padding: 5px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid #e7e2d9;
+            background: white;
+            color: #5f584c;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .distance-btn.active {
+            background: #1d1c16;
+            color: white;
+            border-color: #1d1c16;
+        }
+        .distance-btn:hover:not(.active) {
+            border-color: #c5a059;
+            color: #775a19;
+        }
 </style>
 </head>
 
@@ -457,6 +477,66 @@
                             placeholder="Search stories by location..." type="text" autocomplete="off" />
                     </div>
                 </form>
+                <div class="relative">
+                    <button id="map-filters-toggle-btn" type="button"
+                        class="inline-flex items-center gap-1.5 bg-white border border-border text-textmuted px-4 py-2 rounded-xl text-sm font-semibold hover:border-primary/50 hover:text-textmain transition-all">
+                        <span class="material-symbols-outlined text-xl">tune</span>
+                        <span class="hidden sm:inline">Filters</span>
+                    </button>
+                    <!-- Map Filter Panel (dropdown) -->
+                    <div id="map-filter-panel" class="hidden absolute right-0 top-[calc(100%+0.5rem)] w-72 rounded-2xl border border-border bg-white shadow-soft z-50 p-5">
+                    <div class="flex flex-col gap-5">
+                        <!-- Year Range -->
+                        <div>
+                            <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Year Range</label>
+                            <div class="flex items-center gap-2">
+                                <input id="map-filter-year-from" type="number" placeholder="from" min="1" max="9999"
+                                    class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
+                                <span class="text-textmuted shrink-0 text-sm">—</span>
+                                <input id="map-filter-year-to" type="number" placeholder="to" min="1" max="9999"
+                                    class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
+                            </div>
+                        </div>
+                        <!-- Distance -->
+                        <div>
+                            <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Distance</label>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button type="button" class="map-distance-btn distance-btn active" data-value="">Anywhere</button>
+                                <button type="button" class="map-distance-btn distance-btn" data-value="500">500 m</button>
+                                <button type="button" class="map-distance-btn distance-btn" data-value="1000">1 km</button>
+                                <button type="button" class="map-distance-btn distance-btn" data-value="10000">10 km</button>
+                                <button type="button" class="map-distance-btn distance-btn" data-value="100000">100 km</button>
+                            </div>
+                        </div>
+                        <!-- Tags -->
+                        <div>
+                            <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Tags</label>
+                            <div id="map-filter-panel-tags" class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]"></div>
+                            <div class="flex items-center gap-2">
+                                <input id="map-filter-panel-tag-input" type="text" placeholder="Tag name..."
+                                    class="hidden text-xs border border-border rounded-full px-3 py-1.5 outline-none focus:border-primary w-28 text-textmain placeholder:text-textmuted/50"
+                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addMapPanelTag();}" />
+                                <button id="map-filter-panel-add-tag-btn" type="button"
+                                    class="inline-flex items-center gap-1 text-xs font-semibold text-primary border border-primary/30 bg-[rgba(119,90,25,0.05)] rounded-full px-3 py-1.5 hover:bg-[rgba(119,90,25,0.1)] transition-colors">
+                                    <span class="material-symbols-outlined" style="font-size:14px;line-height:1.2;">add</span>
+                                    Add tag
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Actions -->
+                        <div class="pt-4 border-t border-border/30 flex items-center justify-end gap-3">
+                            <button id="map-filter-reset-btn" type="button"
+                                class="px-4 py-2 text-sm font-semibold text-textmuted border border-border rounded-xl hover:border-primary/50 hover:text-textmain transition-all">
+                                Reset
+                            </button>
+                            <button id="map-filter-apply-btn" type="button"
+                                class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-xl hover:opacity-95 transition-all shadow-sm">
+                                Apply
+                            </button>
+                        </div>
+                    </div>
+                    </div>
+                </div>
                 <div class="relative">
                     <button id="btn-profile" type="button"
                         class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
@@ -482,6 +562,7 @@
                 </div>
             </div>
         </div>
+
     </header>
 
     <!-- Map Container -->
@@ -573,6 +654,7 @@
     <script src="auth.js"></script>
     <script src="anonymous.js"></script>
     <script src="multi-location.js"></script>
+    <script src="search-filters.js"></script>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -587,6 +669,48 @@
         profileMenuUser = document.getElementById("profile-menu-user");
         profileMenuName = document.getElementById("profile-menu-name");
         profileMenuEmail = document.getElementById("profile-menu-email");
+        // ─── Map filter state ───
+        var mapFilterYearFrom = "";
+        var mapFilterYearTo = "";
+        var mapFilterDistance = "";
+        var mapFilterTags = [];
+        var mapFilterPanelTags = [];
+
+        function haversineKm(lat1, lng1, lat2, lng2) {
+            var R = 6371;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLng = (lng2 - lng1) * Math.PI / 180;
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function applyMapFilters(stories) {
+            var result = stories || [];
+            if (mapFilterTags.length > 0) {
+                result = filterStoriesByTags(result, mapFilterTags);
+            }
+            if (mapFilterYearFrom !== "" || mapFilterYearTo !== "") {
+                result = filterStoriesByYear(result, mapFilterYearFrom, mapFilterYearTo);
+            }
+            if (mapFilterDistance !== "") {
+                var maxKm = parseFloat(mapFilterDistance) / 1000;
+                var center = map.getCenter();
+                result = result.filter(function (story) {
+                    if (!hasStoryCoordinates(story)) return true;
+                    return haversineKm(center.lat, center.lng, Number(story.latitude), Number(story.longitude)) <= maxKm;
+                });
+            }
+            return result;
+        }
+
+        function refreshMapDisplay() {
+            var filtered = applyMapFilters(cachedStories);
+            loadStories(filtered);
+            populateSidebar(filtered);
+        }
+
         // ─── Story fetching ───
         var cachedStories = [];
         var fetchTimeout = null;
@@ -600,14 +724,14 @@
                 min_lng: Math.max(-180, bounds.getSouthWest().lng),
                 max_lng: Math.min(180, bounds.getNorthEast().lng)
             });
+            mapFilterTags.forEach(function (t) { params.append("tags", t); });
 
             try {
                 var response = await fetch(API_BASE + "/stories?" + params.toString());
                 if (!response.ok) throw new Error("Failed to fetch stories");
                 var data = await response.json();
                 cachedStories = data.stories || [];
-                loadStories(cachedStories);
-                populateSidebar(cachedStories);
+                refreshMapDisplay();
             } catch (err) {
                 console.error("Error fetching stories:", err);
                 document.getElementById("story-count").textContent = "Failed to load stories";
@@ -743,8 +867,7 @@
                 if (!response.ok) throw new Error("Failed to fetch nearby stories");
                 var data = await response.json();
                 cachedStories = data.stories || [];
-                loadStories(cachedStories);
-                populateSidebar(cachedStories);
+                refreshMapDisplay();
                 nearMeStatus.textContent = cachedStories.length + " stor" + (cachedStories.length === 1 ? "y" : "ies") + " within " + radiusKm + " km";
             } catch (err) {
                 console.error("Error fetching nearby stories:", err);
@@ -933,7 +1056,6 @@
                 '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">' + story.title + '</h3>' +
                 '<p style="font-size:11px;color:#5f584c;margin:0 0 8px 0;' + (isAnonymousStory(story) ? 'font-style:italic;' : '') + '">' + getAuthorByLine(story) + '</p>' +
                 '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
-                '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"' + preview + '"</p>' +
                 (story.tags && story.tags.length > 0
                     ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">' +
                       story.tags.slice(0, 4).map(function(t) {
@@ -1190,7 +1312,132 @@
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
 
-        // ─── Report functionality ────────────────────────────────────────────
+        // ─── Map Filter Panel ─────────────────────────────────────────────────
+
+        var mapFiltersToggleBtn = document.getElementById("map-filters-toggle-btn");
+        var mapFilterPanelEl = document.getElementById("map-filter-panel");
+
+        function setMapFiltersToggleActive(active) {
+            if (active) {
+                mapFiltersToggleBtn.classList.add("bg-textmain", "text-white", "border-textmain");
+                mapFiltersToggleBtn.classList.remove("bg-white", "text-textmuted", "border-border");
+            } else {
+                mapFiltersToggleBtn.classList.remove("bg-textmain", "text-white", "border-textmain");
+                mapFiltersToggleBtn.classList.add("bg-white", "text-textmuted", "border-border");
+            }
+        }
+
+        mapFiltersToggleBtn.addEventListener("click", function () {
+            var isHidden = mapFilterPanelEl.classList.toggle("hidden");
+            setMapFiltersToggleActive(!isHidden);
+            if (!isHidden) {
+                // Panel açıldı: mevcut aktif filtreleri panele yükle
+                mapFilterPanelTags = mapFilterTags.slice();
+                renderMapPanelTags();
+                document.getElementById("map-filter-year-from").value = mapFilterYearFrom;
+                document.getElementById("map-filter-year-to").value = mapFilterYearTo;
+                document.querySelectorAll(".map-distance-btn").forEach(function (b) {
+                    b.classList.toggle("active", b.dataset.value === mapFilterDistance);
+                });
+            }
+        });
+
+        document.querySelectorAll(".map-distance-btn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                document.querySelectorAll(".map-distance-btn").forEach(function (b) { b.classList.remove("active"); });
+                mapFilterDistance = this.dataset.value;
+                this.classList.add("active");
+            });
+        });
+
+        function addMapPanelTag() {
+            var input = document.getElementById("map-filter-panel-tag-input");
+            var val = input.value.trim().toLowerCase();
+            if (!val || mapFilterPanelTags.indexOf(val) !== -1) return;
+            mapFilterPanelTags.push(val);
+            renderMapPanelTags();
+            input.value = "";
+            input.focus();
+        }
+
+        function renderMapPanelTags() {
+            var container = document.getElementById("map-filter-panel-tags");
+            if (!container) return;
+            container.innerHTML = "";
+            mapFilterPanelTags.forEach(function (tag) {
+                var chip = document.createElement("span");
+                chip.className = "inline-flex items-center gap-1 rounded-full bg-[rgba(119,90,25,0.12)] border border-[rgba(119,90,25,0.2)] px-2.5 py-0.5 text-xs font-semibold text-primary";
+                var nameSpan = document.createElement("span");
+                nameSpan.textContent = tag;
+                var removeIcon = document.createElement("span");
+                removeIcon.textContent = "×";
+                removeIcon.style.cssText = "cursor:pointer;line-height:1;opacity:0.6;font-size:14px;";
+                removeIcon.addEventListener("mouseover", function () { this.style.opacity = "1"; });
+                removeIcon.addEventListener("mouseout", function () { this.style.opacity = "0.6"; });
+                (function (t) {
+                    removeIcon.addEventListener("click", function () {
+                        mapFilterPanelTags = mapFilterPanelTags.filter(function (x) { return x !== t; });
+                        renderMapPanelTags();
+                    });
+                }(tag));
+                chip.appendChild(nameSpan);
+                chip.appendChild(removeIcon);
+                container.appendChild(chip);
+            });
+        }
+
+        document.getElementById("map-filter-panel-add-tag-btn").addEventListener("click", function () {
+            var input = document.getElementById("map-filter-panel-tag-input");
+            if (input.classList.contains("hidden")) {
+                input.classList.remove("hidden");
+                this.classList.add("hidden");
+                input.focus();
+            } else {
+                addMapPanelTag();
+            }
+        });
+
+        document.getElementById("map-filter-panel-tag-input").addEventListener("blur", function () {
+            if (!this.value.trim()) {
+                this.classList.add("hidden");
+                document.getElementById("map-filter-panel-add-tag-btn").classList.remove("hidden");
+            }
+        });
+
+        document.getElementById("map-filter-apply-btn").addEventListener("click", function () {
+            mapFilterYearFrom = document.getElementById("map-filter-year-from").value.trim();
+            mapFilterYearTo = document.getElementById("map-filter-year-to").value.trim();
+            mapFilterTags = mapFilterPanelTags.slice();
+            mapFilterPanelTags = [];
+            renderMapPanelTags();
+            mapFilterPanelEl.classList.add("hidden");
+            setMapFiltersToggleActive(false);
+            clearTimeout(fetchTimeout);
+            refreshMapDisplay();
+            if (!nearMeActive) {
+                fetchStoriesInBounds();
+            } else if (lastUserLatLng) {
+                fetchNearbyStories(lastUserLatLng[0], lastUserLatLng[1], nearMeRadiusKm);
+            }
+        });
+
+        document.getElementById("map-filter-reset-btn").addEventListener("click", function () {
+            mapFilterYearFrom = "";
+            mapFilterYearTo = "";
+            mapFilterDistance = "";
+            mapFilterTags = [];
+            mapFilterPanelTags = [];
+            document.getElementById("map-filter-year-from").value = "";
+            document.getElementById("map-filter-year-to").value = "";
+            document.querySelectorAll(".map-distance-btn").forEach(function (b) {
+                b.classList.remove("active");
+                if (b.dataset.value === "") b.classList.add("active");
+            });
+            renderMapPanelTags();
+            refreshMapDisplay();
+        });
+
+        // ─── Report functionality ─────────────────────────────────────────────
         var reportModalStoryId = null;
         var reportSelectedReason = null;
         var reportReasonsList = [
