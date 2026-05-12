@@ -43,7 +43,7 @@ from app.services.storage import (
     get_bucket_for_media_type,
     upload_bytes,
 )
-from app.services.tag_service import normalize_tag_list
+from app.services.tag_service import attach_tags_to_story, get_or_create_tags, normalize_tag_list
 from app.services.transcription_service import transcribe_media_file
 
 
@@ -622,6 +622,15 @@ async def create_story_with_location(
         )
 
     await db.commit()
+
+    if payload.tags:
+        story_row = (
+            await db.execute(select(Story).options(selectinload(Story.tags)).where(Story.id == story_id))
+        ).scalar_one()
+        new_tags = await get_or_create_tags(db, payload.tags)
+        attach_tags_to_story(story_row, new_tags)
+        await db.flush()
+
     awarded_badge_name = await check_and_award_story_badges(db, current_user.id)
     await db.commit()
     story_detail = await get_story_detail_by_id(db, story_id)
@@ -639,7 +648,7 @@ async def update_story_with_location_and_dates(
 
     story_result = await db.execute(
         select(Story)
-        .options(selectinload(Story.locations))
+        .options(selectinload(Story.locations), selectinload(Story.tags))
         .where(
             Story.id == story_id,
             Story.user_id == current_user.id,
@@ -676,6 +685,11 @@ async def update_story_with_location_and_dates(
 
     if payload.locations is not None:
         replace_story_locations(story, payload.locations)
+
+    if payload.tags is not None:
+        story.tags.clear()
+        new_tags = await get_or_create_tags(db, payload.tags)
+        attach_tags_to_story(story, new_tags)
 
     await db.commit()
     return await get_story_detail_by_id(db, story.id)
