@@ -43,6 +43,11 @@ for (const dirent of readdirSync(projectRoot, { withFileTypes: true })) {
   cpSync(src, dest);
 }
 
+const assetsDir = path.join(projectRoot, "assets");
+if (existsSync(assetsDir)) {
+  cpSync(assetsDir, path.join(outputDir, "assets"), { recursive: true });
+}
+
 const configPath = path.join(outputDir, "config.js");
 if (!existsSync(configPath)) {
   throw new Error("config.js was not copied into capacitor-www.");

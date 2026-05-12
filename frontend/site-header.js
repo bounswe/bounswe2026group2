@@ -26,6 +26,7 @@
             '</div>' +
             (extra ? '<div class="hidden md:flex flex-1 items-center justify-center min-w-0">' + extra + '</div>' : '') +
             '<div class="flex items-center gap-3 sm:gap-4 shrink-0">' +
+            (options && options.extraRight ? options.extraRight : '') +
             '<div class="relative">' +
             '<button id="site-header-profile-btn" type="button"' +
             ' class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"' +
