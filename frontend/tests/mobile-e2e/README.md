@@ -18,9 +18,12 @@ ANDROID_APP_PATH=../../android/app/build/outputs/apk/debug/app-debug.apk
 APPIUM_SERVER_URL=http://127.0.0.1:4723
 MOBILE_API_BASE_URL=http://10.0.2.2:8000
 ANDROID_DEVICE_NAME=Pixel_6_API_35
+MOBILE_SEEDED_EMAIL=seed_alice@example.com
+MOBILE_SEEDED_PASSWORD=ValidPass1!
 ```
 
 `MOBILE_API_BASE_URL` is used when preparing Capacitor web assets before the APK is built. Android emulators should usually call the host machine through `10.0.2.2`.
+`MOBILE_SEEDED_EMAIL` and `MOBILE_SEEDED_PASSWORD` are used by skipped scenario specs that mirror seeded web UAT flows.
 
 ## Local Run
 

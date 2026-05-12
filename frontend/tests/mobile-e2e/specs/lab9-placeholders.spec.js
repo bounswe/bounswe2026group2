@@ -3,7 +3,7 @@ describe('Lab 9 mobile E2E scenario placeholders', () => {
 
   it.skip('TC_AUTH_2 - Google OAuth login', async () => {});
 
-  it.skip('TC_TAG_1 - keyword tagging on story creation', async () => {});
+  // TC_TAG_1 has its own skipped spec file: tc-tag-1.spec.js
 
   it.skip('TC_MEDIA_2 - audio transcription review before posting', async () => {});
 
