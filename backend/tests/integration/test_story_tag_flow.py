@@ -108,6 +108,40 @@ class TestStoryTagFlow:
         titles = [story["title"] for story in resp.json()["stories"]]
         assert titles == ["Sport History Story", "Sport Story"]
 
+    async def test_nearby_filters_by_tags_and_radius_with_or_matching(self, client, db_session):
+        token = await self._register_and_login(client, "tagnearby", "tagnearby@example.com")
+        multi_tag_story_id = await self._create_story(client, token, title="Nearby Sport History Story")
+        single_tag_story_id = await self._create_story(client, token, title="Nearby Sport Story")
+        non_matching_story_id = await self._create_story(client, token, title="Nearby Music Story")
+
+        far_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Far Sport History Story",
+                "content": "Story content about sports history in Ankara.",
+                "summary": "Tagged Ankara summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+                "date_start": 2024,
+                "date_end": 2024,
+            },
+        )
+        assert far_resp.status_code == 201
+        far_story_id = far_resp.json()["id"]
+
+        await apply_ai_tags_to_story(db_session, uuid.UUID(multi_tag_story_id), ["Spor", "Tarih"])
+        await apply_ai_tags_to_story(db_session, uuid.UUID(single_tag_story_id), ["Spor"])
+        await apply_ai_tags_to_story(db_session, uuid.UUID(non_matching_story_id), ["Muzik"])
+        await apply_ai_tags_to_story(db_session, uuid.UUID(far_story_id), ["Spor", "Tarih"])
+
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784&radius_km=5&tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        titles = [story["title"] for story in resp.json()["stories"]]
+        assert titles == ["Nearby Sport History Story", "Nearby Sport Story"]
+
     async def test_story_search_filters_by_place_and_tags_with_relevance_ranking(self, client, db_session):
         token = await self._register_and_login(client, "tagsearch", "tagsearch@example.com")
         multi_tag_story_id = await self._create_story(client, token, title="Istanbul Sport History Story")
