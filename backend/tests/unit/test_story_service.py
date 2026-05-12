@@ -220,6 +220,21 @@ class TestListAvailableStoriesService:
         assert "stories.date_start <=" in sql
         assert "stories.date_end >=" in sql
 
+    async def test_query_includes_tag_or_filter_and_relevance_sorting_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await list_available_stories(db, tags=[" Spor ", "history", "spor"])
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "JOIN story_tags" in sql
+        assert "JOIN tags" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY count(tags.id) DESC, stories.created_at DESC" in sql
+
 
 @pytest.mark.asyncio
 class TestSearchAvailableStoriesByPlaceService:
@@ -252,6 +267,31 @@ class TestSearchAvailableStoriesByPlaceService:
         assert result.stories == []
         db.execute.assert_awaited_once()
 
+    async def test_general_search_returns_mapped_stories_and_total(self):
+        story = _make_story(title="Gecekondu Memory", place_name="Istanbul")
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "storyauthor")]
+
+        result = await search_available_stories_by_place(db, search_query="gecek")
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+        assert result.stories[0].id == story.id
+        assert result.stories[0].title == "Gecekondu Memory"
+        assert result.stories[0].author == "storyauthor"
+        db.execute.assert_awaited_once()
+
+    async def test_general_search_returns_empty_response_when_no_match(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await search_available_stories_by_place(db, search_query="unknown")
+
+        assert result.total == 0
+        assert result.stories == []
+        db.execute.assert_awaited_once()
+
     async def test_search_query_includes_date_overlap_filters(self):
         db = AsyncMock()
         db.execute.return_value.all = lambda: []
@@ -268,6 +308,98 @@ class TestSearchAvailableStoriesByPlaceService:
 
         assert "stories.date_start <=" in sql
         assert "stories.date_end >=" in sql
+
+    async def test_general_search_query_includes_story_text_place_and_tag_matching(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, search_query="gecokondi")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LEFT OUTER JOIN story_tags" in sql
+        assert "LEFT OUTER JOIN tags" in sql
+        assert "stories.title" in sql
+        assert "stories.summary" in sql
+        assert "stories.content" in sql
+        assert "stories.place_name" in sql
+        assert "tags.name" in sql
+        assert "similarity" in sql.lower()
+        assert "word_similarity" in sql.lower()
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY" in sql
+        assert "stories.created_at DESC" in sql
+
+    async def test_general_search_query_with_tags_keeps_hybrid_search_and_applies_tag_filter(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, search_query="gecek", tags=["history"])
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LEFT OUTER JOIN story_tags" in sql
+        assert "LEFT OUTER JOIN tags" in sql
+        assert "stories.title" in sql
+        assert "stories.summary" in sql
+        assert "stories.content" in sql
+        assert "stories.place_name" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY" in sql
+        assert "stories.created_at DESC" in sql
+
+    async def test_search_query_includes_tag_or_filter_and_relevance_sorting_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, "istanbul", tags=["spor", "history"])
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "stories.place_name" in sql
+        assert "JOIN story_tags" in sql
+        assert "JOIN tags" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY count(tags.id) DESC, stories.created_at DESC" in sql
+
+    async def test_search_rejects_blank_tag_without_querying_db(self):
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await search_available_stories_by_place(db, "istanbul", tags=[" "])
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.detail == "Tags cannot be blank"
+        db.execute.assert_not_awaited()
+
+    async def test_search_query_includes_similarity_and_ilike(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, "istanubl")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "similarity" in sql.lower()
+        assert "like" in sql.lower()
+
+    async def test_fuzzy_search_returns_story_on_typo(self):
+        story = _make_story(place_name="Istanbul")
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "author")]
+
+        # "istanubl" is a typo — service delegates to DB; mock returns the story
+        result = await search_available_stories_by_place(db, "istanubl")
+
+        assert result.total == 1
+        assert result.stories[0].place_name == "Istanbul"
 
 
 @pytest.mark.asyncio
@@ -1140,17 +1272,31 @@ class TestCreateStoryWithLocationService:
         )
         current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser")
 
+        mock_story = SimpleNamespace(
+            id=uuid.uuid4(),
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=date(1453, 1, 1),
+            date_end=date(1453, 12, 31),
+            date_precision=DatePrecision.YEAR,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            is_anonymous=False,
+            created_at=datetime.now(timezone.utc),
+            media_files=[],
+            story_likes=[],
+        )
+
         db = AsyncMock()
         db.add = MagicMock()
-
-        async def _refresh_side_effect(story_obj):
-            story_obj.id = uuid.uuid4()
-            story_obj.created_at = datetime.now(timezone.utc)
-            story_obj.status = StoryStatus.PUBLISHED
-            story_obj.visibility = StoryVisibility.PUBLIC
-
-        db.refresh.side_effect = _refresh_side_effect
-        db.execute.return_value.scalar_one = lambda: 0
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (mock_story, "authoruser")),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
 
         with patch(
             "app.services.story_service.check_and_award_story_badges",
@@ -1172,9 +1318,56 @@ class TestCreateStoryWithLocationService:
         assert result.media_files == []
         assert result.like_count == 0
         assert result.new_badge == "First Story"
-        db.add.assert_called_once()
+        assert db.add.call_count == 2  # Story + auto-created StoryLocation
         assert db.commit.await_count == 2
-        db.refresh.assert_awaited_once()
+        db.refresh.assert_not_awaited()
+
+    async def test_create_story_with_empty_locations_list_adds_no_story_locations(self):
+        payload = StoryCreateRequest(
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            locations=[],
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser")
+
+        mock_story = SimpleNamespace(
+            id=uuid.uuid4(),
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=None,
+            date_end=None,
+            date_precision=None,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            is_anonymous=False,
+            created_at=datetime.now(timezone.utc),
+            media_files=[],
+            story_likes=[],
+        )
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (mock_story, "authoruser")),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
+
+        with patch("app.services.story_service.check_and_award_story_badges", new_callable=AsyncMock):
+            result = await create_story_with_location(db, current_user, payload)
+
+        # Only the Story is added; no auto-created StoryLocation for an explicit empty list
+        assert result.title == "New Story"
+        assert db.add.call_count == 1
+        assert db.commit.await_count == 2
+        db.refresh.assert_not_awaited()
 
     async def test_create_story_rejects_missing_place_name(self):
         payload = StoryCreateRequest(
@@ -1214,9 +1407,29 @@ class TestUpdateStoryWithLocationAndDatesService:
         )
         current_user = SimpleNamespace(id=story.user_id, username="authoruser")
 
+        mock_story_updated = SimpleNamespace(
+            id=story_id,
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=date(1920, 1, 1),
+            date_end=date(1923, 12, 31),
+            date_precision=DatePrecision.YEAR,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            is_anonymous=False,
+            created_at=story.created_at,
+            media_files=[],
+            story_likes=[],
+        )
+
         db = AsyncMock()
         db.execute.side_effect = [
             SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(one_or_none=lambda: (mock_story_updated, "authoruser")),
             SimpleNamespace(scalar_one=lambda: 4),
         ]
 
@@ -1236,7 +1449,7 @@ class TestUpdateStoryWithLocationAndDatesService:
         assert result.like_count == 4
         assert result.media_files == []
         db.commit.assert_awaited_once()
-        db.refresh.assert_awaited_once_with(story)
+        db.refresh.assert_not_awaited()
 
     async def test_update_story_not_found(self):
         payload = StoryUpdateRequest(
@@ -1645,17 +1858,31 @@ class TestAnonymousStoryService:
         )
         current_user = SimpleNamespace(id=uuid.uuid4(), username="realauthor")
 
+        mock_story = SimpleNamespace(
+            id=uuid.uuid4(),
+            title="Anonymous Story",
+            content="Content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=None,
+            date_end=None,
+            date_precision=None,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            is_anonymous=True,
+            created_at=datetime.now(timezone.utc),
+            media_files=[],
+            story_likes=[],
+        )
+
         db = AsyncMock()
         db.add = MagicMock()
-
-        async def _refresh_side_effect(story_obj):
-            story_obj.id = uuid.uuid4()
-            story_obj.created_at = datetime.now(timezone.utc)
-            story_obj.status = StoryStatus.PUBLISHED
-            story_obj.visibility = StoryVisibility.PUBLIC
-
-        db.refresh.side_effect = _refresh_side_effect
-        db.execute.return_value.scalar_one = lambda: 0
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (mock_story, "realauthor")),
+            SimpleNamespace(scalar_one=lambda: 0),
+        ]
 
         with patch(
             "app.services.story_service.check_and_award_story_badges",
@@ -1666,9 +1893,10 @@ class TestAnonymousStoryService:
 
         assert result.is_anonymous is True
         assert result.author is None
-        db.add.assert_called_once()
-        added_story = db.add.call_args.args[0]
+        assert db.add.call_count == 2
+        added_story = db.add.call_args_list[0].args[0]
         assert added_story.is_anonymous is True
+        db.refresh.assert_not_awaited()
 
     async def test_update_story_sets_is_anonymous_and_masks_author(self):
         story_id = uuid.uuid4()
@@ -1685,9 +1913,29 @@ class TestAnonymousStoryService:
             is_anonymous=True,
         )
 
+        mock_story_updated = SimpleNamespace(
+            id=story_id,
+            title="Updated Story",
+            content="Updated content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=None,
+            date_end=None,
+            date_precision=None,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            is_anonymous=True,
+            created_at=story.created_at,
+            media_files=[],
+            story_likes=[],
+        )
+
         db = AsyncMock()
         db.execute.side_effect = [
             SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(one_or_none=lambda: (mock_story_updated, "realauthor")),
             SimpleNamespace(scalar_one=lambda: 0),
         ]
 
@@ -1713,9 +1961,29 @@ class TestAnonymousStoryService:
             # is_anonymous intentionally omitted
         )
 
+        mock_story_updated = SimpleNamespace(
+            id=story_id,
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=None,
+            date_end=None,
+            date_precision=None,
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            is_anonymous=True,
+            created_at=story.created_at,
+            media_files=[],
+            story_likes=[],
+        )
+
         db = AsyncMock()
         db.execute.side_effect = [
             SimpleNamespace(scalar_one_or_none=lambda: story),
+            SimpleNamespace(one_or_none=lambda: (mock_story_updated, "realauthor")),
             SimpleNamespace(scalar_one=lambda: 0),
         ]
 

@@ -259,6 +259,85 @@
             transform: scale(1.1);
         }
 
+        /* Multi-location story marker — tertiary blue with a route badge */
+        .story-marker.multi {
+            background: #35618f;
+            border-color: #ffffff;
+            position: relative;
+        }
+        .story-marker.multi::after {
+            content: attr(data-count);
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 4px;
+            border-radius: 9999px;
+            background: #c5a059;
+            color: #1d1c16;
+            font-size: 10px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #ffffff;
+            line-height: 1;
+        }
+
+        /* Focus mode banner */
+        #focus-banner {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px 10px 18px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            border: 1px solid #e7e2d9;
+            border-radius: 9999px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+            font-family: Inter, sans-serif;
+            font-size: 13px;
+            color: #1d1c16;
+            max-width: calc(100% - 32px);
+        }
+        #focus-banner.visible {
+            display: inline-flex;
+        }
+        #focus-banner .focus-banner-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 9999px;
+            background: #35618f;
+            flex: 0 0 auto;
+        }
+        #focus-banner .focus-banner-title {
+            font-weight: 700;
+            max-width: 16rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #focus-banner button {
+            border: none;
+            background: #1d1c16;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            cursor: pointer;
+            transition: opacity 0.15s ease;
+        }
+        #focus-banner button:hover {
+            opacity: 0.9;
+        }
+
         /* Story popup card */
         .leaflet-popup-content-wrapper {
             border-radius: 16px !important;
@@ -410,6 +489,18 @@
         <div class="relative h-[58vh] min-h-[360px] md:h-[calc(100vh-68px)]">
             <div id="map" class="absolute inset-0 md:top-0"></div>
 
+            <!-- Focus mode banner (multi-location story view) -->
+            <div id="focus-banner" role="status" aria-live="polite">
+                <span class="focus-banner-dot" aria-hidden="true"></span>
+                <span>
+                    <span class="focus-banner-title" id="focus-banner-title">Story focus</span>
+                    <span style="display:block;font-size:11px;color:#5f584c;margin-top:2px;">
+                        <span id="focus-banner-count">0</span> locations · other stories hidden
+                    </span>
+                </span>
+                <button type="button" id="btn-exit-focus" aria-label="Exit story focus mode">Exit focus</button>
+            </div>
+
             <!-- Map Layer Toggle -->
             <div class="absolute left-4 top-20 z-[1000] flex flex-col gap-2 md:top-40">
                 <button id="btn-layers"
@@ -480,6 +571,8 @@
 
     <script src="config.js"></script>
     <script src="auth.js"></script>
+    <script src="anonymous.js"></script>
+    <script src="multi-location.js"></script>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -787,7 +880,21 @@
         });
 
         // ─── Create Markers ───
-        function createMarkerIcon() {
+        function createMarkerIcon(story) {
+            var multi = hasMultipleLocations(story);
+            if (multi) {
+                var count = story.locations.length;
+                return L.divIcon({
+                    className: "",
+                    html:
+                        '<div class="story-marker multi" data-count="' + count + '" title="Multi-location story (' + count + ' pins)">' +
+                        '<span class="material-symbols-outlined" style="font-size:18px;">route</span>' +
+                        '</div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20],
+                    popupAnchor: [0, -24]
+                });
+            }
             return L.divIcon({
                 className: "",
                 html: '<div class="story-marker"><span class="material-symbols-outlined" style="font-size:18px;">auto_stories</span></div>',
@@ -824,6 +931,8 @@
                 headerHtml +
                 '<div style="padding:16px;">' +
                 '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">' + story.title + '</h3>' +
+                '<p style="font-size:11px;color:#5f584c;margin:0 0 8px 0;' + (isAnonymousStory(story) ? 'font-style:italic;' : '') + '">' + getAuthorByLine(story) + '</p>' +
+                '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
                 '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"' + preview + '"</p>' +
                 (story.tags && story.tags.length > 0
                     ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">' +
@@ -863,7 +972,84 @@
             return Number.isFinite(Number(story.latitude)) && Number.isFinite(Number(story.longitude));
         }
 
+        // ─── Focus mode (multi-location story view) ───
+        var focusLayer = L.layerGroup();
+        var focusPolyline = null;
+        var focusStoryId = null;
+        var lastStoriesSnapshot = [];
+
+        function enterFocusMode(story) {
+            focusStoryId = story.id;
+            var locs = getEffectiveLocations(story);
+            if (locs.length === 0) return;
+
+            // Hide all other stories
+            map.removeLayer(markerClusterLayer);
+            focusLayer.clearLayers();
+            if (focusPolyline) {
+                map.removeLayer(focusPolyline);
+                focusPolyline = null;
+            }
+
+            locs.forEach(function (loc, idx) {
+                var marker = L.marker([loc.latitude, loc.longitude], {
+                    icon: buildNumberedIcon(L, idx, { color: "#35618f", size: 36 })
+                });
+                var coordsText = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
+                var stopTitle = (idx + 1) + ". " + (loc.label || coordsText);
+                marker.bindPopup(
+                    '<div style="font-family:Inter,sans-serif;min-width:200px;">' +
+                    '<div style="font-size:11px;font-weight:700;color:#35618f;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Stop ' + (idx + 1) + ' / ' + locs.length + '</div>' +
+                    '<div style="font-size:13px;font-weight:700;color:#1d1c16;margin-bottom:6px;">' + (loc.label || coordsText) + '</div>' +
+                    '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read full story →</a>' +
+                    '</div>',
+                    { closeButton: true }
+                );
+                marker.bindTooltip(stopTitle, { direction: "top", offset: [0, -18] });
+                focusLayer.addLayer(marker);
+            });
+
+            focusPolyline = L.polyline(
+                locs.map(function (l) { return [l.latitude, l.longitude]; }),
+                { color: "#35618f", weight: 4, opacity: 0.75, dashArray: "8 10" }
+            );
+            focusLayer.addLayer(focusPolyline);
+            focusLayer.addTo(map);
+
+            var bounds = L.latLngBounds(locs.map(function (l) { return [l.latitude, l.longitude]; }));
+            map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+
+            var banner = document.getElementById("focus-banner");
+            document.getElementById("focus-banner-title").textContent = story.title || "Story focus";
+            document.getElementById("focus-banner-count").textContent = String(locs.length);
+            banner.classList.add("visible");
+        }
+
+        function exitFocusMode() {
+            focusStoryId = null;
+            focusLayer.clearLayers();
+            if (map.hasLayer(focusLayer)) map.removeLayer(focusLayer);
+            if (focusPolyline) {
+                map.removeLayer(focusPolyline);
+                focusPolyline = null;
+            }
+            if (!map.hasLayer(markerClusterLayer)) map.addLayer(markerClusterLayer);
+            document.getElementById("focus-banner").classList.remove("visible");
+        }
+
+        document.getElementById("btn-exit-focus").addEventListener("click", exitFocusMode);
+
         function loadStories(stories) {
+            lastStoriesSnapshot = stories || [];
+
+            // If we're in focus mode, don't disturb it — the user is reading
+            // one story, the underlying data refresh will be re-applied when
+            // they exit focus mode.
+            if (focusStoryId) {
+                document.getElementById("story-count").textContent = (stories || []).length + " stories on the map";
+                return;
+            }
+
             // Clear existing markers
             markerClusterLayer.clearLayers();
             markers.length = 0;
@@ -872,16 +1058,25 @@
                 if (!hasStoryCoordinates(story)) return;
 
                 const marker = L.marker([story.latitude, story.longitude], {
-                    icon: createMarkerIcon()
+                    icon: createMarkerIcon(story)
                 });
 
-                marker.bindPopup(buildPopupHtml(story, null), {
-                    maxWidth: 300,
-                    minWidth: 300,
-                    closeButton: true
-                });
+                var isMulti = hasMultipleLocations(story);
+
+                if (!isMulti) {
+                    marker.bindPopup(buildPopupHtml(story, null), {
+                        maxWidth: 300,
+                        minWidth: 300,
+                        closeButton: true
+                    });
+                }
 
                 marker.on("click", function () {
+                    if (isMulti) {
+                        enterFocusMode(story);
+                        return;
+                    }
+
                     // Highlight active marker
                     document.querySelectorAll(".story-marker").forEach(function (el) {
                         el.classList.remove("active");
@@ -937,6 +1132,7 @@
                 div.innerHTML =
                     (dateLabel ? '<div class="text-[10px] font-bold text-tertiary tracking-widest uppercase mb-1">' + dateLabel + '</div>' : '') +
                     '<h4 class="font-semibold text-sm text-textmain leading-snug mb-1">' + story.title + '</h4>' +
+                    '<p class="text-[11px] text-textmuted mb-1' + (isAnonymousStory(story) ? ' italic' : '') + '">' + getAuthorByLine(story) + '</p>' +
                     '<p class="text-xs text-textmuted line-clamp-2 leading-relaxed">' + preview + '</p>' +
                     '<div class="mt-2 flex items-center justify-between">' +
                     '<span class="text-[10px] text-textmuted">' + placeName + '</span>' +

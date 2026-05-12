@@ -217,6 +217,8 @@
 <script src="config.js"></script>
 <script src="comments.js"></script>
 <script src="saves.js"></script>
+<script src="anonymous.js"></script>
+<script src="multi-location.js"></script>
 <script src="tags.js"></script>
 <script src="story-transcript.js"></script>
 <script>
@@ -349,7 +351,11 @@
   function applyStoryDetail(story) {
     document.getElementById('story-title').textContent = story.title || "Untitled";
     document.getElementById('story-summary').textContent = story.summary || "";
-    document.getElementById('story-author').innerHTML = 'by ' + (story.author || "Unknown");
+
+    var authorEl = document.getElementById('story-author');
+    authorEl.textContent = getAuthorByLine(story);
+    authorEl.classList.toggle('italic', isAnonymousStory(story));
+
     document.getElementById('story-date').textContent = story.date_label || "No Date";
     document.getElementById('story-location').textContent = story.place_name || "Istanbul";
     document.getElementById('story-content').textContent = story.content || "No content available.";
@@ -367,12 +373,43 @@
       timelineLink.classList.add("hidden");
     }
 
-    if (hasCoordinates) {
-      detailMap.setView([storyLat, storyLng], 15);
-      L.marker([storyLat, storyLng])
-        .addTo(detailMap)
-        .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
-        .openPopup();
+    var allLocations = getEffectiveLocations(story);
+    if (allLocations.length > 0) {
+      var isMulti = allLocations.length > 1;
+      allLocations.forEach(function (loc, idx) {
+        var icon = isMulti
+          ? buildNumberedIcon(L, idx, { color: "#35618f", size: 32 })
+          : undefined;
+        var marker = icon
+          ? L.marker([loc.latitude, loc.longitude], { icon: icon }).addTo(detailMap)
+          : L.marker([loc.latitude, loc.longitude]).addTo(detailMap);
+        var coords = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
+        var popupTitle = isMulti
+          ? ((idx + 1) + ". " + (loc.label || coords))
+          : (story.title || coords);
+        var popupSub = isMulti
+          ? coords
+          : (story.place_name || coords);
+        marker.bindPopup(
+          '<div style="font-family:Inter,sans-serif;">' +
+          '<strong style="font-size:13px;">' + popupTitle + '</strong><br>' +
+          '<span style="font-size:11px;color:#5f584c;">' + popupSub + '</span>' +
+          '</div>'
+        );
+      });
+
+      if (isMulti) {
+        L.polyline(
+          allLocations.map(function (l) { return [l.latitude, l.longitude]; }),
+          { color: "#35618f", weight: 3, opacity: 0.75, dashArray: "6 8" }
+        ).addTo(detailMap);
+        detailMap.fitBounds(
+          allLocations.map(function (l) { return [l.latitude, l.longitude]; }),
+          { padding: [30, 30], maxZoom: 16 }
+        );
+      } else {
+        detailMap.setView([allLocations[0].latitude, allLocations[0].longitude], 15);
+      }
     } else {
       document.getElementById('detail-map').parentElement.style.display = 'none';
     }

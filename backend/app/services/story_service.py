@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from sqlalchemy import func, nulls_last, select, update
+from sqlalchemy import and_, case, exists, func, nulls_last, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,8 +15,10 @@ from app.db.notification import Notification
 from app.db.story import Story
 from app.db.story_comment import StoryComment
 from app.db.story_like import StoryLike
+from app.db.story_location import StoryLocation
 from app.db.story_report import StoryReport
 from app.db.story_save import StorySave
+from app.db.tag import Tag, story_tags_table
 from app.db.user import User
 from app.models.comment import CommentAuthorResponse, CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
@@ -33,6 +36,7 @@ from app.models.story import (
     StoryUpdateRequest,
 )
 from app.services.badge_service import check_and_award_story_badges
+from app.services.location_service import build_story_locations, replace_story_locations, validate_location_list
 from app.services.media_validation import read_uploaded_file_content, validate_media_upload
 from app.services.storage import (
     build_public_object_url,
@@ -40,12 +44,93 @@ from app.services.storage import (
     get_bucket_for_media_type,
     upload_bytes,
 )
+from app.services.tag_service import normalize_tag_list
 from app.services.transcription_service import transcribe_media_file
 
 
 def _map_story_rows(rows: list[tuple[Story, str]]) -> StoryListResponse:
     stories = [StoryResponse.from_orm_with_author(story, author_username) for story, author_username in rows]
     return StoryListResponse(stories=stories, total=len(stories))
+
+
+def _apply_tag_relevance_filter(stmt, tag_names: list[str]):
+    if not tag_names:
+        return stmt
+
+    tag_match_count = func.count(Tag.id)
+    return (
+        stmt.join(story_tags_table, story_tags_table.c.story_id == Story.id)
+        .join(Tag, Tag.id == story_tags_table.c.tag_id)
+        .where(Tag.name.in_(tag_names))
+        .group_by(Story.id, User.username)
+        .order_by(tag_match_count.desc(), Story.created_at.desc())
+    )
+
+
+def _apply_hybrid_search_filter(stmt, search_query: str):
+    normalized_query = search_query.strip().lower()
+    query_pattern = f"%{normalized_query}%"
+    fuzzy_threshold = 0.3
+    title_similarity = func.greatest(
+        func.similarity(Story.title, search_query), func.word_similarity(search_query, Story.title)
+    )
+    summary_similarity = func.greatest(
+        func.similarity(Story.summary, search_query), func.word_similarity(search_query, Story.summary)
+    )
+    content_similarity = func.greatest(
+        func.similarity(Story.content, search_query), func.word_similarity(search_query, Story.content)
+    )
+    place_similarity = func.greatest(
+        func.similarity(Story.place_name, search_query), func.word_similarity(search_query, Story.place_name)
+    )
+    tag_similarity = func.greatest(
+        func.similarity(Tag.name, search_query), func.word_similarity(search_query, Tag.name)
+    )
+    # Score priority: exact tag (30) > text/tag substring matches > fuzzy typo matches.
+    # Tag scores are aggregated with MAX so a story isn't double-counted for multiple tag rows.
+    tag_score = func.coalesce(
+        func.max(
+            case(
+                (func.lower(Tag.name) == normalized_query, 30),
+                (Tag.name.ilike(query_pattern), 15),
+                (tag_similarity >= fuzzy_threshold, 9),
+                else_=0,
+            )
+        ),
+        0,
+    )
+    text_score = (
+        case((Story.title.ilike(query_pattern), 20), else_=0)
+        + case((title_similarity >= fuzzy_threshold, 12), else_=0)
+        + case((Story.summary.ilike(query_pattern), 12), else_=0)
+        + case((summary_similarity >= fuzzy_threshold, 7), else_=0)
+        + case((Story.content.ilike(query_pattern), 8), else_=0)
+        + case((content_similarity >= fuzzy_threshold, 5), else_=0)
+        + case((Story.place_name.ilike(query_pattern), 10), else_=0)
+        + case((place_similarity >= fuzzy_threshold, 6), else_=0)
+    )
+    search_score = tag_score + text_score
+
+    return (
+        stmt.outerjoin(story_tags_table, story_tags_table.c.story_id == Story.id)
+        .outerjoin(Tag, Tag.id == story_tags_table.c.tag_id)
+        .where(
+            or_(
+                Story.title.ilike(query_pattern),
+                Story.summary.ilike(query_pattern),
+                Story.content.ilike(query_pattern),
+                Story.place_name.ilike(query_pattern),
+                Tag.name.ilike(query_pattern),
+                title_similarity >= fuzzy_threshold,
+                summary_similarity >= fuzzy_threshold,
+                content_similarity >= fuzzy_threshold,
+                place_similarity >= fuzzy_threshold,
+                tag_similarity >= fuzzy_threshold,
+            )
+        )
+        .group_by(Story.id, User.username)
+        .order_by(search_score.desc(), Story.created_at.desc())
+    )
 
 
 def _map_media_file(media: MediaFile) -> MediaFileResponse:
@@ -178,27 +263,41 @@ async def list_available_stories(
     max_lng: float | None = None,
     query_start: date | None = None,
     query_end: date | None = None,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
             Story.deleted_at.is_(None),
         )
-        .order_by(Story.created_at.desc())
     )
 
     if all(v is not None for v in (min_lat, max_lat, min_lng, max_lng)):
         stmt = stmt.where(
-            Story.latitude.is_not(None),
-            Story.longitude.is_not(None),
-            Story.latitude >= min_lat,
-            Story.latitude <= max_lat,
-            Story.longitude >= min_lng,
-            Story.longitude <= max_lng,
+            or_(
+                and_(
+                    Story.latitude.is_not(None),
+                    Story.longitude.is_not(None),
+                    Story.latitude >= min_lat,
+                    Story.latitude <= max_lat,
+                    Story.longitude >= min_lng,
+                    Story.longitude <= max_lng,
+                ),
+                exists(
+                    select(StoryLocation.id).where(
+                        StoryLocation.story_id == Story.id,
+                        StoryLocation.latitude >= min_lat,
+                        StoryLocation.latitude <= max_lat,
+                        StoryLocation.longitude >= min_lng,
+                        StoryLocation.longitude <= max_lng,
+                    )
+                ),
+            )
         )
 
     if query_start is not None and query_end is not None:
@@ -208,6 +307,11 @@ async def list_available_stories(
             Story.date_start <= query_end,
             Story.date_end >= query_start,
         )
+
+    if normalized_tags:
+        stmt = _apply_tag_relevance_filter(stmt, normalized_tags)
+    else:
+        stmt = stmt.order_by(Story.created_at.desc())
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -217,22 +321,33 @@ async def list_available_stories(
 
 async def search_available_stories_by_place(
     db: AsyncSession,
-    place_name: str,
+    place_name: str | None = None,
+    search_query: str | None = None,
     query_start: date | None = None,
     query_end: date | None = None,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
             Story.deleted_at.is_(None),
-            Story.place_name.ilike(f"%{place_name}%"),
         )
-        .order_by(Story.created_at.desc())
     )
+
+    if search_query is not None:
+        stmt = _apply_hybrid_search_filter(stmt, search_query)
+    elif place_name is not None:
+        stmt = stmt.where(
+            or_(
+                Story.place_name.ilike(f"%{place_name}%"),
+                func.similarity(Story.place_name, place_name) >= 0.3,
+            )
+        )
 
     if query_start is not None and query_end is not None:
         stmt = stmt.where(
@@ -241,6 +356,13 @@ async def search_available_stories_by_place(
             Story.date_start <= query_end,
             Story.date_end >= query_start,
         )
+
+    if search_query is not None and normalized_tags:
+        stmt = stmt.where(Tag.name.in_(normalized_tags))
+    elif normalized_tags:
+        stmt = _apply_tag_relevance_filter(stmt, normalized_tags)
+    elif search_query is None:
+        stmt = stmt.order_by(Story.created_at.desc())
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -258,7 +380,7 @@ async def get_story_detail_by_id(
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
         .where(Story.id == story_id, Story.deleted_at.is_(None))
-        .options(selectinload(Story.media_files), selectinload(Story.tags))
+        .options(selectinload(Story.media_files), selectinload(Story.tags), selectinload(Story.locations))
     )
 
     result = await db.execute(stmt)
@@ -425,7 +547,7 @@ async def list_saved_stories_for_user(
         select(Story, User.username)
         .join(StorySave, StorySave.story_id == Story.id)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             StorySave.user_id == current_user.id,
             Story.status == StoryStatus.PUBLISHED,
@@ -454,7 +576,10 @@ async def create_story_with_location(
 
     normalized_date_start, normalized_date_end, normalized_date_precision = payload.normalize_date_range()
 
+    # Pre-generate the PK so StoryLocation FK is available before the first flush.
+    story_id = uuid.uuid4()
     story = Story(
+        id=story_id,
         user_id=current_user.id,
         title=payload.title,
         summary=payload.summary,
@@ -471,18 +596,28 @@ async def create_story_with_location(
     )
 
     db.add(story)
-    await db.commit()
-    await db.refresh(story)
 
+    if payload.locations is not None:
+        validate_location_list(payload.locations)
+        for loc in build_story_locations(story_id, payload.locations):
+            db.add(loc)
+    else:
+        db.add(
+            StoryLocation(
+                story_id=story_id,
+                latitude=payload.latitude,
+                longitude=payload.longitude,
+                label=place_name,
+                sort_order=0,
+            )
+        )
+
+    await db.commit()
     awarded_badge_name = await check_and_award_story_badges(db, current_user.id)
     await db.commit()
-
-    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    like_count = await _get_story_like_count(db, story.id)
-    new_badge = awarded_badge_name if isinstance(awarded_badge_name, str) else None
-    return StoryDetailResponse(
-        **story_response.model_dump(), media_files=[], like_count=like_count, new_badge=new_badge
-    )
+    story_detail = await get_story_detail_by_id(db, story_id)
+    story_detail.new_badge = awarded_badge_name if isinstance(awarded_badge_name, str) else None
+    return story_detail
 
 
 async def update_story_with_location_and_dates(
@@ -492,7 +627,9 @@ async def update_story_with_location_and_dates(
     payload: StoryUpdateRequest,
 ) -> StoryDetailResponse:
     story_result = await db.execute(
-        select(Story).where(
+        select(Story)
+        .options(selectinload(Story.locations))
+        .where(
             Story.id == story_id,
             Story.user_id == current_user.id,
             Story.deleted_at.is_(None),
@@ -526,12 +663,11 @@ async def update_story_with_location_and_dates(
     if payload.is_anonymous is not None:
         story.is_anonymous = payload.is_anonymous
 
-    await db.commit()
-    await db.refresh(story)
+    if payload.locations is not None:
+        replace_story_locations(story, payload.locations)
 
-    story_response = StoryResponse.from_orm_with_author(story, current_user.username)
-    like_count = await _get_story_like_count(db, story.id)
-    return StoryDetailResponse(**story_response.model_dump(), media_files=[], like_count=like_count)
+    await db.commit()
+    return await get_story_detail_by_id(db, story.id)
 
 
 async def like_story(
@@ -693,7 +829,7 @@ async def get_nearby_stories(
     stmt = (
         select(Story, User.username)
         .join(User, Story.user_id == User.id)
-        .options(selectinload(Story.tags))
+        .options(selectinload(Story.tags), selectinload(Story.locations))
         .where(
             Story.status == StoryStatus.PUBLISHED,
             Story.visibility == StoryVisibility.PUBLIC,
