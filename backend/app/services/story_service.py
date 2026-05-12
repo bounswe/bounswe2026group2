@@ -43,7 +43,7 @@ from app.services.storage import (
     get_bucket_for_media_type,
     upload_bytes,
 )
-from app.services.tag_service import normalize_tag_list
+from app.services.tag_service import attach_tags_to_story, get_or_create_tags, normalize_tag_list
 from app.services.transcription_service import transcribe_media_file
 
 
@@ -214,6 +214,14 @@ def _map_comment_row(comment: StoryComment, author: User) -> CommentResponse:
 def _build_media_storage_key(story_id: uuid.UUID, filename: str) -> str:
     ext = Path(filename).suffix.lower()
     return f"stories/{story_id}/media/{uuid.uuid4()}{ext}"
+
+
+def _ensure_user_can_modify_stories(current_user: User) -> None:
+    if getattr(current_user, "is_restricted", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Restricted users cannot modify stories",
+        )
 
 
 async def _get_story_or_404(
@@ -566,6 +574,8 @@ async def create_story_with_location(
     current_user: User,
     payload: StoryCreateRequest,
 ) -> StoryDetailResponse:
+    _ensure_user_can_modify_stories(current_user)
+
     place_name = payload.place_name.strip() if payload.place_name else None
     if not place_name:
         raise HTTPException(
@@ -612,6 +622,15 @@ async def create_story_with_location(
         )
 
     await db.commit()
+
+    if payload.tags:
+        story_row = (
+            await db.execute(select(Story).options(selectinload(Story.tags)).where(Story.id == story_id))
+        ).scalar_one()
+        new_tags = await get_or_create_tags(db, payload.tags)
+        attach_tags_to_story(story_row, new_tags)
+        await db.flush()
+
     awarded_badge_name = await check_and_award_story_badges(db, current_user.id)
     await db.commit()
     story_detail = await get_story_detail_by_id(db, story_id)
@@ -625,9 +644,11 @@ async def update_story_with_location_and_dates(
     current_user: User,
     payload: StoryUpdateRequest,
 ) -> StoryDetailResponse:
+    _ensure_user_can_modify_stories(current_user)
+
     story_result = await db.execute(
         select(Story)
-        .options(selectinload(Story.locations))
+        .options(selectinload(Story.locations), selectinload(Story.tags))
         .where(
             Story.id == story_id,
             Story.user_id == current_user.id,
@@ -664,6 +685,11 @@ async def update_story_with_location_and_dates(
 
     if payload.locations is not None:
         replace_story_locations(story, payload.locations)
+
+    if payload.tags is not None:
+        story.tags.clear()
+        new_tags = await get_or_create_tags(db, payload.tags)
+        attach_tags_to_story(story, new_tags)
 
     await db.commit()
     return await get_story_detail_by_id(db, story.id)
@@ -732,8 +758,12 @@ async def upload_media_for_story(
     story_id: uuid.UUID,
     file: UploadFile,
     payload: MediaUploadRequest,
+    current_user: User | None = None,
     background_tasks: BackgroundTasks | None = None,
 ) -> MediaUploadResponse:
+    if current_user is not None:
+        _ensure_user_can_modify_stories(current_user)
+
     normalized_content_type = validate_media_upload(file, payload.media_type)
 
     story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))
@@ -813,7 +843,9 @@ async def get_nearby_stories(
     center_lat: float,
     center_lng: float,
     radius_km: float = 10.0,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     lat1 = func.radians(center_lat)
     lat2 = func.radians(Story.latitude)
     lon1 = func.radians(center_lng)
@@ -837,8 +869,19 @@ async def get_nearby_stories(
             Story.longitude.is_not(None),
             distance_km <= radius_km,
         )
-        .order_by(distance_km)
     )
+
+    if normalized_tags:
+        tag_match_count = func.count(Tag.id)
+        stmt = (
+            stmt.join(story_tags_table, story_tags_table.c.story_id == Story.id)
+            .join(Tag, Tag.id == story_tags_table.c.tag_id)
+            .where(Tag.name.in_(normalized_tags))
+            .group_by(Story.id, User.username)
+            .order_by(tag_match_count.desc(), distance_km)
+        )
+    else:
+        stmt = stmt.order_by(distance_km)
 
     result = await db.execute(stmt)
     rows = result.all()

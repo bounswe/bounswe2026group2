@@ -18,9 +18,12 @@ ANDROID_APP_PATH=../../android/app/build/outputs/apk/debug/app-debug.apk
 APPIUM_SERVER_URL=http://127.0.0.1:4723
 MOBILE_API_BASE_URL=http://10.0.2.2:8000
 ANDROID_DEVICE_NAME=Pixel_6_API_35
+MOBILE_SEEDED_EMAIL=seed_alice@example.com
+MOBILE_SEEDED_PASSWORD=ValidPass1!
 ```
 
 `MOBILE_API_BASE_URL` is used when preparing Capacitor web assets before the APK is built. Android emulators should usually call the host machine through `10.0.2.2`.
+`MOBILE_SEEDED_EMAIL` and `MOBILE_SEEDED_PASSWORD` are used by skipped scenario specs that mirror seeded web UAT flows.
 
 ## Local Run
 
@@ -56,10 +59,22 @@ The first mobile E2E scope mirrors the Lab 9/current web UAT scenarios:
 - `TC_TAG_2` - keyword tagging UI during story creation
 - `TC_STORY_5` - anonymous story sharing
 - `TC_MAP_2` - multi-location story display on map
-- `TC_DASH_1` - user dashboard view count
+- `TC_DASH_1` - user dashboard / profile view count ([`specs/dashboard.spec.js`](./specs/dashboard.spec.js), **skipped unless** `MOBILE_E2E_RUN_TC_DASH_1=1`)
 - `TC_BADGE_1` - first post badge awarded
 
 Keep unstable or dependency-blocked flows skipped until the related app behavior is available on `dev`.
+
+### TC_DASH_1 (dashboard / profile view counts)
+
+Implementation: `specs/dashboard.spec.js`. By default the test calls `this.skip()` unless you set:
+
+```bash
+MOBILE_E2E_RUN_TC_DASH_1=1
+```
+
+Profile assertions use `#profile-stories-container`, `article`, and `span[title="Views on this story"]` (no extra `data-testid` on profile markup). Login still uses the same `data-testid` fields as `auth.spec.js`.
+
+Optional overrides: `MOBILE_E2E_OWNER_EMAIL`, `MOBILE_E2E_OWNER_PASSWORD`, `MOBILE_E2E_SEEDED_STORY_ID` (see `.env.example`).
 
 ## Selector Strategy
 

@@ -63,7 +63,7 @@ test.describe('TC_TAG_1 - Keyword Tagging on Story Creation', () => {
       await page.goto('/story-create.html');
       await page.fill('#title', title);
       await page.fill('#story', content);
-      await page.fill('#date-single', '01/01/1890');
+      await page.fill('#date-single', '1890-01-01');
 
       // Step 2: Add keyword tags through the tag input UI.
       await addStoryTag(page, 'ottoman');

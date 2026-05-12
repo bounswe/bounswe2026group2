@@ -2116,6 +2116,37 @@ class TestNearbyStoriesAPI:
         data = resp.json()
         assert data["total"] == 0
 
+    async def test_filters_nearby_stories_by_repeated_tags(self, client, db_session):
+        user = self._make_user("nearbytagauthor", "nearbytag@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        multi_tag_story = self._make_story(user.id, "Nearby Sport History", lat=41.0082, lng=28.9784)
+        single_tag_story = self._make_story(user.id, "Nearby Sport", lat=41.0090, lng=28.9790)
+        wrong_tag_story = self._make_story(user.id, "Nearby Music", lat=41.0085, lng=28.9788)
+        far_matching_story = self._make_story(
+            user.id,
+            "Far Sport History",
+            lat=39.9334,
+            lng=32.8597,
+            place_name="Ankara",
+        )
+        db_session.add_all([multi_tag_story, single_tag_story, wrong_tag_story, far_matching_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, multi_tag_story.id, ["spor", "tarih"])
+        await apply_ai_tags_to_story(db_session, single_tag_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, wrong_tag_story.id, ["muzik"])
+        await apply_ai_tags_to_story(db_session, far_matching_story.id, ["spor", "tarih"])
+
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784&radius_km=5&tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert data["total"] == 2
+        assert titles == ["Nearby Sport History", "Nearby Sport"]
+
     async def test_returns_empty_when_no_stories_exist(self, client):
         resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784")
 

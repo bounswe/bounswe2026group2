@@ -75,7 +75,7 @@ describe('TC_STORY_5 — Anonymous Story Sharing', () => {
     await (await browser.$('#title')).setValue('Old Fountain');
     await (await browser.$('#story')).setValue('A forgotten fountain in the heart of the old city.');
     await (await browser.$('#location')).setValue('Istanbul');
-    await (await browser.$('#date-single')).setValue('01/01/2024');
+    await (await browser.$('#date-single')).setValue('2024-01-01');
     // Set lat/lng hidden fields directly — the Leaflet map is not interactive
     // in the WebView and the submit handler requires non-empty coordinates.
     await browser.execute(() => {
