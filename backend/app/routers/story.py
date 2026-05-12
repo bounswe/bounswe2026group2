@@ -61,6 +61,7 @@ router = APIRouter(prefix="/stories", tags=["stories"])
     ),
     responses={
         401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "Restricted users cannot modify stories"},
         422: {"description": "Validation error for story/location input"},
     },
 )
@@ -89,7 +90,7 @@ async def create_story(
     ),
     responses={
         401: {"description": "Missing or invalid authentication token"},
-        403: {"description": "Authenticated user is not the story owner"},
+        403: {"description": "Authenticated user is not the story owner, or is restricted"},
         404: {"description": "Story not found"},
         422: {"description": "Validation error for story/location input"},
     },
@@ -494,6 +495,7 @@ async def unsave_story(
     ),
     responses={
         401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "Restricted users cannot modify stories"},
         404: {"description": "Story not found"},
         413: {"description": "File exceeds the 20 MB size limit"},
         502: {"description": "Object storage backend unavailable"},
@@ -508,7 +510,7 @@ async def upload_story_media(
     caption: str | None = Form(default=None),
     transcript: str | None = Form(default=None),
     sort_order: int = Form(default=0),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     payload = MediaUploadRequest(
@@ -523,6 +525,7 @@ async def upload_story_media(
         story_id,
         file,
         payload,
+        current_user=current_user,
         background_tasks=background_tasks,
     )
 
