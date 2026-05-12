@@ -7,6 +7,7 @@ Covers issue #211 acceptance criteria:
 - Codec parameter strings (e.g. audio/webm;codecs=opus) are accepted.
 - Mixed-case MIME types (e.g. Audio/WebM;Codecs=Opus) are accepted.
 """
+
 from unittest.mock import AsyncMock
 
 import pytest
