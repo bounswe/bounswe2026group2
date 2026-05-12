@@ -1,42 +1,42 @@
 # Monitoring & Logs
 
-Bu sayfa Render uzerindeki backend sagligini, background task hatalarini ve temel sistem performansini izlemek icin kullanilir.
+This page explains how to monitor backend health, background task failures, and basic system performance on Render.
 
-## Gunluk Kontrol Noktalari
+## Daily Checkpoints
 
-- Render backend service > Logs: canli log akisi ve son uygulama loglari.
-- Render backend service > Metrics: CPU, memory, restart/deploy durumu, response time ve 5xx oranlari.
+- Render backend service > Logs: live log stream and recent application logs.
+- Render backend service > Metrics: CPU, memory, restart/deploy status, response time, and 5xx rates.
 - Backend health endpoint: `/health`.
 - Better Stack / Logtail source:
   - Production: `render-backend-prod`
-  - Development varsa: `render-backend-dev`
+  - Development, if available: `render-backend-dev`
 
-## Render Log Stream Kurulumu
+## Render Log Stream Setup
 
-1. Better Stack icinde yeni bir Render log source olustur.
-2. Source adini ortama gore `render-backend-prod` veya `render-backend-dev` yap.
-3. Better Stack'in verdigi syslog ingest host'unu ve source token'i kopyala.
-4. Render Dashboard'da workspace ana ekranindan `Integrations > Observability > Log Streams` bolumune git.
-5. Default destination olarak Better Stack endpoint'ini ekle.
-6. Endpoint formatini `HOST:6514` olarak gir.
-7. Token alanina Better Stack source token'ini gir.
-8. Kaydettikten sonra backend loglarinin Better Stack'e dusmesini birkac dakika icinde kontrol et.
+1. Create a new Render log source in Better Stack.
+2. Name the source `render-backend-prod` or `render-backend-dev`, depending on the environment.
+3. Copy the syslog ingest host and source token provided by Better Stack.
+4. In the Render Dashboard, go to `Integrations > Observability > Log Streams` from the workspace home page.
+5. Add the Better Stack endpoint as the default destination.
+6. Enter the endpoint in `HOST:6514` format.
+7. Enter the Better Stack source token in the token field.
+8. After saving, verify within a few minutes that backend logs are arriving in Better Stack.
 
-Papertrail kullanilirsa ayni adimlar uygulanir, sadece Log Endpoint Papertrail'in TLS syslog endpoint'i olur.
+If Papertrail is used instead, follow the same steps and use Papertrail's TLS syslog endpoint as the log endpoint.
 
-## Alarm Kurallari
+## Alert Rules
 
-Better Stack / Logtail uzerinde asagidaki query'ler icin alarm tanimla. Esik: 15 dakika icinde en az 1 error log.
+Create alerts in Better Stack / Logtail for the following queries. Threshold: at least 1 error log within 15 minutes.
 
 | Alarm | Query |
 | --- | --- |
-| Transcription hatasi | `Audio transcription failed for` |
-| Transcript kaydetme hatasi | `Failed to persist transcript for media file` |
-| AI tagging hatasi | `AI tagging failed for story` |
+| Transcription failure | `Audio transcription failed for` |
+| Transcript persistence failure | `Failed to persist transcript for media file` |
+| AI tagging failure | `AI tagging failed for story` |
 
-Bildirim hedefi ekip e-postasi veya ekip Slack/Discord kanali olmalidir.
+The notification target should be the team email address or the team Slack/Discord channel.
 
-Ilk fazda alarm olmayan ama takip edilecek uyari:
+Warning to monitor during the first phase, without an alert:
 
 ```text
 Whisper transcription for
@@ -44,24 +44,24 @@ Whisper transcription for
 
 ## Health Check
 
-Render veya Better Stack uptime monitor ile backend `/health` endpoint'ini izle.
+Monitor the backend `/health` endpoint with Render or Better Stack uptime monitoring.
 
-- Beklenen basarili yanit: HTTP `200`, body icinde `"status": "ok"`.
-- Hata durumu: HTTP `503`, body icinde `"status": "degraded"`.
-- Alarm kosulu: 2 ardisik kontrolde endpoint basarisiz veya degraded.
+- Expected successful response: HTTP `200`, with `"status": "ok"` in the response body.
+- Failure response: HTTP `503`, with `"status": "degraded"` in the response body.
+- Alert condition: the endpoint fails or returns degraded status in 2 consecutive checks.
 
-## Incident Kontrol Listesi
+## Incident Checklist
 
-1. Render backend service > Metrics ekraninda CPU, memory, restart ve 5xx oranini kontrol et.
-2. Render backend service > Logs ekraninda son deploy sonrasi error olup olmadigina bak.
-3. Better Stack / Logtail'de alarm query'lerini calistir.
-4. `/health` yanitinda `db` ve `storage` alanlarindan hangisinin degraded oldugunu kontrol et.
-5. Son deploy zamanini ve GitHub Actions deploy summary'sini kontrol et.
+1. Check CPU, memory, restarts, and 5xx rate in Render backend service > Metrics.
+2. Check Render backend service > Logs for errors after the latest deploy.
+3. Run the alert queries in Better Stack / Logtail.
+4. Check the `/health` response to see whether `db` or `storage` is degraded.
+5. Check the latest deploy time and the GitHub Actions deploy summary.
 
-## Kabul Kriterleri
+## Acceptance Criteria
 
-- Render Logs ekraninda backend loglari gorunuyor.
-- Better Stack / Logtail icinde Render'dan gelen backend loglari gorunuyor.
-- Uc background task hata query'si loglari filtreleyebiliyor.
-- Test amacli error log uretildiginde alarm tetikleniyor.
-- `/health` uptime monitor tarafindan izleniyor.
+- Backend logs are visible in the Render Logs screen.
+- Logs coming from Render are visible in Better Stack / Logtail.
+- The three background task error queries can filter the relevant logs.
+- An alert is triggered when a test error log is generated.
+- `/health` is monitored by the uptime monitor.
