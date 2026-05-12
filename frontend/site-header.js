@@ -139,6 +139,10 @@
         appendMenuLink("View Profile", "profile.html", "person");
         appendMenuLink("Saved Stories", "saved.html", "bookmark");
 
+        if (currentUser.role === "admin") {
+            appendMenuLink("Reports", "admin-panel.html", "flag");
+        }
+
         var signOut = document.createElement("button");
         signOut.type = "button";
         signOut.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50";
