@@ -8,6 +8,8 @@ from functools import lru_cache
 from tempfile import NamedTemporaryFile
 
 from fastapi import UploadFile, status
+from google import genai
+from google.genai import types
 from sqlalchemy import select
 
 from app.core.config import settings
@@ -23,6 +25,14 @@ logger = logging.getLogger(__name__)
 # allocated, so no threadpool slots are wasted waiting and only one WhisperModel
 # is ever active. Both preview and background calls share this queue.
 _TRANSCRIPTION_EXECUTOR = ThreadPoolExecutor(max_workers=1)
+_GEMINI_TRANSCRIPTION_PROMPT = (
+    "Generate an accurate transcript of the speech in this audio file. "
+    "Return only the transcript text. Do not summarize, translate, add timestamps, "
+    "or include explanations. If no speech is present, return an empty response."
+)
+_GEMINI_MIME_TYPE_ALIASES = {
+    "audio/mpeg": "audio/mp3",
+}
 
 
 async def transcribe_media_file(
@@ -68,7 +78,7 @@ async def transcribe_audio_content(
     mime_type: str | None,
 ) -> str | None:
     try:
-        return await _transcribe_with_whisper(
+        return await _transcribe_with_configured_provider(
             filename=filename,
             content=content,
             mime_type=mime_type,
@@ -76,6 +86,38 @@ async def transcribe_audio_content(
     except Exception:
         logger.exception("Audio transcription failed for %s", filename)
         return None
+
+
+async def _transcribe_with_configured_provider(
+    *,
+    filename: str,
+    content: bytes,
+    mime_type: str | None,
+) -> str | None:
+    if settings.STT_PROVIDER.lower() != "gemini":
+        return await _transcribe_with_whisper(
+            filename=filename,
+            content=content,
+            mime_type=mime_type,
+        )
+
+    try:
+        transcript = await _transcribe_with_gemini(
+            filename=filename,
+            content=content,
+            mime_type=mime_type,
+        )
+        if transcript:
+            return transcript
+        logger.warning("Gemini transcription for %s returned no text; falling back to local Whisper", filename)
+    except Exception:
+        logger.exception("Gemini transcription failed for %s; falling back to local Whisper", filename)
+
+    return await _transcribe_with_whisper(
+        filename=filename,
+        content=content,
+        mime_type=mime_type,
+    )
 
 
 async def preview_audio_transcription(file: UploadFile) -> str | None:
@@ -101,6 +143,62 @@ async def _transcribe_with_whisper(
     loop = asyncio.get_running_loop()
     fn = functools.partial(_transcribe_with_whisper_sync, filename=filename, content=content, mime_type=mime_type)
     return await loop.run_in_executor(_TRANSCRIPTION_EXECUTOR, fn)
+
+
+async def _transcribe_with_gemini(
+    *,
+    filename: str,
+    content: bytes,
+    mime_type: str | None,
+) -> str | None:
+    return await asyncio.to_thread(
+        _transcribe_with_gemini_sync,
+        filename=filename,
+        content=content,
+        mime_type=mime_type,
+    )
+
+
+def _transcribe_with_gemini_sync(
+    *,
+    filename: str,
+    content: bytes,
+    mime_type: str | None,
+) -> str | None:
+    if not settings.GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY is not configured")
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    try:
+        response = client.models.generate_content(
+            model=settings.STT_MODEL,
+            contents=[
+                _GEMINI_TRANSCRIPTION_PROMPT,
+                types.Part.from_bytes(
+                    data=content,
+                    mime_type=_normalize_gemini_mime_type(mime_type),
+                ),
+            ],
+        )
+    finally:
+        client.close()
+
+    transcript = getattr(response, "text", None)
+    if not isinstance(transcript, str):
+        raise ValueError("Could not extract Gemini transcription text")
+
+    transcript = transcript.strip()
+    if not transcript:
+        logger.warning("Gemini transcription for %s returned no text", filename)
+        return None
+
+    return transcript
+
+
+def _normalize_gemini_mime_type(mime_type: str | None) -> str:
+    if not mime_type:
+        return "audio/mp3"
+    return _GEMINI_MIME_TYPE_ALIASES.get(mime_type, mime_type)
 
 
 @lru_cache(maxsize=1)

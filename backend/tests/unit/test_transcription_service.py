@@ -7,6 +7,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.datastructures import Headers, UploadFile
 
+from app.core.config import settings
 from app.db.enums import MediaType
 from app.services.transcription_service import (
     preview_audio_transcription,
@@ -41,6 +42,48 @@ class TestTranscribeAudioContent:
 
         assert result == "Transcribed text"
         mock_stt.assert_awaited_once()
+
+    async def test_uses_gemini_provider_when_configured(self, monkeypatch):
+        monkeypatch.setattr(settings, "STT_PROVIDER", "gemini")
+
+        with patch(
+            "app.services.transcription_service._transcribe_with_gemini",
+            new=AsyncMock(return_value="Gemini transcript"),
+        ) as mock_gemini:
+            with patch(
+                "app.services.transcription_service._transcribe_with_whisper",
+                new=AsyncMock(),
+            ) as mock_whisper:
+                result = await transcribe_audio_content(
+                    filename="audio.mp3",
+                    content=b"audio-bytes",
+                    mime_type="audio/mp3",
+                )
+
+        assert result == "Gemini transcript"
+        mock_gemini.assert_awaited_once()
+        mock_whisper.assert_not_awaited()
+
+    async def test_falls_back_to_local_whisper_when_gemini_fails(self, monkeypatch):
+        monkeypatch.setattr(settings, "STT_PROVIDER", "gemini")
+
+        with patch(
+            "app.services.transcription_service._transcribe_with_gemini",
+            new=AsyncMock(side_effect=RuntimeError("gemini down")),
+        ) as mock_gemini:
+            with patch(
+                "app.services.transcription_service._transcribe_with_whisper",
+                new=AsyncMock(return_value="Local transcript"),
+            ) as mock_whisper:
+                result = await transcribe_audio_content(
+                    filename="audio.webm",
+                    content=b"audio-bytes",
+                    mime_type="audio/webm",
+                )
+
+        assert result == "Local transcript"
+        mock_gemini.assert_awaited_once()
+        mock_whisper.assert_awaited_once()
 
     async def test_returns_none_when_provider_raises(self):
         with patch(
