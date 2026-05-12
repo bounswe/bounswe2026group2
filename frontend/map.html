@@ -404,37 +404,6 @@
             100% { transform: scale(1.6); opacity: 0;   }
         }
 
-        /* Near Me panel */
-        #near-me-panel {
-            min-width: 180px;
-        }
-
-        #near-me-panel.hidden { display: none; }
-
-        .radius-chip {
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 600;
-            border: 1px solid #e7e2d9;
-            background: #ffffff;
-            color: #5f584c;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-
-        .radius-chip:hover { background: #fef9f0; }
-
-        .radius-chip.active {
-            background: #775a19;
-            color: #ffffff;
-            border-color: #775a19;
-        }
-
-        #btn-near-me.active {
-            background: #35618f !important;
-            color: #ffffff !important;
-        }
         .distance-btn {
             padding: 5px 12px;
             border-radius: 9999px;
@@ -502,11 +471,12 @@
                             <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Distance</label>
                             <div class="flex flex-wrap gap-1.5">
                                 <button type="button" class="map-distance-btn distance-btn active" data-value="">Anywhere</button>
-                                <button type="button" class="map-distance-btn distance-btn" data-value="500">500 m</button>
                                 <button type="button" class="map-distance-btn distance-btn" data-value="1000">1 km</button>
+                                <button type="button" class="map-distance-btn distance-btn" data-value="5000">5 km</button>
                                 <button type="button" class="map-distance-btn distance-btn" data-value="10000">10 km</button>
-                                <button type="button" class="map-distance-btn distance-btn" data-value="100000">100 km</button>
+                                <button type="button" class="map-distance-btn distance-btn" data-value="25000">25 km</button>
                             </div>
+                            <p class="mt-2 text-[11px] text-textmuted">Uses your current location</p>
                         </div>
                         <!-- Tags -->
                         <div>
@@ -594,25 +564,8 @@
                     title="Go to my location">
                     <span class="material-symbols-outlined text-xl">my_location</span>
                 </button>
-                <button id="btn-near-me"
-                    class="glass-panel w-11 h-11 flex items-center justify-center rounded-xl text-tertiary shadow-sm hover:bg-white transition-colors border border-border/30"
-                    title="Show stories near me" aria-pressed="false">
-                    <span class="material-symbols-outlined text-xl">near_me</span>
-                </button>
             </div>
 
-            <!-- Near Me Radius Panel -->
-            <div id="near-me-panel"
-                class="hidden absolute left-20 top-[152px] z-[1000] glass-panel rounded-xl p-3 shadow-sm border border-border/30 md:top-[208px]">
-                <div class="text-[11px] font-semibold uppercase tracking-wide text-textmuted mb-2">Search radius</div>
-                <div id="radius-chips" class="flex items-center gap-1.5">
-                    <button type="button" class="radius-chip" data-radius="1">1 km</button>
-                    <button type="button" class="radius-chip active" data-radius="5">5 km</button>
-                    <button type="button" class="radius-chip" data-radius="10">10 km</button>
-                    <button type="button" class="radius-chip" data-radius="25">25 km</button>
-                </div>
-                <div id="near-me-status" class="mt-2 text-[11px] text-textmuted"></div>
-            </div>
 
             <!-- Story Count Badge -->
             <div class="absolute bottom-6 left-4 z-[1000] md:bottom-8 md:left-8">
@@ -694,7 +647,7 @@
             if (mapFilterYearFrom !== "" || mapFilterYearTo !== "") {
                 result = filterStoriesByYear(result, mapFilterYearFrom, mapFilterYearTo);
             }
-            if (mapFilterDistance !== "") {
+            if (mapFilterDistance !== "" && !nearMeActive) {
                 var maxKm = parseFloat(mapFilterDistance) / 1000;
                 var center = map.getCenter();
                 result = result.filter(function (story) {
@@ -791,10 +744,6 @@
         var radiusCircle = null;
         var lastUserLatLng = null;
 
-        var nearMeButton = document.getElementById("btn-near-me");
-        var nearMePanel = document.getElementById("near-me-panel");
-        var nearMeStatus = document.getElementById("near-me-status");
-        var radiusChipsContainer = document.getElementById("radius-chips");
 
         function userLocationIcon() {
             return L.divIcon({
@@ -868,10 +817,8 @@
                 var data = await response.json();
                 cachedStories = data.stories || [];
                 refreshMapDisplay();
-                nearMeStatus.textContent = cachedStories.length + " stor" + (cachedStories.length === 1 ? "y" : "ies") + " within " + radiusKm + " km";
             } catch (err) {
                 console.error("Error fetching nearby stories:", err);
-                nearMeStatus.textContent = "Failed to load nearby stories";
                 document.getElementById("story-count").textContent = "Failed to load stories";
             }
         }
@@ -912,13 +859,7 @@
                 try { localStorage.setItem(NEAR_ME_CONSENT_KEY, "1"); } catch (_) {}
             }
 
-            // Mark active up-front so the bounds-based fetch (triggered by map moves) is suppressed,
-            // and immediately clear any previously rendered markers so we never show "all stories".
             nearMeActive = true;
-            nearMeButton.classList.add("active");
-            nearMeButton.setAttribute("aria-pressed", "true");
-            nearMePanel.classList.remove("hidden");
-            nearMeStatus.textContent = "Locating you…";
             cachedStories = [];
             loadStories([]);
             populateSidebar([]);
@@ -927,10 +868,6 @@
                 function (pos) {
                     var latlng = [pos.coords.latitude, pos.coords.longitude];
                     lastUserLatLng = latlng;
-
-                    // Update status FIRST so it never gets stuck on "Locating you…"
-                    // even if a Leaflet call below throws.
-                    nearMeStatus.textContent = "Loading nearby stories…";
 
                     try { renderUserLocation(latlng, pos.coords.accuracy); }
                     catch (e) { console.error("renderUserLocation failed:", e); }
@@ -942,11 +879,7 @@
                     fetchNearbyStories(latlng[0], latlng[1], nearMeRadiusKm);
                 },
                 function (err) {
-                    nearMeStatus.textContent = err && err.code === 1
-                        ? "Location permission denied."
-                        : "Unable to access your location.";
                     console.error("Geolocation error:", err);
-                    // Roll back active state so bounds browsing resumes.
                     deactivateNearMe();
                 },
                 { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
@@ -955,39 +888,11 @@
 
         function deactivateNearMe() {
             nearMeActive = false;
-            nearMeButton.classList.remove("active");
-            nearMeButton.setAttribute("aria-pressed", "false");
-            nearMePanel.classList.add("hidden");
             clearUserLocationLayers();
             lastUserLatLng = null;
             fetchStoriesInBounds();
         }
 
-        nearMeButton.addEventListener("click", function () {
-            if (nearMeActive) {
-                deactivateNearMe();
-            } else {
-                activateNearMe();
-            }
-        });
-
-        radiusChipsContainer.addEventListener("click", function (e) {
-            var btn = e.target.closest(".radius-chip");
-            if (!btn) return;
-            var r = parseFloat(btn.getAttribute("data-radius"));
-            if (!Number.isFinite(r) || r <= 0) return;
-
-            nearMeRadiusKm = r;
-            radiusChipsContainer.querySelectorAll(".radius-chip").forEach(function (el) {
-                el.classList.toggle("active", el === btn);
-            });
-
-            if (nearMeActive && lastUserLatLng) {
-                renderRadiusCircle(lastUserLatLng, nearMeRadiusKm);
-                fitToRadius(lastUserLatLng, nearMeRadiusKm);
-                fetchNearbyStories(lastUserLatLng[0], lastUserLatLng[1], nearMeRadiusKm);
-            }
-        });
 
         // ─── Geolocation ───
         document.getElementById("btn-locate").addEventListener("click", function () {
@@ -1413,11 +1318,12 @@
             mapFilterPanelEl.classList.add("hidden");
             setMapFiltersToggleActive(false);
             clearTimeout(fetchTimeout);
-            refreshMapDisplay();
-            if (!nearMeActive) {
-                fetchStoriesInBounds();
-            } else if (lastUserLatLng) {
-                fetchNearbyStories(lastUserLatLng[0], lastUserLatLng[1], nearMeRadiusKm);
+            if (mapFilterDistance !== "") {
+                nearMeRadiusKm = parseFloat(mapFilterDistance) / 1000;
+                activateNearMe();
+            } else {
+                if (nearMeActive) deactivateNearMe();
+                else fetchStoriesInBounds();
             }
         });
 
@@ -1434,7 +1340,8 @@
                 if (b.dataset.value === "") b.classList.add("active");
             });
             renderMapPanelTags();
-            refreshMapDisplay();
+            if (nearMeActive) deactivateNearMe();
+            else refreshMapDisplay();
         });
 
         // ─── Report functionality ─────────────────────────────────────────────
