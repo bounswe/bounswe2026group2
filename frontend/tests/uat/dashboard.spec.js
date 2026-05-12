@@ -7,7 +7,6 @@ const { test, expect } = require('@playwright/test');
 
 /** Deployed dev frontend; env UAT_BASE_URL overrides for local Docker, staging, etc. */
 const DEFAULT_UAT_BASE_URL = 'https://localhistorymap-dev.onrender.com';
-const UAT_BASE_URL = process.env.UAT_BASE_URL || DEFAULT_UAT_BASE_URL;
 
 const UAT_EMAIL = process.env.UAT_OWNER_EMAIL || 'test@gmail.com';
 const UAT_PASSWORD = process.env.UAT_OWNER_PASSWORD || 'Test1234%';
@@ -86,7 +85,7 @@ async function leaveStoryDetailToMap(page) {
 }
 
 test.describe('TC_DASH — Profile view count (UAT script)', () => {
-  test.use({ baseURL: UAT_BASE_URL });
+  test.use({ baseURL: DEFAULT_UAT_BASE_URL });
 
   test('view count after anonymous story visit matches manual UAT steps', async ({ page }) => {
     // 1–2
