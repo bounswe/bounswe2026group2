@@ -13,5 +13,7 @@ describe('Lab 9 mobile E2E scenario placeholders', () => {
 
   it.skip('TC_MAP_2 - multi-location story display on map', async () => {});
 
+  it.skip('TC_DASH_1 - user dashboard view count', async () => {});
+
   it.skip('TC_BADGE_1 - first post badge awarded', async () => {});
 });
