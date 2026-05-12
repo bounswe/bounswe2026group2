@@ -224,6 +224,7 @@ class TestUserDashboardAPI:
             "total_likes_received": 3,
             "total_comments_received": 3,
             "total_saves_received": 3,
+            "total_views_received": 0,
         }
 
     async def test_get_my_dashboard_combines_saved_count_and_top_stats(self, client, db_session):
@@ -280,6 +281,7 @@ class TestUserDashboardAPI:
             "total_likes_received": 2,
             "total_comments_received": 1,
             "total_saves_received": 2,
+            "total_views_received": 0,
         }
 
     async def test_openapi_includes_dashboard_paths(self, client):
