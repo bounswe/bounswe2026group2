@@ -9,7 +9,7 @@ describe('Lab 9 mobile E2E scenario placeholders', () => {
 
   it.skip('TC_TAG_2 - keyword tagging UI during story creation', async () => {});
 
-  it.skip('TC_STORY_5 - anonymous story sharing', async () => {});
+  // TC_STORY_5 has its own spec file: tc-story-5.spec.js
 
   it.skip('TC_MAP_2 - multi-location story display on map', async () => {});
 
