@@ -30,6 +30,7 @@ _GEMINI_TRANSCRIPTION_PROMPT = (
     "Return only the transcript text. Do not summarize, translate, add timestamps, "
     "or include explanations. If no speech is present, return an empty response."
 )
+_GEMINI_TRANSCRIPTION_MODEL = "gemini-2.5-flash"
 _GEMINI_MIME_TYPE_ALIASES = {
     "audio/mpeg": "audio/mp3",
 }
@@ -94,7 +95,7 @@ async def _transcribe_with_configured_provider(
     content: bytes,
     mime_type: str | None,
 ) -> str | None:
-    if settings.STT_PROVIDER.lower() != "gemini":
+    if not settings.GEMINI_API_KEY:
         return await _transcribe_with_whisper(
             filename=filename,
             content=content,
@@ -171,7 +172,7 @@ def _transcribe_with_gemini_sync(
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     try:
         response = client.models.generate_content(
-            model=settings.STT_MODEL,
+            model=_GEMINI_TRANSCRIPTION_MODEL,
             contents=[
                 _GEMINI_TRANSCRIPTION_PROMPT,
                 types.Part.from_bytes(

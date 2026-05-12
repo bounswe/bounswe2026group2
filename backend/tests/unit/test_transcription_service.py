@@ -44,8 +44,8 @@ class TestTranscribeAudioContent:
         assert result == "Transcribed text"
         mock_stt.assert_awaited_once()
 
-    async def test_uses_gemini_provider_when_configured(self, monkeypatch):
-        monkeypatch.setattr(settings, "STT_PROVIDER", "gemini")
+    async def test_uses_gemini_provider_when_api_key_is_configured(self, monkeypatch):
+        monkeypatch.setattr(settings, "GEMINI_API_KEY", "secret")
 
         with patch(
             "app.services.transcription_service._transcribe_with_gemini",
@@ -65,8 +65,29 @@ class TestTranscribeAudioContent:
         mock_gemini.assert_awaited_once()
         mock_whisper.assert_not_awaited()
 
+    async def test_uses_local_whisper_when_gemini_api_key_is_missing(self, monkeypatch):
+        monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+
+        with patch(
+            "app.services.transcription_service._transcribe_with_gemini",
+            new=AsyncMock(),
+        ) as mock_gemini:
+            with patch(
+                "app.services.transcription_service._transcribe_with_whisper",
+                new=AsyncMock(return_value="Local transcript"),
+            ) as mock_whisper:
+                result = await transcribe_audio_content(
+                    filename="audio.webm",
+                    content=b"audio-bytes",
+                    mime_type="audio/webm",
+                )
+
+        assert result == "Local transcript"
+        mock_gemini.assert_not_awaited()
+        mock_whisper.assert_awaited_once()
+
     async def test_falls_back_to_local_whisper_when_gemini_fails(self, monkeypatch):
-        monkeypatch.setattr(settings, "STT_PROVIDER", "gemini")
+        monkeypatch.setattr(settings, "GEMINI_API_KEY", "secret")
 
         with patch(
             "app.services.transcription_service._transcribe_with_gemini",
@@ -87,7 +108,7 @@ class TestTranscribeAudioContent:
         mock_whisper.assert_awaited_once()
 
     async def test_falls_back_to_local_whisper_when_gemini_returns_no_text(self, monkeypatch):
-        monkeypatch.setattr(settings, "STT_PROVIDER", "gemini")
+        monkeypatch.setattr(settings, "GEMINI_API_KEY", "secret")
 
         with patch(
             "app.services.transcription_service._transcribe_with_gemini",
