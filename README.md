@@ -11,6 +11,10 @@ A collaborative platform for sharing and discovering local history stories tied 
 | Mobile | Capacitor + Android |
 | Infrastructure | Docker Compose, GitHub Actions, Render |
 
+## Operations
+
+Monitoring and log aggregation setup is documented in [docs/wiki/monitoring-and-logs.md](docs/wiki/monitoring-and-logs.md).
+
 ## Quick Start
 
 ```bash
