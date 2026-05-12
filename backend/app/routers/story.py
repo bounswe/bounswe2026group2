@@ -259,9 +259,10 @@ async def list_nearby_stories(
     lat: float = Query(ge=-90.0, le=90.0),
     lng: float = Query(ge=-180.0, le=180.0),
     radius_km: float = Query(default=10.0, gt=0.0, le=500.0),
+    tags: list[str] | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_nearby_stories(db, center_lat=lat, center_lng=lng, radius_km=radius_km)
+    return await get_nearby_stories(db, center_lat=lat, center_lng=lng, radius_km=radius_km, tags=tags)
 
 
 @router.get(

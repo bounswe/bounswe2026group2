@@ -813,6 +813,7 @@ async def get_nearby_stories(
     center_lat: float,
     center_lng: float,
     radius_km: float = 10.0,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
     lat1 = func.radians(center_lat)
     lat2 = func.radians(Story.latitude)
