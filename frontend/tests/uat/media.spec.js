@@ -19,7 +19,7 @@ const SEEDED_USER = {
 };
 
 const RECORDED_AUDIO_FIXTURE_BASE64 = fs.readFileSync(
-  path.join(__dirname, 'fixtures', 'tc-media-2-sample.wav'),
+  path.resolve(process.cwd(), 'tests', 'uat', 'fixtures', 'tc-media-2-sample.wav'),
 ).toString('base64');
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ async function postJsonFromPage(page, path, payload) {
     let data = null;
     try {
       data = await response.json();
-    } catch (error) {
+    } catch {
       data = null;
     }
 
@@ -131,7 +131,7 @@ async function installRecordedAudioMocks(page) {
         }
 
         this.state = 'inactive';
-        const binary = atob(recordedAudioFixtureBase64);
+        const binary = globalThis.atob(recordedAudioFixtureBase64);
         const bytes = new Uint8Array(binary.length);
         for (let index = 0; index < binary.length; index += 1) {
           bytes[index] = binary.charCodeAt(index);
