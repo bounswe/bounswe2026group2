@@ -10,6 +10,7 @@ from starlette.datastructures import Headers, UploadFile
 from app.core.config import settings
 from app.db.enums import MediaType
 from app.services.transcription_service import (
+    _normalize_gemini_mime_type,
     preview_audio_transcription,
     transcribe_audio_content,
     transcribe_media_file,
@@ -85,6 +86,27 @@ class TestTranscribeAudioContent:
         mock_gemini.assert_awaited_once()
         mock_whisper.assert_awaited_once()
 
+    async def test_falls_back_to_local_whisper_when_gemini_returns_no_text(self, monkeypatch):
+        monkeypatch.setattr(settings, "STT_PROVIDER", "gemini")
+
+        with patch(
+            "app.services.transcription_service._transcribe_with_gemini",
+            new=AsyncMock(return_value=None),
+        ) as mock_gemini:
+            with patch(
+                "app.services.transcription_service._transcribe_with_whisper",
+                new=AsyncMock(return_value="Local transcript"),
+            ) as mock_whisper:
+                result = await transcribe_audio_content(
+                    filename="silent.mp3",
+                    content=b"audio-bytes",
+                    mime_type="audio/mp3",
+                )
+
+        assert result == "Local transcript"
+        mock_gemini.assert_awaited_once()
+        mock_whisper.assert_awaited_once()
+
     async def test_returns_none_when_provider_raises(self):
         with patch(
             "app.services.transcription_service._transcribe_with_whisper",
@@ -98,6 +120,17 @@ class TestTranscribeAudioContent:
 
         assert result is None
         mock_stt.assert_awaited_once()
+
+
+class TestGeminiTranscriptionHelpers:
+    def test_normalizes_mpeg_mime_type_for_gemini(self):
+        assert _normalize_gemini_mime_type("audio/mpeg") == "audio/mp3"
+
+    def test_uses_mp3_mime_type_when_missing(self):
+        assert _normalize_gemini_mime_type(None) == "audio/mp3"
+
+    def test_preserves_supported_mime_type(self):
+        assert _normalize_gemini_mime_type("audio/wav") == "audio/wav"
 
 
 @pytest.mark.asyncio
