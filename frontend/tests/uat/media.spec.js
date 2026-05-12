@@ -8,6 +8,9 @@
 //   UAT_BASE_URL=http://localhost:3000 npm test          (from this directory)
 //   UAT_BASE_URL=http://localhost:3000 npx playwright test tests/uat/  (from frontend/)
 
+const fs = require('fs');
+const path = require('path');
+
 const { test, expect } = require('@playwright/test');
 
 const SEEDED_USER = {
@@ -15,7 +18,9 @@ const SEEDED_USER = {
   password: 'ValidPass1!',
 };
 
-const RECORDED_AUDIO_FIXTURE_BASE64 = 'bW9jayByZWNvcmRlZCBhdWRpbw==';
+const RECORDED_AUDIO_FIXTURE_BASE64 = fs.readFileSync(
+  path.resolve(process.cwd(), 'tests', 'uat', 'fixtures', 'tc-media-2-sample.wav'),
+).toString('base64');
 
 // ---------------------------------------------------------------------------
 // Helpers
