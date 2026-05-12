@@ -53,7 +53,12 @@ router = APIRouter(prefix="/stories", tags=["stories"])
     response_model=StoryDetailResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a story",
-    description="Create a new story tied to a geographic location and historical date range. Requires authentication.",
+    description=(
+        "Create a new story tied to one or more geographic locations and a historical date range. "
+        "Include `tags` in the request body to associate keyword tags with the story. "
+        "When the Gemini AI key is configured, tags are also generated automatically in the background. "
+        "Requires authentication."
+    ),
     responses={
         401: {"description": "Missing or invalid authentication token"},
         422: {"description": "Validation error for story/location input"},
@@ -75,7 +80,13 @@ async def create_story(
     "/{story_id}",
     response_model=StoryDetailResponse,
     summary="Update a story",
-    description="Update an existing story. Only the story owner may update it. Requires authentication.",
+    description=(
+        "Update an existing story's content, locations, date range, visibility, and tags. "
+        "Only the story owner may update it. "
+        "Pass `locations` to replace all locations; omit the field to leave them unchanged. "
+        "Pass `tags` to replace all tags; omit to leave them unchanged. "
+        "Requires authentication."
+    ),
     responses={
         401: {"description": "Missing or invalid authentication token"},
         403: {"description": "Authenticated user is not the story owner"},
