@@ -10,6 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap" rel="stylesheet">
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
       theme: {
@@ -42,16 +43,45 @@
       background: rgba(254,249,240,0.75) !important;
       font-size: 10px;
     }
+
+    .like-button {
+      transform-origin: center;
+    }
+
+    .like-button[data-animating="true"] {
+      animation: like-pop 180ms ease-out;
+    }
+
+    @keyframes like-pop {
+      0% { transform: scale(1); }
+      55% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    }
+    .save-button { transform-origin: center; }
+    .save-button[data-animating="true"] { animation: save-pop 180ms ease-out; }
+    @keyframes save-pop {
+      0% { transform: scale(1); }
+      55% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .like-button[data-animating="true"],
+      .save-button[data-animating="true"] { animation: none; }
+    }
   </style>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
-<main class="max-w-6xl mx-auto px-6 py-10 lg:px-10">
+<div id="site-header"></div>
+<main class="max-w-6xl mx-auto px-6 pt-32 pb-10 lg:px-10">
   <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
     <div>
-      <a href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-        <span aria-hidden="true">&larr;</span> Back to Map
-      </a>
-      <h1 id="story-title" class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">Loading Story...</h1>
+      <h1 id="story-title" class="font-headline text-4xl font-extrabold leading-tight text-textmain">Loading Story...</h1>
       <p id="story-summary" class="mt-4 max-w-3xl text-base leading-7 text-textmuted italic">
       </p>
     </div>
@@ -66,7 +96,27 @@
           <span id="story-location" class="rounded-full bg-[rgba(119,90,25,0.1)] px-3 py-1 font-semibold text-primary">Map Reference</span>
           <span id="story-date">Date Unknown</span>
           <span id="story-author">by Author</span>
+          <span class="inline-flex items-center gap-2">
+            <button
+              id="like-button"
+              type="button"
+              class="like-button inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 font-semibold text-primary transition hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Like this story"
+              aria-pressed="false"
+              data-liked="false"
+              data-animating="false"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+              <span id="like-button-text" class="text-sm leading-none">Like</span>
+            </button>
+            <span id="like-count" class="text-sm font-semibold text-textmuted" aria-label="Total likes">0</span>
+            <span id="like-status" class="hidden text-xs text-textmuted" role="status" aria-live="polite"></span>
+          </span>
         </div>
+
+        <div id="story-tags" class="mt-3 flex flex-wrap gap-2" style="display:none"></div>
 
         <div id="story-content" class="mt-6 space-y-5 text-base leading-8 text-textmain whitespace-pre-wrap">
           <!-- Content injected via JS -->
@@ -76,8 +126,24 @@
           <!-- Media injected via JS -->
         </div>
 
-        <div class="mt-8 flex flex-wrap gap-3">
-          <a href="map.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Back to Map</a>
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Create Another Story</a>
+          <a id="btn-edit" href="story-edit.html" class="hidden inline-flex items-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-stone-50">
+            <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">edit</span>
+            Edit Story
+          </a>
+          <a id="btn-return-login" href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
+          <button id="btn-report" class="hidden inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50" onclick="openReportModal()">
+            <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">flag</span>
+            Report
+          </button>
+          <button id="save-button" type="button"
+            class="save-button inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-stone-50"
+            data-animating="false" aria-pressed="false" aria-label="Save this story" disabled>
+            <span id="save-button-icon" class="material-symbols-outlined text-[18px] leading-none">bookmark</span>
+            <span id="save-button-text">Save</span>
+          </button>
+          <span id="save-status" class="hidden text-xs text-red-600"></span>
         </div>
       </div>
     </article>
@@ -88,12 +154,53 @@
         <div class="mt-4 rounded-2xl overflow-hidden border border-border/50" style="height: 224px;">
           <div id="detail-map" style="height: 100%; width: 100%;"></div>
         </div>
-        <p class="mt-3 text-sm text-textmuted">Kadikoy, Istanbul — <a href="map.html" class="text-primary font-semibold hover:underline">View on full map →</a></p>
+        <p id="detail-location-label" class="mt-3 text-sm text-textmuted">
+          Kadikoy, Istanbul
+        </p>
+        <p class="mt-1 text-sm">
+          <a id="detail-timeline-link" href="timeline.html?lat=41.015&lng=28.979&radius_km=1" class="font-semibold text-tertiary hover:underline">View Timeline →</a>
+        </p>
+        <p class="mt-1 text-sm">
+          <a id="detail-map-link" href="map.html" class="font-semibold text-primary hover:underline">View on full map →</a>
+        </p>
       </section>
 
       <section class="rounded-3xl border border-border bg-surface p-6">
         <h2 class="font-headline text-2xl font-bold text-textmain">Comments</h2>
-        <p class="mt-5 text-sm text-textmuted">No comments yet.</p>
+        <p id="comments-status" class="mt-4 hidden text-sm text-textmuted" role="status" aria-live="polite"></p>
+
+        <div id="comments-login-prompt" class="mt-4 hidden rounded-2xl border border-border bg-background px-4 py-3 text-sm text-textmuted">
+          Please login to comment.
+          <a href="index.html" class="font-semibold text-primary hover:underline">Go to login →</a>
+        </div>
+
+        <form id="comment-form" class="mt-4 hidden space-y-3">
+          <label for="comment-input" class="text-sm font-semibold text-textmain">Add a comment</label>
+          <textarea
+            id="comment-input"
+            name="comment"
+            rows="3"
+            class="w-full resize-none rounded-2xl border border-border bg-white px-4 py-3 text-sm text-textmain shadow-sm focus:border-primary focus:ring-primary"
+            placeholder="Share your thoughts about this story..."
+            maxlength="2000"
+            required
+          ></textarea>
+          <div class="flex items-center justify-between gap-3">
+            <p id="comment-error" class="hidden text-sm font-semibold text-red-600"></p>
+            <button
+              id="comment-submit"
+              type="submit"
+              class="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Post
+            </button>
+          </div>
+        </form>
+
+        <div class="mt-5">
+          <ul id="comments-list" class="space-y-4" aria-label="Comments"></ul>
+          <p id="comments-empty" class="mt-4 text-sm text-textmuted">No comments yet.</p>
+        </div>
       </section>
     </aside>
   </section>
@@ -102,7 +209,17 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+<script src="auth.js"></script>
 <script src="config.js"></script>
+<script src="site-header.js"></script>
+<script>mountSiteHeader();</script>
+<script src="likes.js"></script>
+<script src="comments.js"></script>
+<script src="saves.js"></script>
+<script src="anonymous.js"></script>
+<script src="multi-location.js"></script>
+<script src="tags.js"></script>
+<script src="story-transcript.js"></script>
 <script>
   // Initialize mini-map with arbitrary center initially
   var detailMap = L.map("detail-map", {
@@ -120,56 +237,353 @@
 
   const urlParams = new URLSearchParams(window.location.search);
   const storyId = urlParams.get('id');
-  
+
+  var TRANSCRIPT_POLL_INTERVAL_MS = 2000;
+  var TRANSCRIPT_POLL_MAX_ATTEMPTS = 30;
+  var transcriptPollTimer = null;
+  var transcriptPollAttempts = 0;
+
+  function renderStoryMedia(story) {
+    var pollExhausted = transcriptPollAttempts >= TRANSCRIPT_POLL_MAX_ATTEMPTS;
+    var mediaContainer = document.getElementById('story-media');
+    mediaContainer.innerHTML = "";
+
+    if (!story.media_files || story.media_files.length === 0) {
+      return;
+    }
+
+    var images = story.media_files.filter(function (m) { return m.media_type === "image"; });
+    if (images.length > 0) {
+      document.getElementById('story-cover').style.backgroundImage = "url('" + images[0].media_url + "')";
+    }
+
+    story.media_files.forEach(function (m) {
+      if (m.media_type === "image") {
+        var img = document.createElement("img");
+        img.src = m.media_url;
+        img.className = "w-full rounded-2xl border border-border shadow-sm object-cover";
+        img.style.maxHeight = "300px";
+        img.alt = m.alt_text || "";
+        mediaContainer.appendChild(img);
+      } else if (m.media_type === "video") {
+        var vid = document.createElement("video");
+        vid.src = m.media_url;
+        vid.setAttribute("controls", "controls");
+        vid.className = "w-full rounded-2xl border border-border shadow-sm object-cover";
+        vid.style.maxHeight = "300px";
+        mediaContainer.appendChild(vid);
+      } else if (m.media_type === "audio") {
+        var wrap = document.createElement("div");
+        wrap.className = "p-4 bg-background border border-border rounded-xl w-full flex flex-col gap-2";
+
+        var icon = document.createElement("span");
+        icon.className = "text-sm font-semibold material-symbols-outlined text-primary";
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = "audio";
+
+        var aud = document.createElement("audio");
+        aud.src = m.media_url;
+        aud.setAttribute("controls", "controls");
+        aud.className = "w-full";
+
+        var details = document.createElement("details");
+        details.className = "mt-2 rounded-xl border border-border/80 bg-white/70";
+
+        var summary = document.createElement("summary");
+        summary.className =
+          "cursor-pointer select-none px-3 py-2 text-sm font-semibold text-textmain";
+        summary.textContent = "Transcript";
+
+        var bodyWrap = document.createElement("div");
+        bodyWrap.className = "px-3 pb-3";
+
+        var inner = document.createElement("div");
+        if (typeof StoryTranscript !== "undefined") {
+          var state = StoryTranscript.transcriptDisplayState(m, pollExhausted);
+          StoryTranscript.applyTranscriptBody(inner, state);
+        } else {
+          inner.textContent = m.transcript || "Transcript unavailable";
+          inner.className = "mt-2 text-sm text-textmain whitespace-pre-wrap break-words";
+        }
+
+        bodyWrap.appendChild(inner);
+        details.appendChild(summary);
+        details.appendChild(bodyWrap);
+        wrap.appendChild(icon);
+        wrap.appendChild(aud);
+        wrap.appendChild(details);
+        mediaContainer.appendChild(wrap);
+      }
+    });
+  }
+
+  function startTranscriptPolling(id, mediaFiles) {
+    if (transcriptPollTimer) {
+      clearInterval(transcriptPollTimer);
+      transcriptPollTimer = null;
+    }
+    transcriptPollAttempts = 0;
+    if (typeof StoryTranscript === "undefined" || !StoryTranscript.needsAudioTranscriptPoll(mediaFiles)) {
+      return;
+    }
+    transcriptPollTimer = setInterval(function () {
+      transcriptPollAttempts++;
+      fetch(API_BASE + "/stories/" + id)
+        .then(function (res) { return res.json(); })
+        .then(function (story) {
+          renderStoryMedia(story);
+          var stillNeed =
+            typeof StoryTranscript !== "undefined" &&
+            StoryTranscript.needsAudioTranscriptPoll(story.media_files);
+          var timedOut = transcriptPollAttempts >= TRANSCRIPT_POLL_MAX_ATTEMPTS;
+          if (!stillNeed || timedOut) {
+            if (transcriptPollTimer) {
+              clearInterval(transcriptPollTimer);
+              transcriptPollTimer = null;
+            }
+          }
+        })
+        .catch(function () { /* ignore transient poll errors */ });
+    }, TRANSCRIPT_POLL_INTERVAL_MS);
+  }
+
+  function applyStoryDetail(story) {
+    document.getElementById('story-title').textContent = story.title || "Untitled";
+    document.getElementById('story-summary').textContent = story.summary || "";
+
+    var authorEl = document.getElementById('story-author');
+    authorEl.textContent = getAuthorByLine(story);
+    authorEl.classList.toggle('italic', isAnonymousStory(story));
+
+    document.getElementById('story-date').textContent = story.date_label || "No Date";
+    document.getElementById('story-location').textContent = story.place_name || "Istanbul";
+    document.getElementById('story-content').textContent = story.content || "No content available.";
+    document.getElementById('detail-location-label').textContent = story.place_name || "Istanbul";
+
+    var storyLat = Number(story.latitude);
+    var storyLng = Number(story.longitude);
+    var hasCoordinates = Number.isFinite(storyLat) && Number.isFinite(storyLng);
+    var timelineLink = document.getElementById('detail-timeline-link');
+
+    if (hasCoordinates) {
+      timelineLink.href = "timeline.html?lat=" + encodeURIComponent(storyLat) + "&lng=" + encodeURIComponent(storyLng) + "&radius_km=1";
+      timelineLink.classList.remove("hidden");
+    } else {
+      timelineLink.classList.add("hidden");
+    }
+
+    var allLocations = getEffectiveLocations(story);
+    if (allLocations.length > 0) {
+      var isMulti = allLocations.length > 1;
+      allLocations.forEach(function (loc, idx) {
+        var icon = isMulti
+          ? buildNumberedIcon(L, idx, { color: "#35618f", size: 32 })
+          : L.divIcon({
+              className: "",
+              html: '<div style="width:40px;height:40px;border-radius:50%;border:3px solid #fff;background:#775a19;box-shadow:0 4px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;"><span class="material-symbols-outlined" style="font-size:18px;">auto_stories</span></div>',
+              iconSize: [40, 40],
+              iconAnchor: [20, 20],
+              popupAnchor: [0, -24]
+            });
+        var marker = L.marker([loc.latitude, loc.longitude], { icon: icon }).addTo(detailMap);
+        var coords = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
+        var popupTitle = isMulti
+          ? ((idx + 1) + ". " + (loc.label || coords))
+          : (story.title || coords);
+        var popupSub = isMulti
+          ? coords
+          : (story.place_name || coords);
+        marker.bindPopup(
+          '<div style="font-family:Inter,sans-serif;">' +
+          '<strong style="font-size:13px;">' + popupTitle + '</strong><br>' +
+          '<span style="font-size:11px;color:#5f584c;">' + popupSub + '</span>' +
+          '</div>'
+        );
+      });
+
+      if (isMulti) {
+        L.polyline(
+          allLocations.map(function (l) { return [l.latitude, l.longitude]; }),
+          { color: "#35618f", weight: 3, opacity: 0.75, dashArray: "6 8" }
+        ).addTo(detailMap);
+        detailMap.fitBounds(
+          allLocations.map(function (l) { return [l.latitude, l.longitude]; }),
+          { padding: [30, 30], maxZoom: 16 }
+        );
+      } else {
+        detailMap.setView([allLocations[0].latitude, allLocations[0].longitude], 15);
+      }
+    } else {
+      document.getElementById('detail-map').parentElement.style.display = 'none';
+    }
+
+    renderStoryMedia(story);
+    startTranscriptPolling(String(story.id || storyId), story.media_files);
+
+    setupComments(API_BASE, String(story.id || storyId));
+    var likeSeed = { like_count: typeof story.like_count === "number" ? story.like_count : 0 };
+    setupLikes(API_BASE, String(story.id || storyId), likeSeed);
+  }
+
   if (!storyId) {
     document.getElementById('story-title').textContent = "Story not found";
     document.getElementById('story-summary').textContent = "No ID provided in the URL.";
   } else {
-    fetch(API_BASE + "/stories/" + storyId)
-      .then(res => res.json())
-      .then(story => {
-          document.getElementById('story-title').textContent = story.title || "Untitled";
-          document.getElementById('story-summary').textContent = story.summary || "";
-          document.getElementById('story-author').innerHTML = 'by ' + (story.author || "Unknown");
-          document.getElementById('story-date').textContent = story.date_label || "No Date";
-          document.getElementById('story-location').textContent = story.place_name || "Istanbul";
-          document.getElementById('story-content').textContent = story.content || "No content available.";
-          
-          if (story.latitude && story.longitude) {
-            detailMap.setView([story.latitude, story.longitude], 15);
-            L.marker([story.latitude, story.longitude])
-              .addTo(detailMap)
-              .bindPopup('<div style="font-family:Inter,sans-serif;"><strong style="font-size:13px;">' + story.title + '</strong><br><span style="font-size:11px;color:#5f584c;">' + (story.place_name || "") + '</span></div>')
-              .openPopup();
-          } else {
-             document.getElementById('detail-map').parentElement.style.display = 'none';
-          }
-          
-          if (story.media_files && story.media_files.length > 0) {
-             const images = story.media_files.filter(m => m.media_type === "image");
-             if (images.length > 0) {
-                 document.getElementById('story-cover').style.backgroundImage = "url('" + images[0].media_url + "')";
-             }
-             
-             let mediaHtml = "";
-             story.media_files.forEach(m => {
-                 if (m.media_type === "image") {
-                     mediaHtml += '<img src="' + m.media_url + '" class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;">';
-                 } else if (m.media_type === "video") {
-                     mediaHtml += '<video src="' + m.media_url + '" controls class="w-full rounded-2xl border border-border shadow-sm object-cover" style="max-height: 300px;"></video>';
-                 } else if (m.media_type === "audio") {
-                     mediaHtml += '<div class="p-4 bg-background border border-border rounded-xl w-full flex flex-col gap-2"><span class="text-sm font-semibold material-symbols-outlined text-primary">audio</span><audio src="' + m.media_url + '" controls class="w-full"></audio></div>';
-                 }
-             });
-             document.getElementById('story-media').innerHTML = mediaHtml;
-          }
+    if (typeof setupSaveButton === "function") {
+      setupSaveButton(API_BASE, storyId);
+    }
+
+    fetch(API_BASE + "/stories/" + storyId + "?track_view=true")
+      .then(function (res) { return res.json(); })
+      .then(function (story) {
+         applyStoryDetail(story);
+
+         if (typeof renderTagChips === "function") {
+           renderTagChips(document.getElementById("story-tags"), story.tags || []);
+         }
+
+         if (isLoggedIn() && story.author) {
+           authFetch(API_BASE + "/auth/me")
+             .then(function (r) { return r.ok ? r.json() : null; })
+             .then(function (me) {
+               if (me && me.username === story.author) {
+                 var btnEdit = document.getElementById("btn-edit");
+                 btnEdit.href = "story-edit.html?id=" + encodeURIComponent(story.id || storyId);
+                 btnEdit.classList.remove("hidden");
+               }
+             })
+             .catch(function () {});
+         }
       })
-      .catch(err => {
+      .catch(function (err) {
          console.error("Error loading story details:", err);
          document.getElementById('story-title').textContent = "Failed to load story";
          document.getElementById('story-summary').textContent = "There was a problem communicating with the server.";
       });
   }
+
+  // ─── Report functionality ───────────────────────────────────────────────────
+  var selectedReportReason = null;
+  var reportReasonsList = [
+    { value: "inappropriate_content", label: "Inappropriate content" },
+    { value: "misinformation", label: "Misinformation" },
+    { value: "offensive_language", label: "Offensive language" }
+  ];
+
+  if (isLoggedIn()) {
+    document.getElementById("btn-report").classList.remove("hidden");
+    document.getElementById("btn-return-login").classList.add("hidden");
+  }
+
+  function setSubmitEnabled(enabled) {
+    var btn = document.getElementById("btn-submit-report");
+    btn.disabled = !enabled;
+    btn.style.opacity = enabled ? "1" : "0.4";
+    btn.style.cursor = enabled ? "" : "not-allowed";
+  }
+
+  function openReportModal() {
+    selectedReportReason = null;
+    setSubmitEnabled(false);
+    document.getElementById("btn-submit-report").textContent = "Submit Report";
+    var container = document.getElementById("report-reasons");
+    container.innerHTML = "";
+    reportReasonsList.forEach(function(reason) {
+      var label = document.createElement("label");
+      label.className = "flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer transition-all";
+      label.innerHTML =
+        '<input type="radio" name="report-reason" value="' + reason.value + '" class="accent-primary" onchange="onReasonChange(this)">' +
+        '<span class="text-sm text-textmain">' + reason.label + '</span>';
+      container.appendChild(label);
+    });
+    document.getElementById("report-modal").classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+  }
+
+  function onReasonChange(radio) {
+    selectedReportReason = radio.value;
+    document.querySelectorAll("#report-reasons label").forEach(function(l) {
+      l.style.borderColor = "";
+      l.style.backgroundColor = "";
+    });
+    radio.closest("label").style.borderColor = "#775a19";
+    radio.closest("label").style.backgroundColor = "rgba(119,90,25,0.07)";
+    setSubmitEnabled(true);
+  }
+
+  function closeReportModal() {
+    document.getElementById("report-modal").classList.add("hidden");
+    document.body.style.overflow = "";
+    selectedReportReason = null;
+  }
+
+  async function submitReport() {
+    if (!selectedReportReason || !storyId) return;
+    var btn = document.getElementById("btn-submit-report");
+    setSubmitEnabled(false);
+    btn.textContent = "Submitting...";
+    try {
+      var res = await authFetch(API_BASE + "/stories/" + storyId + "/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: selectedReportReason })
+      });
+      closeReportModal();
+      showToast(res.ok ? "success" : "error",
+        res.ok
+          ? "Report submitted. Thank you for helping keep the community safe."
+          : "Failed to submit report. Please try again.");
+    } catch (err) {
+      closeReportModal();
+      showToast("error", "Failed to submit report. Please try again.");
+    }
+  }
+
+  var toastTimer = null;
+  function showToast(type, message) {
+    var toast = document.getElementById("toast");
+    var icon = document.getElementById("toast-icon");
+    var msg = document.getElementById("toast-message");
+    icon.textContent = type === "success" ? "check_circle" : "error";
+    icon.style.color = type === "success" ? "#10b981" : "#ef4444";
+    msg.textContent = message;
+    toast.classList.remove("hidden");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { toast.classList.add("hidden"); }, 4000);
+  }
+
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeReportModal();
+  });
 </script>
+
+<!-- Report Modal -->
+<div id="report-modal" class="hidden fixed inset-0 z-[1100] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeReportModal()"></div>
+  <div class="relative w-full max-w-md rounded-3xl border border-border bg-surface p-8 shadow-soft">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h2 id="report-modal-title" class="font-headline text-xl font-bold text-textmain">Report Story</h2>
+        <p class="mt-1 text-sm text-textmuted">Help us keep the community safe.</p>
+      </div>
+      <button onclick="closeReportModal()" class="text-textmuted hover:text-textmain transition-colors -mt-1 -mr-1 p-1">
+        <span class="material-symbols-outlined text-xl">close</span>
+      </button>
+    </div>
+    <p class="text-sm font-semibold text-textmain mb-3">Reason for reporting</p>
+    <div id="report-reasons" class="space-y-2"></div>
+    <div class="mt-6 flex gap-3">
+      <button onclick="closeReportModal()" class="flex-1 rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Cancel</button>
+      <button id="btn-submit-report" onclick="submitReport()" disabled class="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95" style="opacity:0.4;cursor:not-allowed;">Submit Report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div id="toast" class="hidden fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-border bg-white px-5 py-4 shadow-soft">
+  <span id="toast-icon" class="material-symbols-outlined text-xl"></span>
+  <p id="toast-message" class="text-sm font-semibold text-textmain max-w-xs"></p>
+</div>
+
 </body>
 </html>

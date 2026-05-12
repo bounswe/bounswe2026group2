@@ -59,5 +59,6 @@ class MediaFile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     alt_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     story: Mapped["Story"] = relationship(back_populates="media_files")

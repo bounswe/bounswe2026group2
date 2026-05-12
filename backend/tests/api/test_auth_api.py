@@ -73,24 +73,33 @@ class TestRegistrationAPI:
 
     async def test_register_missing_fields(self, client):
         # Missing username
-        resp = await client.post("/auth/register", json={
-            "email": "missing@example.com",
-            "password": "ApiPass1!",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json={
+                "email": "missing@example.com",
+                "password": "ApiPass1!",
+            },
+        )
         assert resp.status_code == 422
 
         # Missing email
-        resp = await client.post("/auth/register", json={
-            "username": "missingmail",
-            "password": "ApiPass1!",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json={
+                "username": "missingmail",
+                "password": "ApiPass1!",
+            },
+        )
         assert resp.status_code == 422
 
         # Missing password
-        resp = await client.post("/auth/register", json={
-            "username": "misspwd",
-            "email": "misspwd@example.com",
-        })
+        resp = await client.post(
+            "/auth/register",
+            json={
+                "username": "misspwd",
+                "email": "misspwd@example.com",
+            },
+        )
         assert resp.status_code == 422
 
 
@@ -143,15 +152,21 @@ class TestLoginAPI:
 
     async def test_login_missing_fields(self, client):
         # Missing email
-        resp = await client.post("/auth/login", json={
-            "password": "AnyPass1!",
-        })
+        resp = await client.post(
+            "/auth/login",
+            json={
+                "password": "AnyPass1!",
+            },
+        )
         assert resp.status_code == 422
 
         # Missing password
-        resp = await client.post("/auth/login", json={
-            "email": "some@example.com",
-        })
+        resp = await client.post(
+            "/auth/login",
+            json={
+                "email": "some@example.com",
+            },
+        )
         assert resp.status_code == 422
 
 
@@ -175,27 +190,28 @@ class TestTokenVerificationAPI:
         )
         token = login_resp.json()["access_token"]
 
-        resp = await client.get(
-            "/auth/me", headers={"Authorization": f"Bearer {token}"}
-        )
+        resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["username"] == "meuser"
         assert data["email"] == "me@example.com"
+        assert data["bio"] is None
+        assert data["location"] is None
+        assert data["avatar_url"] is None
 
     async def test_me_without_token(self, client):
         resp = await client.get("/auth/me")
         assert resp.status_code == 401 or resp.status_code == 403
 
     async def test_me_with_invalid_token(self, client):
-        resp = await client.get(
-            "/auth/me", headers={"Authorization": "Bearer invalid.token.here"}
-        )
+        resp = await client.get("/auth/me", headers={"Authorization": "Bearer invalid.token.here"})
         assert resp.status_code == 401
 
     async def test_me_with_expired_token(self, client):
-        import jwt
         from datetime import datetime, timedelta, timezone
+
+        import jwt
+
         from app.core.config import settings
 
         expired_payload = {
@@ -204,10 +220,256 @@ class TestTokenVerificationAPI:
             "role": "user",
             "exp": datetime.now(timezone.utc) - timedelta(hours=1),
         }
-        expired_token = jwt.encode(
-            expired_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-        )
-        resp = await client.get(
-            "/auth/me", headers={"Authorization": f"Bearer {expired_token}"}
-        )
+        expired_token = jwt.encode(expired_payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+        resp = await client.get("/auth/me", headers={"Authorization": f"Bearer {expired_token}"})
         assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+class TestProfileUpdateAPI:
+    async def test_patch_me_updates_profile_fields(self, client):
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="profileuser",
+                email="profile@example.com",
+                password="ProfilePass1!",
+                display_name="Original Name",
+            ),
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="profile@example.com", password="ProfilePass1!"),
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.patch(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "display_name": "Updated Name",
+                "bio": "Local historian",
+                "location": "Istanbul, Turkey",
+            },
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["display_name"] == "Updated Name"
+        assert data["bio"] == "Local historian"
+        assert data["location"] == "Istanbul, Turkey"
+        assert data["email"] == "profile@example.com"
+
+    async def test_patch_me_allows_clearing_fields(self, client):
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="clearuser",
+                email="clear@example.com",
+                password="ClearPass1!",
+                display_name="Needs Clearing",
+            ),
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="clear@example.com", password="ClearPass1!"),
+        )
+        token = login_resp.json()["access_token"]
+
+        await client.patch(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "bio": "Has bio",
+                "location": "Has location",
+            },
+        )
+
+        resp = await client.patch(
+            "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "display_name": "   ",
+                "bio": "",
+                "location": " ",
+            },
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["display_name"] is None
+        assert data["bio"] is None
+        assert data["location"] is None
+
+
+@pytest.mark.asyncio
+class TestAvatarUploadAPI:
+    async def test_upload_avatar_returns_avatar_url(self, client, monkeypatch):
+        monkeypatch.setattr("app.services.auth_service.upload_bytes", lambda **kwargs: None)
+
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="avataruser",
+                email="avatar@example.com",
+                password="AvatarPass1!",
+                display_name="Avatar User",
+            ),
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="avatar@example.com", password="AvatarPass1!"),
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.post(
+            "/auth/me/avatar",
+            headers={"Authorization": f"Bearer {token}"},
+            files={"file": ("avatar.png", b"fake-png-bytes", "image/png")},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["avatar_url"] is not None
+        assert "/images/users/" in data["avatar_url"]
+
+    async def test_upload_avatar_rejects_unsupported_type(self, client):
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="badavatar",
+                email="badavatar@example.com",
+                password="AvatarPass1!",
+                display_name="Bad Avatar",
+            ),
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="badavatar@example.com", password="AvatarPass1!"),
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.post(
+            "/auth/me/avatar",
+            headers={"Authorization": f"Bearer {token}"},
+            files={"file": ("avatar.txt", b"not-an-image", "text/plain")},
+        )
+
+        assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestPasswordChangeAPI:
+    async def test_password_change_updates_login_credentials(self, client):
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="passworduser",
+                email="password@example.com",
+                password="OldPass1!",
+                display_name="Password User",
+            ),
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="password@example.com", password="OldPass1!"),
+        )
+        token = login_resp.json()["access_token"]
+
+        change_resp = await client.post(
+            "/auth/me/password",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "current_password": "OldPass1!",
+                "new_password": "NewPass1!",
+            },
+        )
+
+        assert change_resp.status_code == 204
+
+        old_login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="password@example.com", password="OldPass1!"),
+        )
+        assert old_login_resp.status_code == 401
+
+        new_login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="password@example.com", password="NewPass1!"),
+        )
+        assert new_login_resp.status_code == 200
+
+    async def test_password_change_rejects_wrong_current_password(self, client):
+        await client.post(
+            "/auth/register",
+            json=make_user_payload(
+                username="wrongcurrent",
+                email="wrongcurrent@example.com",
+                password="OldPass1!",
+                display_name="Wrong Current",
+            ),
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json=make_login_payload(email="wrongcurrent@example.com", password="OldPass1!"),
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.post(
+            "/auth/me/password",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "current_password": "WrongPass1!",
+                "new_password": "NewPass1!",
+            },
+        )
+
+        assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+class TestGoogleOAuthCallbackAPI:
+    """API-level tests for OAuth state (CSRF) validation on the callback endpoint."""
+
+    async def test_callback_rejects_missing_state_cookie(self, client):
+        resp = await client.get("/auth/google/callback?code=fake-code&state=some-state")
+        assert resp.status_code == 400
+
+    async def test_callback_rejects_mismatched_state(self, client):
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code&state=attacker-state",
+            cookies={"oauth_state": "real-state"},
+        )
+        assert resp.status_code == 400
+
+    async def test_callback_rejects_missing_state_query_param(self, client):
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code",
+            cookies={"oauth_state": "real-state"},
+        )
+        assert resp.status_code == 422
+
+    async def test_callback_redirects_to_frontend_with_token_fragment(self, client, monkeypatch):
+        from app.models.user import TokenResponse
+
+        async def fake_google_oauth_login(db, code):
+            assert code == "fake-code"
+            return TokenResponse(access_token="app-jwt-token")
+
+        monkeypatch.setattr("app.routers.auth.google_oauth_login", fake_google_oauth_login)
+        monkeypatch.setattr(
+            "app.routers.auth.settings.FRONTEND_GOOGLE_CALLBACK_URL",
+            "http://localhost:3000/oauth-callback.html",
+        )
+
+        resp = await client.get(
+            "/auth/google/callback?code=fake-code&state=real-state",
+            cookies={"oauth_state": "real-state"},
+            follow_redirects=False,
+        )
+
+        assert resp.status_code in (302, 307)
+        assert (
+            resp.headers["location"]
+            == "http://localhost:3000/oauth-callback.html#access_token=app-jwt-token&token_type=bearer"
+        )

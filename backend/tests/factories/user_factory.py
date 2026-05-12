@@ -2,7 +2,6 @@ from app.db.enums import UserRole
 from app.db.user import User
 from app.services.auth_service import hash_password
 
-
 DEFAULT_USERNAME = "testuser"
 DEFAULT_EMAIL = "test@example.com"
 DEFAULT_PASSWORD = "ValidPass1!"
@@ -65,7 +64,11 @@ def make_user_entity(
     role: UserRole = UserRole.USER,
     display_name: str | None = DEFAULT_DISPLAY_NAME,
     bio: str | None = None,
+    location: str | None = None,
+    avatar_bucket_name: str | None = None,
+    avatar_storage_key: str | None = None,
     is_active: bool = True,
+    is_restricted: bool = False,
     password_hash: str | None = None,
     suffix: int | str | None = None,
 ) -> User:
@@ -77,6 +80,10 @@ def make_user_entity(
         password_hash=password_hash or hash_password(password),
         display_name=display_name,
         bio=bio,
+        location=location,
+        avatar_bucket_name=avatar_bucket_name,
+        avatar_storage_key=avatar_storage_key,
         role=role,
         is_active=is_active,
+        is_restricted=is_restricted,
     )

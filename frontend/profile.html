@@ -48,47 +48,26 @@
 
 <body class="bg-background text-textmain font-body min-h-screen">
 
-  <!-- Top Navigation Bar -->
-  <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
-    <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
-      <div class="flex items-center gap-8">
-        <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
-        <nav class="hidden md:flex items-center gap-6">
-          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="map.html">Map</a>
-          <a class="text-textmain font-medium hover:text-tertiary transition-colors"
-            href="story-detail.html">Archive</a>
-          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="story-create.html">Create
-            Story</a>
-          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="index.html">Login</a>
-        </nav>
-      </div>
-      <div class="flex items-center gap-3 sm:gap-4">
-        <a href="profile.html"
-          class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary bg-primary/10 text-primary shadow-sm transition hover:bg-primary/20"
-          aria-label="Open profile">
-          <span class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
-        </a>
-      </div>
-    </div>
-  </header>
+  <!-- Top Navigation Bar (rendered by site-header.js) -->
+  <div id="site-header"></div>
 
   <main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14 max-w-7xl mx-auto">
     <!-- Profile Header Section -->
     <header
       class="mb-12 flex flex-col gap-6 md:flex-row md:items-center bg-surface p-8 rounded-3xl border border-border shadow-soft">
       <div
-        class="w-24 h-24 md:w-32 md:h-32 bg-primary/20 rounded-full flex items-center justify-center border-4 border-white shadow-sm shrink-0">
+        id="profile-avatar"
+        class="w-24 h-24 md:w-32 md:h-32 bg-primary/20 rounded-full flex items-center justify-center border-4 border-white shadow-sm shrink-0 overflow-hidden">
         <span class="material-symbols-outlined text-5xl md:text-6xl text-primary"
           style="font-variation-settings: 'FILL' 1;">person</span>
       </div>
       <div class="flex-1">
         <h1 id="profile-name" class="font-headline text-3xl md:text-4xl font-extrabold leading-tight text-textmain">
           Loading...</h1>
-        <p class="mt-2 text-textmuted text-base">Historian and native of Galata. Passionate about preserving the
-          auditory and visual memories of old Istanbul.</p>
+        <p id="profile-bio" class="mt-2 text-textmuted text-base"></p>
         <div class="mt-4 flex flex-wrap gap-4 text-sm font-medium text-textmuted">
-          <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">location_on</span>
-            Istanbul, Turkey</span>
+          <span id="profile-location" class="flex items-center gap-1"><span class="material-symbols-outlined text-[18px]">location_on</span>
+            </span>
           <span id="profile-joined" class="flex items-center gap-1"><span
               class="material-symbols-outlined text-[18px]">calendar_month</span> Joined...</span>
         </div>
@@ -114,16 +93,16 @@
               <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Stories</div>
             </div>
             <div class="text-center p-4 bg-background rounded-xl border border-border/50">
-              <div class="text-2xl font-bold text-tertiary">0</div>
+              <div id="stat-comments" class="text-2xl font-bold text-tertiary">0</div>
               <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Comments</div>
             </div>
             <div class="text-center p-4 bg-background rounded-xl border border-border/50">
-              <div class="text-2xl font-bold text-emerald-600">0</div>
+              <div id="stat-likes" class="text-2xl font-bold text-emerald-600">0</div>
               <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Likes</div>
             </div>
             <div class="text-center p-4 bg-background rounded-xl border border-border/50">
-              <div class="text-2xl font-bold text-orange-600">0</div>
-              <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Saved</div>
+              <div id="stat-views" class="text-2xl font-bold text-sky-600">0</div>
+              <div class="text-xs text-textmuted font-semibold uppercase tracking-wider mt-1">Views</div>
             </div>
           </div>
         </div>
@@ -131,7 +110,7 @@
         <!-- Badges Card -->
         <div class="bg-surface rounded-2xl p-6 border border-border shadow-sm">
           <h2 class="font-headline text-lg font-bold mb-4">Badges</h2>
-          <div class="flex flex-wrap gap-3">
+          <div id="profile-badges" class="grid grid-cols-3 gap-3">
             <p class="text-sm text-textmuted italic">No badges earned yet.</p>
           </div>
         </div>
@@ -158,7 +137,9 @@
 
   <script src="config.js"></script>
   <script src="auth.js"></script>
-  <script src="profile.js"></script>
+  <script src="site-header.js"></script>
+  <script>mountSiteHeader();</script>
+  <script src="profile.js?v=1"></script>
 </body>
 
 </html>

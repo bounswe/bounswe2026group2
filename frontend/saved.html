@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local History Map - Saved Stories</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:wght@700;800&display=swap"
+    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            background: "#fef9f0",
+            surface: "#ffffff",
+            primary: "#775a19",
+            "primary-light": "#c5a059",
+            secondary: "#506169",
+            tertiary: "#35618f",
+            border: "#e7e2d9",
+            textmain: "#1d1c16",
+            textmuted: "#5f584c"
+          },
+          fontFamily: {
+            body: ["Inter", "sans-serif"],
+            headline: ["Noto Serif", "serif"]
+          },
+          boxShadow: {
+            soft: "0 20px 50px rgba(0,0,0,0.08)"
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    }
+  </style>
+</head>
+
+<body class="bg-background text-textmain font-body min-h-screen">
+
+  <!-- Top Navigation Bar (rendered by site-header.js) -->
+  <div id="site-header"></div>
+
+  <main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14 max-w-5xl mx-auto">
+    <header class="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div>
+        <h1 class="font-headline text-3xl md:text-4xl font-extrabold leading-tight text-textmain">Saved Stories</h1>
+        <p class="mt-2 text-textmuted">Stories you've bookmarked for later. They stay here until you remove them.</p>
+      </div>
+      <p id="saved-count" class="text-sm text-textmuted"></p>
+    </header>
+
+    <div id="saved-container" class="space-y-4">
+      <div class="text-center p-8">
+        <p class="text-textmuted italic">Loading your saved stories...</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+  <script src="site-header.js"></script>
+  <script>mountSiteHeader();</script>
+  <script src="saved.js"></script>
+</body>
+
+</html>

@@ -15,139 +15,10 @@
         rel="stylesheet">
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     <script>
-        let profileButton;
-        let profileButtonIcon;
-        let profileButtonInitials;
-        let profileMenu;
-        let profileMenuState;
-        let profileMenuActions;
-        let profileMenuUser;
-        let profileMenuName;
-        let profileMenuEmail;
-        let currentUser = null;
-
-        function getProfileLabel(user) {
-            if (!user) return "";
-            return (user.display_name || user.username || user.email || "").trim();
-        }
-
-        function getProfileInitials(user) {
-            var label = getProfileLabel(user);
-            if (!label) return "";
-
-            return label
-                .split(/\s+/)
-                .filter(Boolean)
-                .slice(0, 2)
-                .map(function (part) {
-                    return part.charAt(0).toUpperCase();
-                })
-                .join("");
-        }
-
-        function setProfileButton(user) {
-            var initials = getProfileInitials(user);
-
-            if (initials) {
-                profileButtonIcon.classList.add("hidden");
-                profileButtonInitials.textContent = initials;
-                profileButtonInitials.classList.remove("hidden");
-                profileButtonInitials.classList.add("inline-flex");
-                profileButton.setAttribute("aria-label", "Open account menu for " + getProfileLabel(user));
-                return;
-            }
-
-            profileButtonIcon.classList.remove("hidden");
-            profileButtonInitials.textContent = "";
-            profileButtonInitials.classList.add("hidden");
-            profileButtonInitials.classList.remove("inline-flex");
-            profileButton.setAttribute("aria-label", "Open account menu");
-        }
-
-        function closeProfileMenu() {
-            profileMenu.hidden = true;
-            profileButton.setAttribute("aria-expanded", "false");
-        }
-
-        function openProfileMenu() {
-            profileMenu.hidden = false;
-            profileButton.setAttribute("aria-expanded", "true");
-        }
-
-        function toggleProfileMenu() {
-            if (profileMenu.hidden) {
-                openProfileMenu();
-                return;
-            }
-
-            closeProfileMenu();
-        }
-
-        function renderProfileMenu() {
-            profileMenuActions.innerHTML = "";
-
-            if (!currentUser) {
-                profileMenuState.textContent = "Sign in to create stories and manage your account.";
-                profileMenuUser.classList.add("hidden");
-
-                var signInLink = document.createElement("a");
-                signInLink.href = "index.html";
-                signInLink.className = "flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95";
-                signInLink.textContent = "Sign In";
-                signInLink.setAttribute("role", "menuitem");
-                profileMenuActions.appendChild(signInLink);
-                setProfileButton(null);
-                return;
-            }
-
-            profileMenuState.textContent = "Signed in";
-            profileMenuUser.classList.remove("hidden");
-            profileMenuName.textContent = getProfileLabel(currentUser);
-            profileMenuEmail.textContent = currentUser.email || "";
-
-            var profileLink = document.createElement("a");
-            profileLink.href = "profile.html";
-            profileLink.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-primary transition hover:bg-stone-50";
-            profileLink.textContent = "View Profile";
-            profileLink.setAttribute("role", "menuitem");
-            profileMenuActions.appendChild(profileLink);
-
-            var signOutButton = document.createElement("button");
-            signOutButton.type = "button";
-            signOutButton.className = "flex w-full items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50";
-            signOutButton.textContent = "Sign Out";
-            signOutButton.setAttribute("role", "menuitem");
-            signOutButton.addEventListener("click", function () {
-                logout();
-            });
-            profileMenuActions.appendChild(signOutButton);
-            setProfileButton(currentUser);
-        }
-
-        async function loadCurrentUser() {
-            currentUser = null;
-            renderProfileMenu();
-
-            if (!isLoggedIn()) {
-                return;
-            }
-
-            try {
-                var response = await authFetch(API_BASE + "/auth/me");
-                if (!response.ok) {
-                    localStorage.removeItem(AUTH_TOKEN_KEY);
-                    renderProfileMenu();
-                    return;
-                }
-
-                currentUser = await response.json();
-                renderProfileMenu();
-            } catch (err) {
-                profileMenuState.textContent = "Unable to load account details right now.";
-                setProfileButton(null);
-            }
-        }
+        // Profile button + dropdown live in site-header.js (shared across pages).
         tailwind.config = {
             theme: {
                 extend: {
@@ -227,6 +98,218 @@
             transform: scale(1.1);
         }
 
+        /* ── Custom cluster styles ── */
+        /* Strip the default Leaflet.markercluster look so our custom HTML wins */
+        .marker-cluster,
+        .marker-cluster div,
+        .marker-cluster-small,
+        .marker-cluster-medium,
+        .marker-cluster-large,
+        .marker-cluster-small div,
+        .marker-cluster-medium div,
+        .marker-cluster-large div {
+            background: none !important;
+            background-color: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+        }
+        .marker-cluster span {
+            line-height: 1 !important;
+        }
+
+        /* Style 1: warm brown disc with gold ring + serif count */
+        .cluster-warm {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            background: #775a19;
+            color: #fff8e6;
+            border: 2px solid #c5a059;
+            box-shadow: 0 8px 24px rgba(119, 90, 25, 0.35), inset 0 0 0 3px rgba(255, 255, 255, 0.08);
+            font-family: "Noto Serif", serif;
+            font-weight: 700;
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .cluster-warm:hover {
+            transform: scale(1.07);
+            box-shadow: 0 12px 28px rgba(119, 90, 25, 0.45), inset 0 0 0 3px rgba(255, 255, 255, 0.12);
+        }
+        .cluster-warm.tier-sm { width: 38px; height: 38px; font-size: 14px; }
+        .cluster-warm.tier-md { width: 46px; height: 46px; font-size: 16px; }
+        .cluster-warm.tier-lg { width: 56px; height: 56px; font-size: 18px; }
+
+        /* Style 2: outlined cream chip */
+        .cluster-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px 6px 8px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(6px);
+            border: 1.5px solid #775a19;
+            border-radius: 9999px;
+            color: #775a19;
+            font-family: "Inter", sans-serif;
+            font-weight: 700;
+            font-size: 13px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+            transition: transform 0.18s ease, background 0.18s ease;
+            white-space: nowrap;
+        }
+        .cluster-chip:hover {
+            transform: translateY(-1px);
+            background: #fff;
+        }
+        .cluster-chip .cluster-chip-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 9999px;
+            background: #775a19;
+            box-shadow: 0 0 0 3px rgba(119, 90, 25, 0.18);
+            flex: 0 0 auto;
+        }
+
+        /* Style 3: stacked stories — looks like a small stack of paper cards */
+        .cluster-stack {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cluster-stack-card {
+            position: absolute;
+            inset: 0;
+            background: #fff8e6;
+            border: 1.5px solid #775a19;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+        }
+        .cluster-stack-card.back2 {
+            transform: translate(6px, 6px) rotate(6deg);
+            background: #f3e7c8;
+            opacity: 0.7;
+        }
+        .cluster-stack-card.back1 {
+            transform: translate(3px, 3px) rotate(-4deg);
+            background: #f6ecd4;
+            opacity: 0.85;
+        }
+        .cluster-stack-count {
+            position: relative;
+            z-index: 2;
+            font-family: "Noto Serif", serif;
+            font-weight: 800;
+            font-size: 14px;
+            color: #1d1c16;
+        }
+        .cluster-stack-badge {
+            position: absolute;
+            top: -6px;
+            right: -8px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            border-radius: 9999px;
+            background: #c5a059;
+            color: #1d1c16;
+            font-size: 10px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #fff;
+            z-index: 3;
+            line-height: 1;
+        }
+        .cluster-stack:hover .cluster-stack-card.back2 {
+            transform: translate(8px, 8px) rotate(8deg);
+        }
+        .cluster-stack:hover .cluster-stack-card.back1 {
+            transform: translate(4px, 4px) rotate(-6deg);
+        }
+
+        /* Multi-location story marker — tertiary blue with a route badge */
+        .story-marker.multi {
+            background: #35618f;
+            border-color: #ffffff;
+            position: relative;
+        }
+        .story-marker.multi::after {
+            content: attr(data-count);
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 4px;
+            border-radius: 9999px;
+            background: #c5a059;
+            color: #1d1c16;
+            font-size: 10px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #ffffff;
+            line-height: 1;
+        }
+
+        /* Focus mode banner */
+        #focus-banner {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px 10px 18px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            border: 1px solid #e7e2d9;
+            border-radius: 9999px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+            font-family: Inter, sans-serif;
+            font-size: 13px;
+            color: #1d1c16;
+            max-width: calc(100% - 32px);
+        }
+        #focus-banner.visible {
+            display: inline-flex;
+        }
+        #focus-banner .focus-banner-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 9999px;
+            background: #35618f;
+            flex: 0 0 auto;
+        }
+        #focus-banner .focus-banner-title {
+            font-weight: 700;
+            max-width: 16rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #focus-banner button {
+            border: none;
+            background: #1d1c16;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            cursor: pointer;
+            transition: opacity 0.15s ease;
+        }
+        #focus-banner button:hover {
+            opacity: 0.9;
+        }
+
         /* Story popup card */
         .leaflet-popup-content-wrapper {
             border-radius: 16px !important;
@@ -264,61 +347,130 @@
             border-radius: 4px;
         }
 
-        #profile-menu[hidden] {
-            display: none;
+        /* User location: pulsing blue dot like Google/Apple Maps */
+        .user-location-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #1a73e8;
+            border: 3px solid #ffffff;
+            box-shadow: 0 0 0 1px rgba(26, 115, 232, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+            position: relative;
         }
-    </style>
+
+        .user-location-dot::before {
+            content: "";
+            position: absolute;
+            inset: -10px;
+            border-radius: 50%;
+            background: rgba(26, 115, 232, 0.25);
+            animation: user-loc-pulse 1.8s ease-out infinite;
+        }
+
+        @keyframes user-loc-pulse {
+            0%   { transform: scale(0.6); opacity: 0.8; }
+            100% { transform: scale(1.6); opacity: 0;   }
+        }
+
+        .distance-btn {
+            padding: 5px 12px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid #e7e2d9;
+            background: white;
+            color: #5f584c;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .distance-btn.active {
+            background: #1d1c16;
+            color: white;
+            border-color: #1d1c16;
+        }
+        .distance-btn:hover:not(.active) {
+            border-color: #c5a059;
+            color: #775a19;
+        }
+</style>
 </head>
 
 <body class="bg-background text-textmain font-body md:overflow-hidden">
 
-    <!-- Top Navigation Bar -->
-    <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
-        <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
-            <div class="flex items-center">
-                <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
-            </div>
-            <div class="flex items-center gap-3 sm:gap-4">
-                <!-- Search -->
-                <form id="search-form" class="relative hidden sm:flex items-center gap-2" action="search.html" method="get">
-                    <div class="relative">
-                        <span
-                            class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl">search</span>
-                        <input id="search-input" name="q"
-                            class="pl-10 pr-4 py-2 bg-white border border-border rounded-xl w-72 text-sm focus:border-primary focus:ring-primary transition-all"
-                            placeholder="Search stories by location..." type="text" autocomplete="off" />
-                    </div>
-                </form>
-                <div class="relative">
-                    <button id="btn-profile" type="button"
-                        class="inline-flex h-11 min-w-11 items-center justify-center rounded-full border border-border bg-white px-2 text-textmain shadow-sm transition hover:bg-stone-50"
-                        aria-label="Open account menu" aria-haspopup="menu" aria-expanded="false">
-                        <span id="profile-button-icon"
-                            class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
-                        <span id="profile-button-initials"
-                            class="hidden h-7 min-w-7 items-center justify-center rounded-full bg-primary text-xs font-bold uppercase text-white"></span>
-                    </button>
-                    <div id="profile-menu" hidden
-                        class="absolute right-0 top-[calc(100%+0.75rem)] w-72 rounded-2xl border border-border bg-white p-2 shadow-soft"
-                        role="menu" aria-labelledby="btn-profile">
-                        <div id="profile-menu-state" class="px-4 py-3 text-sm text-textmuted">
-                            Checking account status...
-                        </div>
-                        <div id="profile-menu-actions" class="space-y-1"></div>
-                        <div id="profile-menu-user" class="hidden border-t border-border/70 px-4 py-3">
-                            <p id="profile-menu-name" class="text-sm font-semibold text-textmain"></p>
-                            <p id="profile-menu-email" class="mt-1 text-xs text-textmuted break-all"></p>
-                        </div>
-                    </div>
+    <!-- Top Navigation Bar (rendered by site-header.js) -->
+    <div id="site-header"></div>
+
+    <!-- Map Filter Panel (fixed below header, toggled by the Filters button in the header) -->
+    <div id="map-filter-panel" class="hidden fixed w-72 rounded-2xl border border-border bg-white shadow-soft z-[1050] p-5">
+        <div class="flex flex-col gap-5">
+            <!-- Year Range -->
+            <div>
+                <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Year Range</label>
+                <div class="flex items-center gap-2">
+                    <input id="map-filter-year-from" type="number" placeholder="from" min="1" max="9999"
+                        class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
+                    <span class="text-textmuted shrink-0 text-sm">—</span>
+                    <input id="map-filter-year-to" type="number" placeholder="to" min="1" max="9999"
+                        class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
                 </div>
             </div>
+            <!-- Distance -->
+            <div>
+                <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Distance</label>
+                <div class="flex flex-wrap gap-1.5">
+                    <button type="button" class="map-distance-btn distance-btn active" data-value="">Anywhere</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="1000">1 km</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="5000">5 km</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="10000">10 km</button>
+                    <button type="button" class="map-distance-btn distance-btn" data-value="25000">25 km</button>
+                </div>
+                <p class="mt-2 text-[11px] text-textmuted">Uses your current location</p>
+            </div>
+            <!-- Tags -->
+            <div>
+                <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Tags</label>
+                <div id="map-filter-panel-tags" class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]"></div>
+                <div class="flex items-center gap-2">
+                    <input id="map-filter-panel-tag-input" type="text" placeholder="Tag name..."
+                        class="hidden text-xs border border-border rounded-full px-3 py-1.5 outline-none focus:border-primary w-28 text-textmain placeholder:text-textmuted/50"
+                        onkeydown="if(event.key==='Enter'){event.preventDefault();addMapPanelTag();}" />
+                    <button id="map-filter-panel-add-tag-btn" type="button"
+                        class="inline-flex items-center gap-1 text-xs font-semibold text-primary border border-primary/30 bg-[rgba(119,90,25,0.05)] rounded-full px-3 py-1.5 hover:bg-[rgba(119,90,25,0.1)] transition-colors">
+                        <span class="material-symbols-outlined" style="font-size:14px;line-height:1.2;">add</span>
+                        Add tag
+                    </button>
+                </div>
+            </div>
+            <!-- Actions -->
+            <div class="pt-4 border-t border-border/30 flex items-center justify-end gap-3">
+                <button id="map-filter-reset-btn" type="button"
+                    class="px-4 py-2 text-sm font-semibold text-textmuted border border-border rounded-xl hover:border-primary/50 hover:text-textmain transition-all">
+                    Reset
+                </button>
+                <button id="map-filter-apply-btn" type="button"
+                    class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-xl hover:opacity-95 transition-all shadow-sm">
+                    Apply
+                </button>
+            </div>
         </div>
-    </header>
+    </div>
 
     <!-- Map Container -->
     <main class="relative w-full pt-[68px] md:h-screen">
         <div class="relative h-[58vh] min-h-[360px] md:h-[calc(100vh-68px)]">
             <div id="map" class="absolute inset-0 md:top-0"></div>
+
+            <!-- Focus mode banner (multi-location story view) -->
+            <div id="focus-banner" role="status" aria-live="polite">
+                <span class="focus-banner-dot" aria-hidden="true"></span>
+                <span>
+                    <span class="focus-banner-title" id="focus-banner-title">Story focus</span>
+                    <span style="display:block;font-size:11px;color:#5f584c;margin-top:2px;">
+                        <span id="focus-banner-count">0</span> locations · other stories hidden
+                    </span>
+                </span>
+                <button type="button" id="btn-exit-focus" aria-label="Exit story focus mode">Exit focus</button>
+            </div>
 
             <!-- Map Layer Toggle -->
             <div class="absolute left-4 top-20 z-[1000] flex flex-col gap-2 md:top-40">
@@ -333,6 +485,7 @@
                     <span class="material-symbols-outlined text-xl">my_location</span>
                 </button>
             </div>
+
 
             <!-- Story Count Badge -->
             <div class="absolute bottom-6 left-4 z-[1000] md:bottom-8 md:left-8">
@@ -354,6 +507,13 @@
             </div>
         </div>
 
+        <!-- Reopen sidebar button (right side, desktop only) -->
+        <button id="btn-open-sidebar"
+            class="hidden absolute top-48 right-4 z-[1000] glass-panel w-11 h-11 items-center justify-center rounded-xl text-primary shadow-sm hover:bg-white transition-colors border border-border/30 md:flex"
+            title="Show recent stories">
+            <span class="material-symbols-outlined text-xl">menu_open</span>
+        </button>
+
         <!-- Discovery Sidebar -->
         <aside id="sidebar"
             class="relative z-[1000] m-4 mt-5 glass-panel rounded-2xl p-5 shadow-sm border border-border/20 md:absolute md:top-48 md:right-4 md:m-0 md:mt-0 md:w-72 md:max-h-[calc(100vh-296px)] md:overflow-y-auto">
@@ -372,24 +532,74 @@
 
     <script src="config.js"></script>
     <script src="auth.js"></script>
+    <script src="site-header.js"></script>
+    <script src="anonymous.js"></script>
+    <script src="multi-location.js"></script>
+    <script src="search-filters.js"></script>
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <script>
-        profileButton = document.getElementById("btn-profile");
-        profileButtonIcon = document.getElementById("profile-button-icon");
-        profileButtonInitials = document.getElementById("profile-button-initials");
-        profileMenu = document.getElementById("profile-menu");
-        profileMenuState = document.getElementById("profile-menu-state");
-        profileMenuActions = document.getElementById("profile-menu-actions");
-        profileMenuUser = document.getElementById("profile-menu-user");
-        profileMenuName = document.getElementById("profile-menu-name");
-        profileMenuEmail = document.getElementById("profile-menu-email");
+        mountSiteHeader({
+            extraCenter:
+                '<div class="flex items-center gap-2 w-full max-w-xl">' +
+                '<form id="search-form" class="relative flex flex-1 items-center" action="search.html" method="get">' +
+                '<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl pointer-events-none">search</span>' +
+                '<input id="search-input" name="q" type="text" autocomplete="off"' +
+                ' class="w-full pl-10 pr-4 py-2 bg-white border border-border rounded-xl text-sm focus:border-primary focus:ring-primary transition-all"' +
+                ' placeholder="Search stories by location..." />' +
+                '</form>' +
+                '<button id="map-filters-toggle-btn" type="button"' +
+                ' class="inline-flex items-center gap-1.5 bg-white border border-border text-textmuted px-4 py-2 rounded-xl text-sm font-semibold hover:border-primary/50 hover:text-textmain transition-all shrink-0">' +
+                '<span class="material-symbols-outlined text-xl">tune</span>' +
+                '<span class="hidden sm:inline">Filters</span>' +
+                '</button>' +
+                '</div>'
+        });
+
+        // ─── Map filter state ───
+        var mapFilterYearFrom = "";
+        var mapFilterYearTo = "";
+        var mapFilterDistance = "";
+        var mapFilterTags = [];
+        var mapFilterPanelTags = [];
+
+        function haversineKm(lat1, lng1, lat2, lng2) {
+            var R = 6371;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLng = (lng2 - lng1) * Math.PI / 180;
+            var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function applyMapFilters(stories) {
+            var result = stories || [];
+            if (mapFilterDistance !== "" && !nearMeActive) {
+                var maxKm = parseFloat(mapFilterDistance) / 1000;
+                var center = map.getCenter();
+                result = result.filter(function (story) {
+                    if (!hasStoryCoordinates(story)) return true;
+                    return haversineKm(center.lat, center.lng, Number(story.latitude), Number(story.longitude)) <= maxKm;
+                });
+            }
+            return result;
+        }
+
+        function refreshMapDisplay() {
+            var filtered = applyMapFilters(cachedStories);
+            loadStories(filtered);
+            populateSidebar(filtered);
+        }
+
         // ─── Story fetching ───
         var cachedStories = [];
         var fetchTimeout = null;
 
         async function fetchStoriesInBounds() {
+            if (nearMeActive) return;
             var bounds = map.getBounds();
             var params = new URLSearchParams({
                 min_lat: Math.max(-90, bounds.getSouthWest().lat),
@@ -397,14 +607,16 @@
                 min_lng: Math.max(-180, bounds.getSouthWest().lng),
                 max_lng: Math.min(180, bounds.getNorthEast().lng)
             });
+            mapFilterTags.forEach(function (t) { params.append("tags", t); });
+            if (mapFilterYearFrom !== "") params.append("query_start", mapFilterYearFrom);
+            if (mapFilterYearTo !== "") params.append("query_end", mapFilterYearTo);
 
             try {
                 var response = await fetch(API_BASE + "/stories?" + params.toString());
                 if (!response.ok) throw new Error("Failed to fetch stories");
                 var data = await response.json();
                 cachedStories = data.stories || [];
-                loadStories(cachedStories);
-                populateSidebar(cachedStories);
+                refreshMapDisplay();
             } catch (err) {
                 console.error("Error fetching stories:", err);
                 document.getElementById("story-count").textContent = "Failed to load stories";
@@ -439,6 +651,7 @@
         osmLayer.addTo(map);
         let currentLayer = "osm";
 
+
         // Zoom controls (Leaflet default position overridden by CSS, but we add custom)
         L.control.zoom({ position: "topleft" }).addTo(map);
 
@@ -455,21 +668,183 @@
             }
         });
 
-        // ─── Geolocation ───
-        document.getElementById("btn-locate").addEventListener("click", function () {
-            if (!navigator.geolocation) return;
+        // ─── Stories Near Me ───
+        var nearMeActive = false;
+        var nearMeRadiusKm = 5;
+        var userLocationMarker = null;
+        var userAccuracyCircle = null;
+        var radiusCircle = null;
+        var lastUserLatLng = null;
+
+
+        function userLocationIcon() {
+            return L.divIcon({
+                className: "",
+                html: '<div class="user-location-dot"></div>',
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
+            });
+        }
+
+        function clearUserLocationLayers() {
+            if (userLocationMarker) { map.removeLayer(userLocationMarker); userLocationMarker = null; }
+            if (userAccuracyCircle) { map.removeLayer(userAccuracyCircle); userAccuracyCircle = null; }
+            if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+        }
+
+        function renderUserLocation(latlng, accuracy) {
+            if (userLocationMarker) {
+                userLocationMarker.setLatLng(latlng);
+            } else {
+                userLocationMarker = L.marker(latlng, {
+                    icon: userLocationIcon(),
+                    interactive: false,
+                    keyboard: false,
+                    zIndexOffset: 1000
+                }).addTo(map);
+            }
+
+            if (accuracy && accuracy > 0) {
+                if (userAccuracyCircle) {
+                    userAccuracyCircle.setLatLng(latlng);
+                    userAccuracyCircle.setRadius(accuracy);
+                } else {
+                    userAccuracyCircle = L.circle(latlng, {
+                        radius: accuracy,
+                        color: "#1a73e8",
+                        weight: 1,
+                        opacity: 0.4,
+                        fillColor: "#1a73e8",
+                        fillOpacity: 0.08,
+                        interactive: false
+                    }).addTo(map);
+                }
+            }
+        }
+
+        function renderRadiusCircle(latlng, radiusKm) {
+            var meters = radiusKm * 1000;
+            if (radiusCircle) {
+                radiusCircle.setLatLng(latlng);
+                radiusCircle.setRadius(meters);
+            } else {
+                radiusCircle = L.circle(latlng, {
+                    radius: meters,
+                    color: "#775a19",
+                    weight: 2,
+                    opacity: 0.6,
+                    dashArray: "6 6",
+                    fillColor: "#c5a059",
+                    fillOpacity: 0.08,
+                    interactive: false
+                }).addTo(map);
+            }
+        }
+
+        async function fetchNearbyStories(lat, lng, radiusKm) {
+            var params = new URLSearchParams({ lat: lat, lng: lng, radius_km: radiusKm });
+            mapFilterTags.forEach(function (t) { params.append("tags", t); });
+            if (mapFilterYearFrom !== "") params.append("query_start", mapFilterYearFrom);
+            if (mapFilterYearTo !== "") params.append("query_end", mapFilterYearTo);
+            try {
+                var response = await fetch(API_BASE + "/stories/nearby?" + params.toString());
+                if (!response.ok) throw new Error("Failed to fetch nearby stories");
+                var data = await response.json();
+                cachedStories = data.stories || [];
+                refreshMapDisplay();
+            } catch (err) {
+                console.error("Error fetching nearby stories:", err);
+                document.getElementById("story-count").textContent = "Failed to load stories";
+            }
+        }
+
+        function zoomForRadiusKm(radiusKm) {
+            // Pick a zoom level that keeps the radius circle comfortably in view.
+            if (radiusKm <= 1) return 15;
+            if (radiusKm <= 5) return 13;
+            if (radiusKm <= 10) return 12;
+            if (radiusKm <= 25) return 11;
+            return 10;
+        }
+
+        function fitToRadius(latlng, radiusKm) {
+            try {
+                map.flyTo(latlng, zoomForRadiusKm(radiusKm), { duration: FLY_DURATION });
+            } catch (err) {
+                console.error("fitToRadius failed:", err);
+            }
+        }
+
+        function activateNearMe() {
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported in this browser.");
+                return;
+            }
+
+            var NEAR_ME_CONSENT_KEY = "nearMeConsent";
+            var alreadyConsented = false;
+            try { alreadyConsented = localStorage.getItem(NEAR_ME_CONSENT_KEY) === "1"; } catch (_) {}
+
+            if (!alreadyConsented) {
+                var consent = window.confirm(
+                    "Use your current location to show stories nearby?\n\n" +
+                    "Your browser will ask permission next. Your location stays on this device."
+                );
+                if (!consent) return;
+                try { localStorage.setItem(NEAR_ME_CONSENT_KEY, "1"); } catch (_) {}
+            }
+
+            nearMeActive = true;
+            cachedStories = [];
+            loadStories([]);
+            populateSidebar([]);
+
             navigator.geolocation.getCurrentPosition(
                 function (pos) {
-                    map.setView([pos.coords.latitude, pos.coords.longitude], 15);
+                    var latlng = [pos.coords.latitude, pos.coords.longitude];
+                    lastUserLatLng = latlng;
+
+                    try { renderUserLocation(latlng, pos.coords.accuracy); }
+                    catch (e) { console.error("renderUserLocation failed:", e); }
+
+                    try { renderRadiusCircle(latlng, nearMeRadiusKm); }
+                    catch (e) { console.error("renderRadiusCircle failed:", e); }
+
+                    fitToRadius(latlng, nearMeRadiusKm);
+                    fetchNearbyStories(latlng[0], latlng[1], nearMeRadiusKm);
                 },
-                function () {
-                    alert("Unable to access your location.");
-                }
+                function (err) {
+                    console.error("Geolocation error:", err);
+                    deactivateNearMe();
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
             );
-        });
+        }
+
+        function deactivateNearMe() {
+            nearMeActive = false;
+            clearUserLocationLayers();
+            lastUserLatLng = null;
+            fetchStoriesInBounds();
+        }
+
 
         // ─── Create Markers ───
-        function createMarkerIcon() {
+        function createMarkerIcon(story) {
+            var multi = hasMultipleLocations(story);
+            if (multi) {
+                var count = story.locations.length;
+                return L.divIcon({
+                    className: "",
+                    html:
+                        '<div class="story-marker multi" data-count="' + count + '" title="Multi-location story (' + count + ' pins)">' +
+                        '<span class="material-symbols-outlined" style="font-size:18px;">route</span>' +
+                        '</div>',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20],
+                    popupAnchor: [0, -24]
+                });
+            }
             return L.divIcon({
                 className: "",
                 html: '<div class="story-marker"><span class="material-symbols-outlined" style="font-size:18px;">auto_stories</span></div>',
@@ -485,6 +860,11 @@
                 : (story.content || "");
             var placeName = story.place_name || "";
             var dateLabel = story.date_label || "";
+            var storyLat = Number(story.latitude);
+            var storyLng = Number(story.longitude);
+            var timelineLink = Number.isFinite(storyLat) && Number.isFinite(storyLng)
+                ? '<a href="timeline.html?lat=' + encodeURIComponent(storyLat) + '&lng=' + encodeURIComponent(storyLng) + '&radius_km=1" style="font-size:12px;color:#35618f;font-weight:700;text-decoration:none;">View Timeline</a>'
+                : '';
 
             var dateBadge = dateLabel ? '<div style="position:absolute;top:8px;left:8px;padding:2px 8px;background:#775a19;color:white;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-radius:6px;">' + dateLabel + '</div>' : '';
 
@@ -492,37 +872,351 @@
                 ? '<div style="height:100px;position:relative;"><img src="' + coverImage + '" style="width:100%;height:100%;object-fit:cover;" alt="">' + dateBadge + '</div>'
                 : '<div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">' +
                   '<span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>' + dateBadge + '</div>';
+            var reportBtn = isLoggedIn()
+                ? '<button onclick="openReportModal(\'' + story.id + '\')" title="Report story" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:none;border:1px solid #e7e2d9;cursor:pointer;color:#dc2626;flex-shrink:0;">' +
+                  '<span class="material-symbols-outlined" style="font-size:14px;">flag</span></button>'
+                : '';
 
             return '<div style="width:300px;">' +
                 headerHtml +
-                '<div style="padding:16px;">' +
-                '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">' + story.title + '</h3>' +
-                '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
-                '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-                (placeName ? '<span style="font-size:11px;color:#35618f;font-weight:600;">' + placeName + '</span>' : '<span></span>') +
-                '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read Story →</a>' +
-                '</div></div></div>';
+                '<div style="padding:14px 16px 14px;">' +
+                '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 4px 0;line-height:1.3;">' + story.title + '</h3>' +
+                '<p style="font-size:11px;color:#5f584c;margin:0 0 8px 0;' + (isAnonymousStory(story) ? 'font-style:italic;' : '') + '">' + getAuthorByLine(story) + '</p>' +
+                '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"' + preview + '"</p>' +
+                (story.tags && story.tags.length > 0
+                    ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">' +
+                      story.tags.slice(0, 4).map(function(t) {
+                          var name = typeof t === 'string' ? t : (t && t.name ? t.name : '');
+                          return name ? '<span style="display:inline-flex;align-items:center;border-radius:999px;border:1px solid #e7e2d9;background:rgba(119,90,25,0.08);padding:2px 10px;font-size:11px;font-weight:600;color:#775a19;">' + name + '</span>' : '';
+                      }).join('') +
+                      '</div>'
+                    : '') +
+                '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+                (placeName ? '<span style="font-size:11px;color:#5f584c;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + placeName + '</span>' : '<span style="flex:1;"></span>') +
+                '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
+                reportBtn +
+                timelineLink +
+                '<a href="story-detail.html?id=' + story.id + '" style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:#775a19;color:#fff;font-size:12px;font-weight:700;text-decoration:none;border-radius:8px;">Read Story</a>' +
+                '</div></div></div></div>';
         }
 
         const markers = [];
 
+        // ─── Custom cluster icon builders (3 styles — swap via setClusterStyle) ───
+        var CLUSTER_STYLES = {
+            warm: function (cluster) {
+                var count = cluster.getChildCount();
+                var size = count < 10 ? 38 : count < 50 ? 46 : 56;
+                var tier = count < 10 ? "tier-sm" : count < 50 ? "tier-md" : "tier-lg";
+                return L.divIcon({
+                    html: '<div class="cluster-warm ' + tier + '">' + count + '</div>',
+                    className: "",
+                    iconSize: [size, size],
+                    iconAnchor: [size / 2, size / 2]
+                });
+            },
+            chip: function (cluster) {
+                var count = cluster.getChildCount();
+                // Width varies with the count text — estimate it so the anchor
+                // sits at the chip's visual center instead of its top-left.
+                var label = count + " " + (count === 1 ? "story" : "stories");
+                var width = Math.max(96, 36 + label.length * 7);
+                return L.divIcon({
+                    html:
+                        '<div class="cluster-chip">' +
+                        '<span class="cluster-chip-dot" aria-hidden="true"></span>' +
+                        '<span>' + label + '</span>' +
+                        '</div>',
+                    className: "",
+                    iconSize: [width, 30],
+                    iconAnchor: [width / 2, 15]
+                });
+            },
+            stack: function (cluster) {
+                var count = cluster.getChildCount();
+                return L.divIcon({
+                    html:
+                        '<div class="cluster-stack">' +
+                        '<div class="cluster-stack-card back2"></div>' +
+                        '<div class="cluster-stack-card back1"></div>' +
+                        '<div class="cluster-stack-card"></div>' +
+                        '<span class="cluster-stack-count">' + count + '</span>' +
+                        (count > 9 ? '<span class="cluster-stack-badge">' + (count > 99 ? "99+" : count) + '</span>' : "") +
+                        '</div>',
+                    className: "",
+                    iconSize: [56, 56],
+                    iconAnchor: [24, 24]
+                });
+            }
+        };
+
+        var activeClusterStyle = "warm"; // default
+
+        // Camera animation duration (seconds). Tune live in the console with
+        // setFlyDuration(0.45) — snappier, setFlyDuration(1.2) — cinematic.
+        var FLY_DURATION = 0.7;
+        window.setFlyDuration = function (seconds) {
+            var n = Number(seconds);
+            if (!isFinite(n) || n <= 0) {
+                console.warn("[fly] invalid duration:", seconds, "— pass a positive number of seconds");
+                return FLY_DURATION;
+            }
+            FLY_DURATION = n;
+            console.log("[fly] duration →", FLY_DURATION + "s");
+            return FLY_DURATION;
+        };
+
+        const markerClusterLayer = L.markerClusterGroup({
+            iconCreateFunction: CLUSTER_STYLES[activeClusterStyle],
+            showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
+            // Keep zoom-in/out cluster merging animated, but skip the
+            // "fly from center" animation when markers are inserted by a
+            // bounds refetch — that's what made the grouping flicker.
+            animate: true,
+            animateAddingMarkers: false,
+            chunkedLoading: true
+        });
+        map.addLayer(markerClusterLayer);
+
+        // Console hook: setClusterStyle("warm" | "chip" | "stack")
+        window.setClusterStyle = function (name) {
+            if (!CLUSTER_STYLES[name]) {
+                console.warn("[clusters] unknown style:", name, "— try one of:", Object.keys(CLUSTER_STYLES).join(", "));
+                return;
+            }
+            activeClusterStyle = name;
+            markerClusterLayer.options.iconCreateFunction = CLUSTER_STYLES[name];
+            markerClusterLayer.refreshClusters();
+            console.log("[clusters] style →", name);
+        };
+
+        // Fade the marker pane during long camera animations. flyTo does
+        // continuous zoom interpolation but markercluster only re-renders at
+        // zoomend, so the cluster "pops" open at the end. Hiding the pane
+        // during the fly means we never show the in-between state — the user
+        // sees a smooth camera glide, then markers fade in at their final
+        // positions.
+        function flyWithMarkerFade(flyFn) {
+            var pane = map.getPane("markerPane");
+            if (pane) {
+                pane.style.transition = "opacity 180ms ease-out";
+                pane.style.opacity = "0";
+            }
+            flyFn();
+            map.once("moveend", function () {
+                if (!pane) return;
+                pane.style.transition = "opacity 260ms ease-in";
+                pane.style.opacity = "1";
+                setTimeout(function () {
+                    pane.style.transition = "";
+                }, 280);
+            });
+        }
+
+        markerClusterLayer.on("clusterclick", function (event) {
+            var cluster = event.layer;
+            if (!cluster || typeof cluster.getBounds !== "function") return;
+
+            var bounds = cluster.getBounds();
+            // Spiderfy when at max zoom OR when all markers share the exact same
+            // spot (bounds collapses to a point — zooming in would do nothing).
+            var isPointCluster = bounds.isValid() &&
+                bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < 1;
+
+            if ((map.getZoom() >= map.getMaxZoom() || isPointCluster) && typeof cluster.spiderfy === "function") {
+                clearTimeout(fetchTimeout);
+                cluster.spiderfy();
+                return;
+            }
+
+            if (!bounds || !bounds.isValid()) return;
+
+            flyWithMarkerFade(function () {
+                map.flyToBounds(bounds, {
+                    padding: [72, 72],
+                    maxZoom: map.getMaxZoom(),
+                    duration: FLY_DURATION
+                });
+            });
+        });
+
+        function hasStoryCoordinates(story) {
+            return Number.isFinite(Number(story.latitude)) && Number.isFinite(Number(story.longitude));
+        }
+
+        // ─── Focus mode (multi-location story view) ───
+        var focusLayer = L.layerGroup();
+        var focusPolyline = null;
+        var focusStoryId = null;
+        var lastStoriesSnapshot = [];
+
+        function enterFocusMode(story) {
+            focusStoryId = story.id;
+            var locs = getEffectiveLocations(story);
+            if (locs.length === 0) return;
+
+            // Hide all other stories
+            map.removeLayer(markerClusterLayer);
+            focusLayer.clearLayers();
+            if (focusPolyline) {
+                map.removeLayer(focusPolyline);
+                focusPolyline = null;
+            }
+
+            locs.forEach(function (loc, idx) {
+                var marker = L.marker([loc.latitude, loc.longitude], {
+                    icon: buildNumberedIcon(L, idx, { color: "#35618f", size: 36 })
+                });
+                var coordsText = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
+                var stopTitle = (idx + 1) + ". " + (loc.label || coordsText);
+                marker.bindPopup(
+                    '<div style="font-family:Inter,sans-serif;min-width:200px;">' +
+                    '<div style="font-size:11px;font-weight:700;color:#35618f;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Stop ' + (idx + 1) + ' / ' + locs.length + '</div>' +
+                    '<div style="font-size:13px;font-weight:700;color:#1d1c16;margin-bottom:6px;">' + (loc.label || coordsText) + '</div>' +
+                    '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read full story →</a>' +
+                    '</div>',
+                    { closeButton: true }
+                );
+                marker.bindTooltip(stopTitle, { direction: "top", offset: [0, -18] });
+                focusLayer.addLayer(marker);
+            });
+
+            focusPolyline = L.polyline(
+                locs.map(function (l) { return [l.latitude, l.longitude]; }),
+                { color: "#35618f", weight: 4, opacity: 0.75, dashArray: "8 10" }
+            );
+            focusLayer.addLayer(focusPolyline);
+            focusLayer.addTo(map);
+
+            var bounds = L.latLngBounds(locs.map(function (l) { return [l.latitude, l.longitude]; }));
+            map.flyToBounds(bounds, { padding: [80, 80], maxZoom: 16, duration: FLY_DURATION });
+
+            var banner = document.getElementById("focus-banner");
+            document.getElementById("focus-banner-title").textContent = story.title || "Story focus";
+            document.getElementById("focus-banner-count").textContent = String(locs.length);
+            banner.classList.add("visible");
+        }
+
+        function exitFocusMode() {
+            focusStoryId = null;
+            focusLayer.clearLayers();
+            if (map.hasLayer(focusLayer)) map.removeLayer(focusLayer);
+            if (focusPolyline) {
+                map.removeLayer(focusPolyline);
+                focusPolyline = null;
+            }
+            if (!map.hasLayer(markerClusterLayer)) map.addLayer(markerClusterLayer);
+            document.getElementById("focus-banner").classList.remove("visible");
+        }
+
+        document.getElementById("btn-exit-focus").addEventListener("click", exitFocusMode);
+
+        function sameStorySet(prev, next) {
+            if (!prev || !next || prev.length !== next.length) return false;
+            var prevIds = {};
+            for (var i = 0; i < prev.length; i++) prevIds[prev[i].id] = true;
+            for (var j = 0; j < next.length; j++) {
+                if (!prevIds[next[j].id]) return false;
+            }
+            return true;
+        }
+
         function loadStories(stories) {
-            // Clear existing markers
-            markers.forEach(function (m) { map.removeLayer(m); });
+            var nextSnapshot = stories || [];
+
+            // If we're in focus mode, don't disturb it — the user is reading
+            // one story, the underlying data refresh will be re-applied when
+            // they exit focus mode.
+            if (focusStoryId) {
+                lastStoriesSnapshot = nextSnapshot;
+                document.getElementById("story-count").textContent = nextSnapshot.length + " stories on the map";
+                return;
+            }
+
+            // Skip the rebuild when the story set hasn't actually changed. This
+            // is the common case after a popup's autoPan triggers a redundant
+            // bounds refetch — without this guard we'd destroy the marker that
+            // owns the open popup right after the user clicked it.
+            if (sameStorySet(lastStoriesSnapshot, nextSnapshot) && markers.length > 0) {
+                lastStoriesSnapshot = nextSnapshot;
+                document.getElementById("story-count").textContent = markers.length + " stories on the map";
+                return;
+            }
+
+            lastStoriesSnapshot = nextSnapshot;
+
+            // Incremental diff: only remove markers whose story is gone and
+            // only build markers for stories we don't already have on the map.
+            // Without this, every refetch destroyed every marker and the
+            // cluster plugin replayed its merge animation from scratch — the
+            // visible flicker.
+            var existingById = {};
+            for (var mi = 0; mi < markers.length; mi++) {
+                existingById[markers[mi]._storyId] = markers[mi];
+            }
+            var nextById = {};
+            for (var si = 0; si < nextSnapshot.length; si++) {
+                if (hasStoryCoordinates(nextSnapshot[si])) {
+                    nextById[nextSnapshot[si].id] = nextSnapshot[si];
+                }
+            }
+
+            var toRemove = [];
+            var keptMarkers = [];
+            for (var ki = 0; ki < markers.length; ki++) {
+                if (nextById[markers[ki]._storyId]) {
+                    keptMarkers.push(markers[ki]);
+                } else {
+                    toRemove.push(markers[ki]);
+                }
+            }
+            if (toRemove.length > 0) {
+                markerClusterLayer.removeLayers(toRemove);
+            }
             markers.length = 0;
+            for (var kj = 0; kj < keptMarkers.length; kj++) {
+                markers.push(keptMarkers[kj]);
+            }
 
-            stories.forEach(function (story) {
+            var toAdd = [];
+            nextSnapshot.forEach(function (story) {
+                if (!hasStoryCoordinates(story)) return;
+                if (existingById[story.id]) return; // already on map
+
                 const marker = L.marker([story.latitude, story.longitude], {
-                    icon: createMarkerIcon()
+                    icon: createMarkerIcon(story)
                 });
+                marker._storyId = story.id;
 
-                marker.bindPopup(buildPopupHtml(story, null), {
-                    maxWidth: 300,
-                    minWidth: 300,
-                    closeButton: true
-                });
+                var isMulti = hasMultipleLocations(story);
+
+                if (!isMulti) {
+                    marker.bindPopup(buildPopupHtml(story, null), {
+                        maxWidth: 300,
+                        minWidth: 300,
+                        closeButton: true,
+                        autoPan: false  // we'll center the camera ourselves
+                    });
+                }
 
                 marker.on("click", function () {
+                    if (isMulti) {
+                        enterFocusMode(story);
+                        return;
+                    }
+
+                    // Skip flyTo when the marker is spiderfied — the map movement
+                    // would collapse the spiderfy and immediately close the popup.
+                    var isSpiderfied = !!marker._spiderLeg;
+                    if (!isSpiderfied) {
+                        map.flyTo(
+                            [story.latitude, story.longitude],
+                            Math.max(map.getZoom(), 15),
+                            { duration: FLY_DURATION }
+                        );
+                    }
+
                     // Highlight active marker
                     document.querySelectorAll(".story-marker").forEach(function (el) {
                         el.classList.remove("active");
@@ -553,12 +1247,18 @@
                         .catch(function () { /* keep placeholder on error */ });
                 });
 
-                marker.addTo(map);
+                toAdd.push(marker);
                 markers.push(marker);
             });
 
+            if (toAdd.length > 0) {
+                // Bulk insert — markercluster batches the cluster reflow into
+                // a single pass instead of animating once per marker.
+                markerClusterLayer.addLayers(toAdd);
+            }
+
             // Update count
-            document.getElementById("story-count").textContent = stories.length + " stories on the map";
+            document.getElementById("story-count").textContent = markers.length + " stories on the map";
         }
 
         // ─── Sidebar ───
@@ -578,6 +1278,7 @@
                 div.innerHTML =
                     (dateLabel ? '<div class="text-[10px] font-bold text-tertiary tracking-widest uppercase mb-1">' + dateLabel + '</div>' : '') +
                     '<h4 class="font-semibold text-sm text-textmain leading-snug mb-1">' + story.title + '</h4>' +
+                    '<p class="text-[11px] text-textmuted mb-1' + (isAnonymousStory(story) ? ' italic' : '') + '">' + getAuthorByLine(story) + '</p>' +
                     '<p class="text-xs text-textmuted line-clamp-2 leading-relaxed">' + preview + '</p>' +
                     '<div class="mt-2 flex items-center justify-between">' +
                     '<span class="text-[10px] text-textmuted">' + placeName + '</span>' +
@@ -586,11 +1287,13 @@
 
                 div.addEventListener("click", function (e) {
                     if (e.target.tagName === "A") return;
-                    map.setView([story.latitude, story.longitude], 16);
+                    map.flyTo([story.latitude, story.longitude], 16, { duration: FLY_DURATION });
                     // Open the corresponding marker popup
                     markers.forEach(function (m) {
                         if (m.getLatLng().lat === story.latitude && m.getLatLng().lng === story.longitude) {
-                            m.openPopup();
+                            markerClusterLayer.zoomToShowLayer(m, function () {
+                                m.openPopup();
+                            });
                         }
                     });
                 });
@@ -602,37 +1305,309 @@
         // Close sidebar
         document.getElementById("btn-close-sidebar").addEventListener("click", function () {
             document.getElementById("sidebar").classList.add("hidden");
+            document.getElementById("btn-open-sidebar").classList.remove("hidden");
+            document.getElementById("btn-open-sidebar").classList.add("flex");
             syncMapSize();
         });
 
-        // Close profile menu when clicking outside
-        document.addEventListener("click", function (e) {
-            if (!profileMenu.hidden && !profileMenu.contains(e.target) && !profileButton.contains(e.target)) {
-                closeProfileMenu();
-            }
-        });
-
-        profileButton.addEventListener("click", function () {
-            toggleProfileMenu();
-        });
-
-        document.addEventListener("keydown", function (e) {
-            if (e.key === "Escape") {
-                closeProfileMenu();
-            }
+        // Reopen sidebar
+        document.getElementById("btn-open-sidebar").addEventListener("click", function () {
+            document.getElementById("sidebar").classList.remove("hidden");
+            document.getElementById("btn-open-sidebar").classList.add("hidden");
+            document.getElementById("btn-open-sidebar").classList.remove("flex");
+            syncMapSize();
         });
 
         // ─── Initialize ───
+        // Pause bounds refetches while a popup is open so the rebuild can't
+        // destroy the marker the user is reading. Resume on popup close.
+        var popupOpen = false;
+        var openPopupRef = null;
+        map.on("popupopen", function (e) {
+            popupOpen = true;
+            openPopupRef = e.popup || null;
+        });
+        map.on("popupclose", function () {
+            popupOpen = false;
+            openPopupRef = null;
+            clearTimeout(fetchTimeout);
+            fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
+        });
+
         map.on("moveend", function () {
+            // If a popup is open but its anchor has been panned out of view,
+            // close it. Without this the diff-based loadStories preserves the
+            // marker, the popup stays anchored off-screen, and the popupOpen
+            // guard below permanently blocks refetches.
+            if (popupOpen && openPopupRef) {
+                var latlng = openPopupRef.getLatLng && openPopupRef.getLatLng();
+                if (latlng && !map.getBounds().contains(latlng)) {
+                    map.closePopup(openPopupRef);
+                    return; // popupclose handler will schedule the refetch
+                }
+            }
+            if (popupOpen) return;
             clearTimeout(fetchTimeout);
             fetchTimeout = setTimeout(fetchStoriesInBounds, 300);
         });
         fetchStoriesInBounds();
 
-        loadCurrentUser();
         syncMapSize();
         window.addEventListener("resize", syncMapSize);
+
+        // ─── Map Filter Panel ─────────────────────────────────────────────────
+
+        var mapFiltersToggleBtn = document.getElementById("map-filters-toggle-btn");
+        var mapFilterPanelEl = document.getElementById("map-filter-panel");
+
+        function setMapFiltersToggleActive(active) {
+            if (active) {
+                mapFiltersToggleBtn.classList.add("bg-primary", "text-white", "border-primary");
+                mapFiltersToggleBtn.classList.remove("bg-white", "text-textmuted", "border-border");
+            } else {
+                mapFiltersToggleBtn.classList.remove("bg-primary", "text-white", "border-primary");
+                mapFiltersToggleBtn.classList.add("bg-white", "text-textmuted", "border-border");
+            }
+        }
+
+        mapFiltersToggleBtn.addEventListener("click", function () {
+            var isHidden = mapFilterPanelEl.classList.toggle("hidden");
+            setMapFiltersToggleActive(!isHidden);
+            if (!isHidden) {
+                var rect = mapFiltersToggleBtn.getBoundingClientRect();
+                var panelWidth = 288; // w-72
+                var left = rect.right - panelWidth;
+                if (left < 8) left = 8;
+                mapFilterPanelEl.style.top = (rect.bottom + 8) + "px";
+                mapFilterPanelEl.style.left = left + "px";
+
+                mapFilterPanelTags = mapFilterTags.slice();
+                renderMapPanelTags();
+                document.getElementById("map-filter-year-from").value = mapFilterYearFrom;
+                document.getElementById("map-filter-year-to").value = mapFilterYearTo;
+                document.querySelectorAll(".map-distance-btn").forEach(function (b) {
+                    b.classList.toggle("active", b.dataset.value === mapFilterDistance);
+                });
+            }
+        });
+
+        document.querySelectorAll(".map-distance-btn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                document.querySelectorAll(".map-distance-btn").forEach(function (b) { b.classList.remove("active"); });
+                mapFilterDistance = this.dataset.value;
+                this.classList.add("active");
+            });
+        });
+
+        function addMapPanelTag() {
+            var input = document.getElementById("map-filter-panel-tag-input");
+            var val = input.value.trim().toLowerCase();
+            if (!val || mapFilterPanelTags.indexOf(val) !== -1) return;
+            mapFilterPanelTags.push(val);
+            renderMapPanelTags();
+            input.value = "";
+            input.focus();
+        }
+
+        function renderMapPanelTags() {
+            var container = document.getElementById("map-filter-panel-tags");
+            if (!container) return;
+            container.innerHTML = "";
+            mapFilterPanelTags.forEach(function (tag) {
+                var chip = document.createElement("span");
+                chip.className = "inline-flex items-center gap-1 rounded-full bg-[rgba(119,90,25,0.12)] border border-[rgba(119,90,25,0.2)] px-2.5 py-0.5 text-xs font-semibold text-primary";
+                var nameSpan = document.createElement("span");
+                nameSpan.textContent = tag;
+                var removeIcon = document.createElement("span");
+                removeIcon.textContent = "×";
+                removeIcon.style.cssText = "cursor:pointer;line-height:1;opacity:0.6;font-size:14px;";
+                removeIcon.addEventListener("mouseover", function () { this.style.opacity = "1"; });
+                removeIcon.addEventListener("mouseout", function () { this.style.opacity = "0.6"; });
+                (function (t) {
+                    removeIcon.addEventListener("click", function () {
+                        mapFilterPanelTags = mapFilterPanelTags.filter(function (x) { return x !== t; });
+                        renderMapPanelTags();
+                    });
+                }(tag));
+                chip.appendChild(nameSpan);
+                chip.appendChild(removeIcon);
+                container.appendChild(chip);
+            });
+        }
+
+        document.getElementById("map-filter-panel-add-tag-btn").addEventListener("click", function () {
+            var input = document.getElementById("map-filter-panel-tag-input");
+            if (input.classList.contains("hidden")) {
+                input.classList.remove("hidden");
+                this.classList.add("hidden");
+                input.focus();
+            } else {
+                addMapPanelTag();
+            }
+        });
+
+        document.getElementById("map-filter-panel-tag-input").addEventListener("blur", function () {
+            if (!this.value.trim()) {
+                this.classList.add("hidden");
+                document.getElementById("map-filter-panel-add-tag-btn").classList.remove("hidden");
+            }
+        });
+
+        document.getElementById("map-filter-apply-btn").addEventListener("click", function () {
+            mapFilterYearFrom = document.getElementById("map-filter-year-from").value.trim();
+            mapFilterYearTo = document.getElementById("map-filter-year-to").value.trim();
+            mapFilterTags = mapFilterPanelTags.slice();
+            mapFilterPanelTags = [];
+            renderMapPanelTags();
+            mapFilterPanelEl.classList.add("hidden");
+            setMapFiltersToggleActive(false);
+            clearTimeout(fetchTimeout);
+            if (mapFilterDistance !== "") {
+                nearMeRadiusKm = parseFloat(mapFilterDistance) / 1000;
+                activateNearMe();
+            } else {
+                if (nearMeActive) deactivateNearMe();
+                else fetchStoriesInBounds();
+            }
+        });
+
+        document.getElementById("map-filter-reset-btn").addEventListener("click", function () {
+            mapFilterYearFrom = "";
+            mapFilterYearTo = "";
+            mapFilterDistance = "";
+            mapFilterTags = [];
+            mapFilterPanelTags = [];
+            document.getElementById("map-filter-year-from").value = "";
+            document.getElementById("map-filter-year-to").value = "";
+            document.querySelectorAll(".map-distance-btn").forEach(function (b) {
+                b.classList.remove("active");
+                if (b.dataset.value === "") b.classList.add("active");
+            });
+            renderMapPanelTags();
+            if (nearMeActive) deactivateNearMe();
+            else refreshMapDisplay();
+        });
+
+        // ─── Report functionality ─────────────────────────────────────────────
+        var reportModalStoryId = null;
+        var reportSelectedReason = null;
+        var reportReasonsList = [
+            { value: "inappropriate_content", label: "Inappropriate content" },
+            { value: "misinformation", label: "Misinformation" },
+            { value: "offensive_language", label: "Offensive language" }
+        ];
+
+        function setReportSubmitEnabled(enabled) {
+            var btn = document.getElementById("btn-submit-report");
+            btn.disabled = !enabled;
+            btn.style.opacity = enabled ? "1" : "0.4";
+            btn.style.cursor = enabled ? "" : "not-allowed";
+        }
+
+        function openReportModal(storyId) {
+            reportModalStoryId = storyId;
+            reportSelectedReason = null;
+            setReportSubmitEnabled(false);
+            document.getElementById("btn-submit-report").textContent = "Submit Report";
+            var container = document.getElementById("report-reasons");
+            container.innerHTML = "";
+            reportReasonsList.forEach(function(reason) {
+                var label = document.createElement("label");
+                label.className = "flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer transition-all";
+                label.innerHTML =
+                    '<input type="radio" name="report-reason" value="' + reason.value + '" class="accent-primary" onchange="onReportReasonChange(this)">' +
+                    '<span class="text-sm text-textmain">' + reason.label + '</span>';
+                container.appendChild(label);
+            });
+            document.getElementById("report-modal").classList.remove("hidden");
+            document.body.style.overflow = "hidden";
+        }
+
+        function onReportReasonChange(radio) {
+            reportSelectedReason = radio.value;
+            document.querySelectorAll("#report-reasons label").forEach(function(l) {
+                l.style.borderColor = "";
+                l.style.backgroundColor = "";
+            });
+            radio.closest("label").style.borderColor = "#775a19";
+            radio.closest("label").style.backgroundColor = "rgba(119,90,25,0.07)";
+            setReportSubmitEnabled(true);
+        }
+
+        function closeReportModal() {
+            document.getElementById("report-modal").classList.add("hidden");
+            document.body.style.overflow = "";
+            reportModalStoryId = null;
+            reportSelectedReason = null;
+        }
+
+        async function submitReport() {
+            if (!reportSelectedReason || !reportModalStoryId) return;
+            setReportSubmitEnabled(false);
+            document.getElementById("btn-submit-report").textContent = "Submitting...";
+            try {
+                var res = await authFetch(API_BASE + "/stories/" + reportModalStoryId + "/report", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ reason: reportSelectedReason })
+                });
+                closeReportModal();
+                showReportToast(res.ok ? "success" : "error",
+                    res.ok
+                        ? "Report submitted. Thank you for helping keep the community safe."
+                        : "Failed to submit report. Please try again.");
+            } catch (err) {
+                closeReportModal();
+                showReportToast("error", "Failed to submit report. Please try again.");
+            }
+        }
+
+        var reportToastTimer = null;
+        function showReportToast(type, message) {
+            var toast = document.getElementById("report-toast");
+            var icon = document.getElementById("report-toast-icon");
+            var msg = document.getElementById("report-toast-message");
+            icon.textContent = type === "success" ? "check_circle" : "error";
+            icon.style.color = type === "success" ? "#10b981" : "#ef4444";
+            msg.textContent = message;
+            toast.classList.remove("hidden");
+            clearTimeout(reportToastTimer);
+            reportToastTimer = setTimeout(function() { toast.classList.add("hidden"); }, 4000);
+        }
+
+        document.addEventListener("keydown", function(e) {
+            if (e.key === "Escape") closeReportModal();
+        });
     </script>
+
+<!-- Report Modal -->
+<div id="report-modal" class="hidden fixed inset-0 z-[2000] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeReportModal()"></div>
+    <div class="relative w-full max-w-md rounded-3xl border border-border bg-white p-8 shadow-soft">
+        <div class="flex items-start justify-between mb-6">
+            <div>
+                <h2 id="report-modal-title" class="font-headline text-xl font-bold text-textmain">Report Story</h2>
+                <p class="mt-1 text-sm text-textmuted">Help us keep the community safe.</p>
+            </div>
+            <button onclick="closeReportModal()" class="text-textmuted hover:text-textmain transition-colors -mt-1 -mr-1 p-1">
+                <span class="material-symbols-outlined text-xl">close</span>
+            </button>
+        </div>
+        <p class="text-sm font-semibold text-textmain mb-3">Reason for reporting</p>
+        <div id="report-reasons" class="space-y-2"></div>
+        <div class="mt-6 flex gap-3">
+            <button onclick="closeReportModal()" class="flex-1 rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Cancel</button>
+            <button id="btn-submit-report" onclick="submitReport()" disabled class="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95" style="opacity:0.4;cursor:not-allowed;">Submit Report</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast notification -->
+<div id="report-toast" class="hidden fixed bottom-6 right-6 z-[2000] flex items-center gap-3 rounded-2xl border border-border bg-white px-5 py-4 shadow-soft">
+    <span id="report-toast-icon" class="material-symbols-outlined text-xl"></span>
+    <p id="report-toast-message" class="text-sm font-semibold text-textmain max-w-xs"></p>
+</div>
+
 </body>
 
 </html>

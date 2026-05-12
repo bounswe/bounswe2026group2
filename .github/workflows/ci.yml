@@ -3,9 +3,57 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_call:
 
 jobs:
-  # ── 0. HEALTH CHECK ──────────────────────────────────────────────────────────
+  # ── 0a. LINT & FORMAT ───────────────────────────────────────────────────────
+
+  backend-lint:
+    name: Backend Lint & Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff linter
+        working-directory: backend
+        run: ruff check .
+
+      - name: Run ruff format check
+        working-directory: backend
+        run: ruff format --check .
+
+  frontend-lint:
+    name: Frontend Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+
+  # ── 0b. HEALTH CHECK ────────────────────────────────────────────────────────
 
   backend-health:
     name: Backend Health Check
@@ -83,7 +131,7 @@ jobs:
   backend-unit:
     name: Backend Unit Tests
     runs-on: ubuntu-latest
-    needs: [backend-health]
+    needs: [backend-health, backend-lint]
 
     steps:
       - name: Checkout code
@@ -102,11 +150,40 @@ jobs:
         working-directory: backend
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/localhistory
-        run: pytest tests/unit/ -v
+        run: pytest tests/unit/ -v --html=unit-report.html --self-contained-html --junitxml=unit-report.xml
+
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-unit-test-reports
+          path: |
+            backend/unit-report.html
+            backend/unit-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('backend/unit-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Backend Unit Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
 
   frontend-unit:
     name: Frontend Unit Tests
     runs-on: ubuntu-latest
+    needs: [frontend-lint]
 
     steps:
       - name: Checkout code
@@ -115,17 +192,50 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
 
       - name: Run frontend unit tests
-        run: echo "test"  # placeholder
+        working-directory: frontend
+        run: npm test
+
+      - name: Upload frontend test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-unit-test-reports
+          path: |
+            frontend/test-report.html
+            frontend/test-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('frontend/test-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Frontend Unit Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
 
   # ── 2. INTEGRATION TESTS ─────────────────────────────────────────────────────
 
   backend-integration:
     name: Backend Integration Tests
     runs-on: ubuntu-latest
-    needs: [backend-unit]
+    needs: [backend-api]
 
     services:
       postgres:
@@ -163,14 +273,42 @@ jobs:
           STORAGE_ACCESS_KEY: minioadmin
           STORAGE_SECRET_KEY: minioadmin
           STORAGE_REGION: us-east-1
-        run: pytest tests/integration/ -v
+        run: pytest tests/integration/ -v --html=integration-report.html --self-contained-html --junitxml=integration-report.xml
+
+      - name: Upload integration test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-integration-test-reports
+          path: |
+            backend/integration-report.html
+            backend/integration-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('backend/integration-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Backend Integration Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
 
   # ── 3. API TESTS ─────────────────────────────────────────────────────────────
 
   backend-api:
     name: Backend API Tests
     runs-on: ubuntu-latest
-    needs: [backend-integration]
+    needs: [backend-unit]
 
     services:
       postgres:
@@ -208,28 +346,256 @@ jobs:
           STORAGE_ACCESS_KEY: minioadmin
           STORAGE_SECRET_KEY: minioadmin
           STORAGE_REGION: us-east-1
-        run: pytest tests/api/ -v
+        run: pytest tests/api/ -v --html=api-report.html --self-contained-html --junitxml=api-report.xml
+
+      - name: Upload API test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-api-test-reports
+          path: |
+            backend/api-report.html
+            backend/api-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('backend/api-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **Backend API Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
 
   # ── 4. E2E TESTS ─────────────────────────────────────────────────────────────
 
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [backend-api, frontend-unit]
+    needs: [backend-integration, frontend-unit]
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run E2E tests
-        run: echo "playwright test"  # placeholder
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
-  # ── 5. DEPLOY ─────────────────────────────────────────────────────────────────
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start full stack
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose up -d --build
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && break
+            sleep 3
+          done
+          curl -sf http://localhost:8000/health || exit 1
+
+      - name: Wait for frontend
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:3000 && break
+            sleep 3
+          done
+
+      - name: Run E2E tests
+        run: cd frontend && npx playwright test tests/e2e/ --config playwright.e2e.config.js
+
+      - name: Upload E2E test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-reports
+          path: |
+            frontend/playwright-e2e-report/
+            frontend/e2e-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('frontend/e2e-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **E2E Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
+
+  # ── 5. UAT TESTS ──────────────────────────────────────────────────────────────
+
+  uat:
+    name: UAT Tests
+    runs-on: ubuntu-latest
+    needs: [backend-integration, frontend-unit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start full stack
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose up -d --build
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && break
+            sleep 3
+          done
+          curl -sf http://localhost:8000/health || exit 1
+
+      - name: Run Playwright UAT tests
+        run: |
+          if [ -d "frontend/tests/uat" ]; then
+            cd frontend && npx playwright test tests/uat/
+          else
+            echo "UAT placeholder — tests/uat/ not yet created (see issue #282)"
+          fi
+
+      - name: Upload UAT test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-test-reports
+          path: |
+            frontend/playwright-report/
+            frontend/uat-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('frontend/uat-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **UAT Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
+
+  # ── 6. TEST SUMMARY ───────────────────────────────────────────────────────────
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [e2e, uat]
+    if: always()
+
+    steps:
+      - name: Download all test reports
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: reports
+
+      - name: Generate combined summary
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os, glob
+
+          def parse(filename):
+              # upload-artifact strips the common path prefix (LCA), so search by filename
+              matches = glob.glob(f'reports/**/{filename}', recursive=True) + \
+                        glob.glob(f'reports/{filename}')
+              if not matches:
+                  return None
+              try:
+                  root = ET.parse(matches[0]).getroot()
+                  ss = list(root) if root.tag == 'testsuites' else [root]
+                  t  = sum(int(x.get('tests',    0)) for x in ss)
+                  f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+                  sk = sum(int(x.get('skipped',  0)) for x in ss)
+                  return t, t - f - sk, f, sk
+              except:
+                  return None
+
+          suites = [
+              ('Backend Unit',        'unit-report.xml'),
+              ('Backend API',         'api-report.xml'),
+              ('Backend Integration', 'integration-report.xml'),
+              ('Frontend Unit',       'test-report.xml'),
+              ('E2E',                 'e2e-report.xml'),
+              ('UAT',                 'uat-report.xml'),
+          ]
+
+          rows, totals = [], [0, 0, 0, 0]
+          for name, filename in suites:
+              r = parse(filename)
+              if r:
+                  t, p, f, sk = r
+                  for i, v in enumerate(r): totals[i] += v
+                  icon = '✅' if f == 0 else '❌'
+                  rows.append(f'| {icon} {name} | {t} | {p} | {f} | {sk} |')
+              else:
+                  rows.append(f'| ⚠️ {name} | — | — | — | — |')
+
+          overall = '✅ All tests passed' if totals[2] == 0 else f'❌ {totals[2]} test(s) failed'
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+              gh.write(f'## {overall}\n\n')
+              gh.write('| Suite | Tests | ✅ Passed | ❌ Failed | Skipped |\n')
+              gh.write('|-------|------:|--------:|--------:|-------:|\n')
+              for row in rows:
+                  gh.write(row + '\n')
+              gh.write(f'| **Total** | **{totals[0]}** | **{totals[1]}** | **{totals[2]}** | **{totals[3]}** |\n')
+          PYEOF
+
+  # ── 7. DEPLOY ─────────────────────────────────────────────────────────────────
 
   trigger-deploy:
     name: Trigger Deployment
     runs-on: ubuntu-latest
-    needs: e2e
+    needs: [e2e, uat]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
 
     steps:

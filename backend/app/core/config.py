@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     # Set to "true" in .env to write every SQL query to logs/sql.log
     LOG_SQL: bool = False
+    LOG_LEVEL: str = "INFO"
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Comma-separated list of allowed origins
@@ -31,6 +32,18 @@ class Settings(BaseSettings):
     STORAGE_BUCKET_IMAGES: str = "images"
     STORAGE_BUCKET_AUDIO: str = "audio"
     STORAGE_BUCKET_VIDEOS: str = "videos"
+
+    # ── Google OAuth ───────────────────────────────────────────────────────────
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/google/callback"
+    FRONTEND_GOOGLE_CALLBACK_URL: str = "http://localhost:3000/oauth-callback.html"
+
+    # ── Speech-to-Text ───────────────────────────────────────────────────────
+    OPENAI_API_KEY: str = ""
+    AI_WHISPER_MODEL: str = "whisper-1"
+    GEMINI_API_KEY: str = ""
+    AI_TAGGING_MODEL: str = "gemini-2.5-flash"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

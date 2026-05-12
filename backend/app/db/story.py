@@ -1,17 +1,38 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Date, Enum, Float, ForeignKey, Index, String, Text, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
 from app.db.mixins import TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.tag import story_tags_table
 
 if TYPE_CHECKING:
     from app.db.media_file import MediaFile
+    from app.db.notification import Notification
+    from app.db.story_comment import StoryComment
+    from app.db.story_like import StoryLike
+    from app.db.story_location import StoryLocation
+    from app.db.story_report import StoryReport
+    from app.db.story_save import StorySave
+    from app.db.tag import Tag
     from app.db.user import User
 
 
@@ -21,6 +42,7 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_stories_user_id", "user_id"),
         Index("ix_stories_status", "status"),
         Index("ix_stories_visibility", "visibility"),
+        Index("ix_stories_deleted_at", "deleted_at"),
         CheckConstraint(
             "date_end IS NULL OR date_start IS NULL OR date_end >= date_start",
             name="ck_stories_date_range_valid",
@@ -57,9 +79,56 @@ class Story(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Enum(DatePrecision, name="date_precision", native_enum=False),
         nullable=True,
     )
+    is_anonymous: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    view_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0"),
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    delete_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="stories")
+    user: Mapped["User"] = relationship(back_populates="stories", foreign_keys=[user_id])
     media_files: Mapped[list["MediaFile"]] = relationship(
         back_populates="story",
         cascade="all, delete-orphan",
+        order_by="MediaFile.sort_order",
+    )
+    saves: Mapped[list["StorySave"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+    )
+    comments: Mapped[list["StoryComment"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+    )
+
+    story_likes: Mapped[list["StoryLike"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+    )
+    notifications: Mapped[list["Notification"]] = relationship(back_populates="story")
+    reports: Mapped[list["StoryReport"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+    )
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=story_tags_table,
+        back_populates="stories",
+    )
+    locations: Mapped[list["StoryLocation"]] = relationship(
+        back_populates="story",
+        cascade="all, delete-orphan",
+        order_by="StoryLocation.sort_order",
     )

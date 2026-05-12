@@ -28,3 +28,28 @@ class MediaType(str, Enum):
 class DatePrecision(str, Enum):
     YEAR = "year"
     DATE = "date"
+
+
+class NotificationEventType(str, Enum):
+    STORY_LIKED = "story_liked"
+    STORY_COMMENTED = "story_commented"
+    STORY_BOOKMARKED = "story_bookmarked"
+
+
+class ReportReason(str, Enum):
+    INAPPROPRIATE_CONTENT = "inappropriate_content"
+    MISINFORMATION = "misinformation"
+    OFFENSIVE_LANGUAGE = "offensive_language"
+
+
+class ReportStatus(str, Enum):
+    PENDING = "pending"
+    REVIEWED = "reviewed"
+    REMOVED = "removed"
+    RESOLVED = "reviewed"
+
+
+class BadgeRuleType(str, Enum):
+    FIRST_STORY = "first_story"
+    STORY_MILESTONE_5 = "story_milestone_5"
+    STORY_MILESTONE_10 = "story_milestone_10"

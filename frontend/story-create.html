@@ -64,17 +64,30 @@
     }
     #location-search-results::-webkit-scrollbar { width: 4px; }
     #location-search-results::-webkit-scrollbar-thumb { background: #c5a059; border-radius: 4px; }
+    .recording-dot {
+      width: 0.7rem;
+      height: 0.7rem;
+      border-radius: 9999px;
+      background: #b91c1c;
+      animation: recording-pulse 1s infinite;
+    }
+    @keyframes recording-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.86); }
+    }
+    .voice-meter-bar {
+      transform-origin: bottom;
+      flex: 0 0 4px;
+      transition: height 80ms linear, opacity 160ms linear;
+    }
   </style>
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
-<main class="w-full px-4 py-10 lg:px-8 xl:px-10 2xl:px-14">
+<div id="site-header"></div>
+<main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14">
   <header class="mb-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
-      <a href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-        <span aria-hidden="true">&larr;</span>
-        Back to map
-      </a>
-      <h1 class="mt-5 font-headline text-4xl font-extrabold leading-tight text-textmain">Share a piece of local history</h1>
+      <h1 class="font-headline text-4xl font-extrabold leading-tight text-textmain">Share a piece of local history</h1>
       <p class="mt-4 max-w-4xl text-base leading-7 text-textmuted">
         Add a memory, attach media, choose a location, and place your story on the map for others to discover.
       </p>
@@ -125,16 +138,21 @@
             <div id="create-map" style="height: 100%; width: 100%;"></div>
           </div>
 
-          <!-- Selected Location Display -->
-          <div id="selected-location" class="mt-3 hidden">
-            <div class="flex items-center gap-2 rounded-xl bg-[rgba(53,97,143,0.08)] px-4 py-3 text-sm">
-              <span class="text-tertiary font-semibold">📍 Pinned:</span>
-              <span id="selected-location-text" class="text-textmain"></span>
-              <button type="button" id="clear-location" class="ml-auto text-xs text-red-500 hover:underline">Clear</button>
+          <!-- Pinned locations chip strip -->
+          <div class="mt-4 rounded-2xl border border-border bg-[rgba(53,97,143,0.05)] p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-textmain">Pinned locations</p>
+                <p class="mt-0.5 text-xs text-textmuted">Click the map to add a pin. Drag any pin to refine its position. Add multiple pins to tell a story across places — a route will connect them in order.</p>
+              </div>
+              <button type="button" id="clear-locations" class="hidden shrink-0 text-xs font-semibold text-red-500 hover:underline">
+                Clear all
+              </button>
             </div>
+            <div id="location-chips" class="mt-3 flex flex-wrap gap-2"></div>
           </div>
 
-          <!-- Hidden fields for coordinates -->
+          <!-- Hidden fields for coordinates (kept for the existing backend payload shape) -->
           <input type="hidden" id="latitude" name="latitude" />
           <input type="hidden" id="longitude" name="longitude" />
         </section>
@@ -170,16 +188,118 @@
 
         <div>
           <label class="mb-2 block text-sm font-semibold text-textmain">Media Upload</label>
-          <div class="rounded-2xl border border-dashed border-primary-light bg-[rgba(197,160,89,0.08)] px-6 py-10 text-center">
-            <p class="text-base font-semibold text-primary">Drop photos, videos, or audio here</p>
-            <p class="mt-2 text-sm text-textmuted">Or click to browse files from your device</p>
-            <input type="file" id="media-files" multiple accept="image/*,video/*,audio/*" class="hidden" />
-            <button type="button" onclick="document.getElementById('media-files').click()" class="mt-5 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
-              Choose Files
-            </button>
-            <div id="file-list" class="mt-4 text-sm text-textmuted"></div>
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+            <div class="rounded-2xl border border-dashed border-primary-light bg-[rgba(197,160,89,0.08)] px-6 py-10 text-center">
+              <p class="text-base font-semibold text-primary">Drop photos, videos, or audio here</p>
+              <p class="mt-2 text-sm text-textmuted">Or capture a photo/video with your camera</p>
+              <input type="file" id="media-files" multiple accept="image/*,video/*,audio/*" class="hidden" />
+              <input type="file" id="camera-image-file" accept="image/*" capture="environment" class="hidden" />
+              <input type="file" id="camera-video-file" accept="video/*" capture="environment" class="hidden" />
+              <div class="mt-5 flex flex-wrap justify-center gap-2">
+                <button type="button" onclick="document.getElementById('media-files').click()" class="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+                  Choose Files
+                </button>
+                <button type="button" onclick="document.getElementById('camera-image-file').click()" class="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+                  Take Photo
+                </button>
+                <button type="button" onclick="document.getElementById('camera-video-file').click()" class="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">
+                  Record Video
+                </button>
+              </div>
+              <div id="file-list" class="mt-4 text-sm text-textmuted"></div>
+            </div>
+
+            <section class="rounded-2xl bg-[rgba(53,97,143,0.08)] p-5" aria-labelledby="recording-heading">
+              <div>
+                <h3 id="recording-heading" class="font-headline text-xl font-bold text-textmain">Record Audio</h3>
+                <p id="recording-status" class="mt-2 text-sm leading-6 text-textmuted">Record audio in your browser, then preview it before publishing.</p>
+              </div>
+
+              <div id="recording-live" class="mt-4 hidden items-center gap-2 rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-red-700">
+                <span class="recording-dot" aria-hidden="true"></span>
+                <span id="recording-timer">00:00</span>
+              </div>
+
+              <div id="voice-meter" class="mt-4 hidden h-16 items-center overflow-hidden rounded-xl bg-white/80 px-3 py-3" aria-label="Live voice level"></div>
+
+              <audio id="recording-audio-preview" class="mt-4 hidden w-full" controls></audio>
+
+              <div id="recording-transcript-panel" class="mt-4 hidden rounded-xl border border-border bg-white/90 px-4 py-3">
+                <label for="recording-transcript-draft" class="block text-sm font-semibold text-textmain">Transcript</label>
+                <p class="mt-1 text-xs leading-5 text-textmuted">
+                  This process may take some time.
+                </p>
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <p id="recording-transcript-status" class="hidden text-xs font-semibold" role="status" aria-live="polite"></p>
+                  <button
+                    type="button"
+                    id="btn-retry-transcription"
+                    class="hidden rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-semibold text-textmain transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Retry transcription
+                  </button>
+                </div>
+                <textarea
+                  id="recording-transcript-draft"
+                  rows="4"
+                  class="mt-2 w-full resize-y rounded-xl border border-border bg-white px-3 py-2 text-sm leading-6 text-textmain shadow-sm focus:border-primary focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  placeholder="Transcript appears here after the server responds."
+                ></textarea>
+              </div>
+
+              <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                <button type="button" id="btn-start-recording" class="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+                  Start
+                </button>
+                <button type="button" id="btn-stop-recording" disabled class="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-textmain opacity-60 transition hover:bg-stone-50">
+                  Stop
+                </button>
+                <button type="button" id="btn-cancel-recording" disabled class="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-textmain opacity-60 transition hover:bg-stone-50">
+                  Cancel
+                </button>
+              </div>
+            </section>
           </div>
         </div>
+
+        <!-- Anonymous sharing card -->
+        <div>
+          <label class="mb-2 block text-sm font-semibold text-textmain">Author visibility</label>
+          <button
+            type="button"
+            id="anon-card"
+            role="switch"
+            aria-checked="false"
+            aria-describedby="anon-card-desc"
+            class="group w-full rounded-2xl border border-border bg-white p-5 text-left transition hover:border-primary-light hover:bg-[rgba(197,160,89,0.06)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <div class="flex items-start gap-4">
+              <span
+                id="anon-card-indicator"
+                aria-hidden="true"
+                class="mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full border border-border bg-white text-white transition"
+              >
+                <span id="anon-card-check" class="material-symbols-outlined text-[16px] leading-none opacity-0 transition-opacity">check</span>
+              </span>
+              <span class="flex-1">
+                <span class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[18px] leading-none text-primary">visibility_off</span>
+                  <span class="text-sm font-semibold text-textmain">Share anonymously</span>
+                </span>
+                <span id="anon-card-desc" class="mt-1.5 block text-xs leading-5 text-textmuted">
+                  Your username will be hidden everywhere this story appears — feed, map, search, and the story page. Readers will see the author as <strong class="text-primary">Anonymous</strong>. You can change this later by editing the story.
+                </span>
+                <span id="anon-card-state" class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-0.5 text-[11px] font-semibold text-textmuted transition">
+                  <span id="anon-card-state-dot" class="h-1.5 w-1.5 rounded-full bg-textmuted"></span>
+                  <span id="anon-card-state-text">Off — your username will be shown</span>
+                </span>
+              </span>
+            </div>
+          </button>
+          <input type="hidden" id="is-anonymous" name="is_anonymous" value="false" />
+        </div>
+
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 
         <!-- Error / Success Messages -->
         <div id="form-error" class="hidden rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700"></div>
@@ -208,9 +328,32 @@
   </section>
 </main>
 
+<div id="badge-unlock-modal" class="hidden fixed inset-0 z-[3000] flex items-center justify-center bg-black/45 px-4 py-6" role="dialog" aria-modal="true" aria-labelledby="badge-unlock-title">
+  <div class="relative w-full max-w-md rounded-3xl border border-border bg-surface p-7 text-center shadow-soft">
+    <button type="button" id="badge-unlock-close" class="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-white text-textmuted transition hover:bg-stone-50 hover:text-textmain" aria-label="Close badge popup">
+      <span class="text-xl leading-none">&times;</span>
+    </button>
+    <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Badge unlocked</p>
+    <h2 id="badge-unlock-title" class="mt-3 font-headline text-3xl font-extrabold text-textmain">Congratulations!</h2>
+    <p id="badge-unlock-message" class="mt-3 text-sm leading-6 text-textmuted">You earned a new badge for sharing local history.</p>
+    <div class="mt-6 flex justify-center">
+      <img id="badge-unlock-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="" class="h-44 w-44 object-contain drop-shadow-xl" />
+    </div>
+    <p id="badge-unlock-name" class="mt-5 text-lg font-bold text-textmain"></p>
+    <button type="button" id="badge-keep-publishing" class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">
+      Keep publishing
+    </button>
+  </div>
+</div>
+
 <!-- Auth -->
 <script src="config.js"></script>
 <script src="auth.js"></script>
+<script src="site-header.js"></script>
+<script>mountSiteHeader();</script>
+<script src="recording.js"></script>
+<script src="tags.js"></script>
+<script src="multi-location.js"></script>
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -227,59 +370,50 @@
     maxZoom: 19
   }).addTo(createMap);
 
-  var pinMarker = null;
+  // ─── Multi-location picker ───
+  var chipContainer = document.getElementById("location-chips");
+  var clearAllBtn = document.getElementById("clear-locations");
+  var latitudeInput = document.getElementById("latitude");
+  var longitudeInput = document.getElementById("longitude");
+  var locationNameInput = document.getElementById("location");
 
-  function setPin(lat, lng, label) {
-    if (pinMarker) createMap.removeLayer(pinMarker);
-
-    pinMarker = L.marker([lat, lng], {
-      draggable: true
-    }).addTo(createMap);
-
-    pinMarker.on("dragend", function () {
-      var pos = pinMarker.getLatLng();
-      updateLocationFields(pos.lat, pos.lng, null);
-      reverseGeocode(pos.lat, pos.lng);
-    });
-
-    document.getElementById("latitude").value = lat.toFixed(6);
-    document.getElementById("longitude").value = lng.toFixed(6);
-
-    var display = label || (lat.toFixed(4) + ", " + lng.toFixed(4));
-    document.getElementById("selected-location-text").textContent = display;
-    document.getElementById("selected-location").classList.remove("hidden");
-
-    updateChecklist();
-  }
-
-  function updateLocationFields(lat, lng, name) {
-    document.getElementById("latitude").value = lat.toFixed(6);
-    document.getElementById("longitude").value = lng.toFixed(6);
-    if (name) {
-      document.getElementById("location").value = name;
-      document.getElementById("selected-location-text").textContent = name + " (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")";
+  function onPickerChange(locs) {
+    if (locs.length > 0) {
+      latitudeInput.value = locs[0].latitude.toFixed(6);
+      longitudeInput.value = locs[0].longitude.toFixed(6);
     } else {
-      document.getElementById("selected-location-text").textContent = lat.toFixed(4) + ", " + lng.toFixed(4);
+      latitudeInput.value = "";
+      longitudeInput.value = "";
     }
-    document.getElementById("selected-location").classList.remove("hidden");
+    clearAllBtn.classList.toggle("hidden", locs.length === 0);
+    renderLocationChips(chipContainer, locs, {
+      onRemove: function (i) { picker.remove(i); },
+      onFocus: function (i) { picker.focus(i); }
+    });
     updateChecklist();
   }
 
-  // Click on map to pin
+  var picker = createMultiLocationPicker(L, createMap, { onChange: onPickerChange });
+  onPickerChange([]); // initial render
+
+  function addPinFromMapClick(lat, lng) {
+    var added = picker.add({ latitude: lat, longitude: lng, label: null });
+    if (!added) return;
+    // Reverse geocode this pin so the chip shows a readable label and
+    // (if the user hasn't typed one yet) the "Location Name" input is
+    // populated from the first pin.
+    reverseGeocode(lat, lng, picker.count() - 1);
+  }
+
+  // Click on map to add a pin
   createMap.on("click", function (e) {
-    setPin(e.latlng.lat, e.latlng.lng, null);
-    reverseGeocode(e.latlng.lat, e.latlng.lng);
+    addPinFromMapClick(e.latlng.lat, e.latlng.lng);
   });
 
-  // Clear location
-  document.getElementById("clear-location").addEventListener("click", function () {
-    if (pinMarker) createMap.removeLayer(pinMarker);
-    pinMarker = null;
-    document.getElementById("latitude").value = "";
-    document.getElementById("longitude").value = "";
-    document.getElementById("location").value = "";
-    document.getElementById("selected-location").classList.add("hidden");
-    updateChecklist();
+  // Clear all locations
+  clearAllBtn.addEventListener("click", function () {
+    picker.clear();
+    locationNameInput.value = "";
   });
 
   // ─── Geocoding (Nominatim / OpenStreetMap) ───
@@ -313,9 +447,12 @@
                   div.addEventListener("click", function () {
                     var lat = parseFloat(item.lat);
                     var lon = parseFloat(item.lon);
+                    var shortLabel = item.display_name.split(",").slice(0, 2).join(",").trim();
                     createMap.setView([lat, lon], 16);
-                    setPin(lat, lon, item.display_name.split(",").slice(0, 2).join(","));
-                    document.getElementById("location").value = item.display_name.split(",").slice(0, 2).join(",").trim();
+                    var added = picker.add({ latitude: lat, longitude: lon, label: shortLabel });
+                    if (added && picker.count() === 1 && !locationNameInput.value.trim()) {
+                      locationNameInput.value = shortLabel;
+                    }
                     searchInput.value = item.display_name.split(",").slice(0, 3).join(",");
                     searchResults.classList.add("hidden");
                   });
@@ -337,16 +474,24 @@
     }
   });
 
-  // Reverse geocode when clicking on map
-  function reverseGeocode(lat, lng) {
+  // Reverse geocode a pin so its chip shows a readable label. For the very
+  // first pin, also populate the "Location Name" input (the user can still
+  // overwrite it) so single-location stories behave the same as before.
+  function reverseGeocode(lat, lng, pinIndex) {
     fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lng + "&zoom=16")
             .then(function (r) { return r.json(); })
             .then(function (data) {
-              if (data && data.display_name) {
-                var shortName = data.display_name.split(",").slice(0, 3).join(",").trim();
-                var locationName = data.display_name.split(",").slice(0, 2).join(",").trim();
-                document.getElementById("location").value = locationName;
-                document.getElementById("selected-location-text").textContent = shortName + " (" + lat.toFixed(4) + ", " + lng.toFixed(4) + ")";
+              if (!data || !data.display_name) return;
+              var locationName = data.display_name.split(",").slice(0, 2).join(",").trim();
+              if (typeof pinIndex === "number") {
+                picker.setLabel(pinIndex, locationName);
+                renderLocationChips(chipContainer, picker.getLocations(), {
+                  onRemove: function (i) { picker.remove(i); },
+                  onFocus: function (i) { picker.focus(i); }
+                });
+              }
+              if (pinIndex === 0 && !locationNameInput.value.trim()) {
+                locationNameInput.value = locationName;
               }
             })
             .catch(function () { /* silent fail */ });
@@ -354,10 +499,13 @@
 
   // ─── Date Range Toggle ───
   function isValidDateInput(value) {
-    return /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
   }
 
   function getISODateFromDateInput(value) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return value;
+    }
     var parts = value.split("/");
     return parts[2] + "-" + parts[0] + "-" + parts[1];
   }
@@ -368,22 +516,50 @@
     updateChecklist();
   });
 
-  // ─── File Upload Display ───
-  document.getElementById("media-files").addEventListener("change", function () {
+  var recordedFiles = [];
+  var recorder = null;
+  var recordingStream = null;
+  var recordingChunks = [];
+  var recordingStartedAt = 0;
+  var recordingTimerInterval = null;
+  var recordingPreviewUrl = null;
+  var recordingWasCanceled = false;
+  var capturedCameraFiles = [];
+  var audioContext = null;
+  var voiceAnalyser = null;
+  var voiceAnimationFrame = null;
+  var lastVoiceBarAt = 0;
+
+  function updateFileList() {
     var fileList = document.getElementById("file-list");
-    if (this.files.length === 0) {
+    var selectedFiles = Array.prototype.slice.call(document.getElementById("media-files").files || []);
+    var allFiles = selectedFiles.concat(capturedCameraFiles, recordedFiles);
+    if (allFiles.length === 0) {
       fileList.textContent = "";
       return;
     }
     var names = [];
-    for (var i = 0; i < this.files.length; i++) {
-      names.push(this.files[i].name);
+    for (var i = 0; i < allFiles.length; i++) {
+      names.push(allFiles[i].name);
     }
-    fileList.textContent = names.length + " file(s) selected: " + names.join(", ");
+    fileList.textContent = names.length + " file(s) ready: " + names.join(", ");
+  }
+
+  // ─── File Upload Display ───
+  document.getElementById("media-files").addEventListener("change", updateFileList);
+  document.getElementById("camera-image-file").addEventListener("change", function () {
+    capturedCameraFiles = capturedCameraFiles.concat(Array.prototype.slice.call(this.files || []));
+    this.value = "";
+    updateFileList();
+  });
+  document.getElementById("camera-video-file").addEventListener("change", function () {
+    capturedCameraFiles = capturedCameraFiles.concat(Array.prototype.slice.call(this.files || []));
+    this.value = "";
+    updateFileList();
   });
 
   function getSelectedFiles() {
-    return Array.prototype.slice.call(document.getElementById("media-files").files || []);
+    return Array.prototype.slice.call(document.getElementById("media-files").files || []).concat(capturedCameraFiles, recordedFiles);
   }
 
   function getMediaType(file) {
@@ -427,6 +603,418 @@
     draftButton.classList.toggle("opacity-70", isSubmitting);
     draftButton.classList.toggle("cursor-not-allowed", isSubmitting);
   }
+
+  function setRecordingButtonState(isRecording) {
+    var startButton = document.getElementById("btn-start-recording");
+    var stopButton = document.getElementById("btn-stop-recording");
+    var cancelButton = document.getElementById("btn-cancel-recording");
+
+    startButton.disabled = isRecording;
+    stopButton.disabled = !isRecording;
+    cancelButton.disabled = !isRecording;
+
+    startButton.classList.toggle("opacity-60", isRecording);
+    startButton.classList.toggle("cursor-not-allowed", isRecording);
+    stopButton.classList.toggle("opacity-60", !isRecording);
+    stopButton.classList.toggle("cursor-not-allowed", !isRecording);
+    cancelButton.classList.toggle("opacity-60", !isRecording);
+    cancelButton.classList.toggle("cursor-not-allowed", !isRecording);
+  }
+
+  function setStartRecordingLabel(label) {
+    document.getElementById("btn-start-recording").textContent = label;
+  }
+
+  function setRecordingStatus(message, isError) {
+    var statusEl = document.getElementById("recording-status");
+    statusEl.textContent = message;
+    statusEl.classList.toggle("text-red-700", !!isError);
+    statusEl.classList.toggle("text-textmuted", !isError);
+  }
+
+  function clearRecordingTimer() {
+    if (recordingTimerInterval) {
+      clearInterval(recordingTimerInterval);
+      recordingTimerInterval = null;
+    }
+    document.getElementById("recording-live").classList.add("hidden");
+    document.getElementById("recording-live").classList.remove("flex");
+    document.getElementById("recording-timer").textContent = "00:00";
+  }
+
+  function resetVoiceMeter() {
+    document.getElementById("voice-meter").innerHTML = "";
+  }
+
+  function stopVoiceMeter() {
+    if (voiceAnimationFrame) {
+      cancelAnimationFrame(voiceAnimationFrame);
+      voiceAnimationFrame = null;
+    }
+    if (audioContext) {
+      audioContext.close().catch(function () { /* audio context may already be closing */ });
+      audioContext = null;
+    }
+    voiceAnalyser = null;
+    document.getElementById("voice-meter").classList.add("hidden");
+    document.getElementById("voice-meter").classList.remove("flex");
+    resetVoiceMeter();
+  }
+
+  function startVoiceMeter(stream) {
+    var AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    stopVoiceMeter();
+    audioContext = new AudioContextClass();
+    voiceAnalyser = audioContext.createAnalyser();
+    voiceAnalyser.fftSize = 256;
+
+    var source = audioContext.createMediaStreamSource(stream);
+    source.connect(voiceAnalyser);
+
+    document.getElementById("voice-meter").classList.remove("hidden");
+    document.getElementById("voice-meter").classList.add("flex");
+
+    var data = new Uint8Array(voiceAnalyser.frequencyBinCount);
+    lastVoiceBarAt = 0;
+
+    function appendVoiceBar(level) {
+      var meter = document.getElementById("voice-meter");
+      var bar = document.createElement("span");
+      var height = Math.max(8, Math.round(8 + (level * 48)));
+
+      bar.className = "voice-meter-bar rounded-full bg-primary";
+      bar.style.height = height + "px";
+      bar.style.opacity = String(Math.max(0.35, Math.min(1, 0.45 + level)));
+      meter.appendChild(bar);
+
+      while (meter.children.length > 48) {
+        meter.removeChild(meter.firstElementChild);
+      }
+    }
+
+    function renderVoiceLevel() {
+      if (!voiceAnalyser) return;
+
+      voiceAnalyser.getByteFrequencyData(data);
+      var total = 0;
+      for (var i = 0; i < data.length; i++) {
+        total += data[i];
+      }
+      var level = Math.min(1, total / data.length / 120);
+
+      if (Date.now() - lastVoiceBarAt > 90) {
+        appendVoiceBar(level);
+        lastVoiceBarAt = Date.now();
+      }
+
+      voiceAnimationFrame = requestAnimationFrame(renderVoiceLevel);
+    }
+
+    renderVoiceLevel();
+  }
+
+  function updateRecordingTimer() {
+    var elapsed = Math.floor((Date.now() - recordingStartedAt) / 1000);
+    var minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    var seconds = String(elapsed % 60).padStart(2, "0");
+    document.getElementById("recording-timer").textContent = minutes + ":" + seconds;
+  }
+
+  function stopRecordingStream() {
+    if (recordingStream) {
+      recordingStream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+      recordingStream = null;
+    }
+  }
+
+  var transcriptionPreviewSeq = 0;
+
+  function setRecordingTranscriptStatus(message, tone) {
+    var el = document.getElementById("recording-transcript-status");
+    if (!el) return;
+    if (!message) {
+      el.classList.add("hidden");
+      el.textContent = "";
+      el.classList.remove("text-textmuted", "text-amber-800", "text-red-700");
+      return;
+    }
+    el.classList.remove("hidden");
+    el.textContent = message;
+    el.classList.remove("text-textmuted", "text-amber-800", "text-red-700");
+    if (tone === "error") {
+      el.classList.add("text-red-700");
+    } else if (tone === "warn") {
+      el.classList.add("text-amber-800");
+    } else {
+      el.classList.add("text-textmuted");
+    }
+  }
+
+  function setRetryTranscriptionVisible(visible) {
+    var btn = document.getElementById("btn-retry-transcription");
+    if (!btn) return;
+    btn.classList.toggle("hidden", !visible);
+  }
+
+  async function fetchTranscriptionPreviewForRecordedFile(file) {
+    transcriptionPreviewSeq++;
+    var seq = transcriptionPreviewSeq;
+    var textarea = document.getElementById("recording-transcript-draft");
+    setRecordingTranscriptStatus("Transcribing…", "info");
+    setRetryTranscriptionVisible(false);
+    if (textarea) {
+      textarea.disabled = true;
+    }
+    try {
+      var formData = new FormData();
+      formData.append("file", file, file.name || "recording.webm");
+      var res = await authFetch(API_BASE + "/transcription/preview", {
+        method: "POST",
+        body: formData
+      });
+      if (seq !== transcriptionPreviewSeq) {
+        return;
+      }
+      if (!res.ok) {
+        var detail = await readErrorMessage(res, "Could not transcribe this recording.");
+        if (res.status === 401) {
+          setRecordingTranscriptStatus("Not authenticated (401). Please log in again.", "error");
+        } else {
+          setRecordingTranscriptStatus("Transcription failed (" + res.status + "): " + detail, "error");
+        }
+        setRetryTranscriptionVisible(true);
+        return;
+      }
+      var data = await res.json();
+      if (seq !== transcriptionPreviewSeq) {
+        return;
+      }
+      var t = data && data.transcript;
+      if (typeof t === "string" && t.trim().length > 0) {
+        if (textarea) {
+          textarea.value = t;
+        }
+        setRecordingTranscriptStatus("Transcript from server—you can edit below.", "info");
+      } else {
+        setRecordingTranscriptStatus("No text was detected in this recording. You can type your own transcript.", "warn");
+      }
+    } catch (err) {
+      if (seq !== transcriptionPreviewSeq) {
+        return;
+      }
+      setRecordingTranscriptStatus("Network error while transcribing. Check your connection and try recording again.", "error");
+      setRetryTranscriptionVisible(true);
+    } finally {
+      if (seq === transcriptionPreviewSeq && textarea) {
+        textarea.disabled = false;
+      }
+    }
+  }
+
+  function clearRecordingPreview() {
+    var audioPreview = document.getElementById("recording-audio-preview");
+
+    transcriptionPreviewSeq++;
+    transcriptionPreviewSeq++;
+    if (recordingPreviewUrl) {
+      URL.revokeObjectURL(recordingPreviewUrl);
+      recordingPreviewUrl = null;
+    }
+
+    audioPreview.removeAttribute("src");
+    audioPreview.classList.add("hidden");
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptPanel) transcriptPanel.classList.add("hidden");
+    if (transcriptDraft) {
+      transcriptDraft.value = "";
+      transcriptDraft.disabled = false;
+    }
+    setRecordingTranscriptStatus("", null);
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptPanel) transcriptPanel.classList.add("hidden");
+    if (transcriptDraft) {
+      transcriptDraft.value = "";
+      transcriptDraft.disabled = false;
+    }
+    setRecordingTranscriptStatus("", null);
+  }
+
+  function showRecordedPreview(file) {
+    var audioPreview = document.getElementById("recording-audio-preview");
+
+    clearRecordingPreview();
+    recordingPreviewUrl = URL.createObjectURL(file);
+    audioPreview.src = recordingPreviewUrl;
+    audioPreview.classList.remove("hidden");
+
+    var transcriptPanel = document.getElementById("recording-transcript-panel");
+    var transcriptDraft = document.getElementById("recording-transcript-draft");
+    if (transcriptDraft) transcriptDraft.value = "";
+    if (transcriptPanel) transcriptPanel.classList.remove("hidden");
+    setRetryTranscriptionVisible(true);
+  }
+
+  async function startRecording() {
+    var kind = "audio";
+
+    if (!window.RecordingUtils || !RecordingUtils.isMediaRecorderAvailable(window)) {
+      setRecordingStatus("Recording is not supported by this browser.", true);
+      return;
+    }
+
+    try {
+      clearRecordingPreview();
+      recordingChunks = [];
+      recordingWasCanceled = false;
+      setStartRecordingLabel("Start");
+      recordingStream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+      startVoiceMeter(recordingStream);
+
+      var mimeType = RecordingUtils.getSupportedRecordingMimeType(kind, window.MediaRecorder);
+      recorder = mimeType
+        ? new MediaRecorder(recordingStream, { mimeType: mimeType })
+        : new MediaRecorder(recordingStream);
+
+      recorder.addEventListener("dataavailable", function (event) {
+        if (event.data && event.data.size > 0) {
+          recordingChunks.push(event.data);
+        }
+      });
+
+      recorder.addEventListener("stop", function () {
+        clearRecordingTimer();
+        stopVoiceMeter();
+        stopRecordingStream();
+        setRecordingButtonState(false);
+
+        if (recordingWasCanceled) {
+          setRecordingStatus("Recording canceled. Start again when ready.", false);
+          return;
+        }
+
+        if (recordingChunks.length === 0) {
+          setRecordingStatus("No recording data was captured. Try again.", true);
+          return;
+        }
+
+        var recordedFile = RecordingUtils.buildRecordedFile(recordingChunks, kind, recorder.mimeType, new Date());
+        recordedFiles = [recordedFile];
+        showRecordedPreview(recordedFile);
+        updateFileList();
+        setStartRecordingLabel("Record Again");
+        setRecordingStatus("Recording ready. Preview it here, then publish the story to upload it.", false);
+        void fetchTranscriptionPreviewForRecordedFile(recordedFile);
+      });
+
+      recorder.start();
+      recordingStartedAt = Date.now();
+      updateRecordingTimer();
+      recordingTimerInterval = setInterval(updateRecordingTimer, 1000);
+      document.getElementById("recording-live").classList.remove("hidden");
+      document.getElementById("recording-live").classList.add("flex");
+      setRecordingButtonState(true);
+      setRecordingStatus("Recording audio...", false);
+    } catch (error) {
+      clearRecordingTimer();
+      stopVoiceMeter();
+      stopRecordingStream();
+      setRecordingButtonState(false);
+      var denied = error && (error.name === "NotAllowedError" || error.name === "PermissionDeniedError");
+      setRecordingStatus(denied ? "Microphone or camera permission was denied." : "Could not start recording. Check your device permissions.", true);
+    }
+  }
+
+  function stopRecording() {
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  }
+
+  function cancelRecording() {
+    recordingWasCanceled = true;
+    recordingChunks = [];
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    clearRecordingTimer();
+    stopVoiceMeter();
+    stopRecordingStream();
+    clearRecordingPreview();
+    setRecordingButtonState(false);
+    setStartRecordingLabel(recordedFiles.length > 0 ? "Record Again" : "Start");
+    setRecordingStatus("Recording canceled. Start again when ready.", false);
+  }
+
+  // ─── Anonymous card toggle ───
+  (function setupAnonymousCard() {
+    var card = document.getElementById("anon-card");
+    var hidden = document.getElementById("is-anonymous");
+    var indicator = document.getElementById("anon-card-indicator");
+    var check = document.getElementById("anon-card-check");
+    var statePill = document.getElementById("anon-card-state");
+    var stateDot = document.getElementById("anon-card-state-dot");
+    var stateText = document.getElementById("anon-card-state-text");
+
+    function applyState(on) {
+      hidden.value = on ? "true" : "false";
+      card.setAttribute("aria-checked", on ? "true" : "false");
+
+      card.classList.toggle("border-primary", on);
+      card.classList.toggle("bg-[rgba(119,90,25,0.06)]", on);
+      card.classList.toggle("border-border", !on);
+      card.classList.toggle("bg-white", !on);
+
+      indicator.classList.toggle("bg-primary", on);
+      indicator.classList.toggle("border-primary", on);
+      indicator.classList.toggle("bg-white", !on);
+      indicator.classList.toggle("border-border", !on);
+      check.classList.toggle("opacity-0", !on);
+      check.classList.toggle("opacity-100", on);
+
+      statePill.classList.toggle("bg-[rgba(119,90,25,0.12)]", on);
+      statePill.classList.toggle("text-primary", on);
+      statePill.classList.toggle("bg-stone-100", !on);
+      statePill.classList.toggle("text-textmuted", !on);
+
+      stateDot.classList.toggle("bg-primary", on);
+      stateDot.classList.toggle("bg-textmuted", !on);
+
+      stateText.textContent = on
+        ? "On — you will appear as Anonymous"
+        : "Off — your username will be shown";
+    }
+
+    card.addEventListener("click", function () {
+      applyState(hidden.value !== "true");
+    });
+
+    card.addEventListener("keydown", function (e) {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        applyState(hidden.value !== "true");
+      }
+    });
+
+    applyState(false);
+  })();
+
+  document.getElementById("btn-start-recording").addEventListener("click", startRecording);
+  document.getElementById("btn-stop-recording").addEventListener("click", stopRecording);
+  document.getElementById("btn-cancel-recording").addEventListener("click", cancelRecording);
+  document.getElementById("btn-retry-transcription").addEventListener("click", function () {
+    if (!recordedFiles || recordedFiles.length === 0) return;
+    void fetchTranscriptionPreviewForRecordedFile(recordedFiles[0]);
+  });
 
   // ─── Checklist Updates ───
   function updateChecklist() {
@@ -474,6 +1062,47 @@
   });
 
   // ─── Form Submission ───
+  var BADGE_ASSET_BY_NAME = {
+    "first story": "assets/1st story.png",
+    "1st story": "assets/1st story.png",
+    "story teller": "assets/story teller.png",
+    "story master": "assets/story master.png"
+  };
+
+  function getBadgeAssetPathByName(name) {
+    return BADGE_ASSET_BY_NAME[String(name || "").trim().toLowerCase()] || "";
+  }
+
+  function redirectToMap() {
+    window.location.assign("map.html");
+  }
+
+  function redirectToNewStory() {
+    window.location.assign("story-create.html");
+  }
+
+  function showBadgeUnlockModal(badgeName) {
+    var assetPath = getBadgeAssetPathByName(badgeName);
+    if (!assetPath) return false;
+
+    var modal = document.getElementById("badge-unlock-modal");
+    var image = document.getElementById("badge-unlock-image");
+    var nameEl = document.getElementById("badge-unlock-name");
+    var messageEl = document.getElementById("badge-unlock-message");
+    if (!modal || !image || !nameEl || !messageEl) return false;
+
+    image.src = assetPath;
+    image.alt = badgeName;
+    nameEl.textContent = badgeName;
+    messageEl.textContent = "Congratulations, you earned a new badge for sharing local history.";
+    modal.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+    return true;
+  }
+
+  document.getElementById("badge-unlock-close").addEventListener("click", redirectToMap);
+  document.getElementById("badge-keep-publishing").addEventListener("click", redirectToNewStory);
+
   document.getElementById("story-form").addEventListener("submit", async function (e) {
     e.preventDefault();
 
@@ -512,7 +1141,7 @@
     }
 
     if (!usingDateRange && !isValidDateInput(dateSingle)) {
-      errorEl.textContent = "Date must use mm/dd/yyyy format.";
+      errorEl.textContent = "Date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -524,13 +1153,13 @@
     }
 
     if (usingDateRange && !isValidDateInput(dateStart)) {
-      errorEl.textContent = "Start date must use mm/dd/yyyy format.";
+      errorEl.textContent = "Start date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
 
     if (usingDateRange && !isValidDateInput(dateEnd)) {
-      errorEl.textContent = "End date must use mm/dd/yyyy format.";
+      errorEl.textContent = "End date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -549,6 +1178,9 @@
       }
     }
 
+    var isAnonymous = document.getElementById("is-anonymous").value === "true";
+    var pickerLocations = picker.getLocations();
+
     var payload = {
       title: title,
       content: content,
@@ -557,8 +1189,16 @@
       longitude: parseFloat(lng),
       place_name: placeName,
       date_start: usingDateRange ? getISODateFromDateInput(dateStart) : getISODateFromDateInput(dateSingle),
-      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null
+      date_end: usingDateRange ? getISODateFromDateInput(dateEnd) : null,
+      is_anonymous: isAnonymous
     };
+
+    // Only send the locations array for multi-location stories. Single-pin
+    // stories continue to use the legacy latitude/longitude/place_name shape
+    // for backwards compatibility with existing list/detail rendering.
+    if (pickerLocations.length > 1) {
+      payload.locations = pickerLocations;
+    }
 
     setSubmittingState(true, "Creating Story...");
 
@@ -589,6 +1229,12 @@
         formData.append("media_type", mediaType);
         formData.append("sort_order", String(fileIndex));
 
+        if (mediaType === "audio" && recordedFiles && recordedFiles.indexOf(file) !== -1) {
+          var transcriptDraft = document.getElementById("recording-transcript-draft");
+          var transcriptValue = transcriptDraft ? transcriptDraft.value : "";
+          formData.append("transcript", transcriptValue);
+        }
+
         var uploadResponse = await authFetch(API_BASE + "/stories/" + createdStory.id + "/media", {
           method: "POST",
           body: formData
@@ -610,8 +1256,13 @@
       successEl.textContent = "Story published successfully! Redirecting to the map...";
       successEl.classList.remove("hidden");
 
+      if (createdStory && createdStory.new_badge && showBadgeUnlockModal(createdStory.new_badge)) {
+        successEl.classList.add("hidden");
+        return;
+      }
+
       setTimeout(function () {
-        window.location.assign("map.html");
+        redirectToMap();
       }, 1500);
     } catch (error) {
       errorEl.textContent = error && error.message ? error.message : "Failed to publish the story.";

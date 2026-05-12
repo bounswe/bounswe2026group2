@@ -1,12 +1,19 @@
-import pytest
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
+from unittest.mock import AsyncMock
+
+import pytest
+from sqlalchemy import func, select
 
 from app.db.enums import DatePrecision, MediaType, StoryStatus, StoryVisibility
 from app.db.media_file import MediaFile
 from app.db.story import Story
+from app.db.story_comment import StoryComment
+from app.db.story_like import StoryLike
+from app.db.story_save import StorySave
 from app.db.user import User
 from app.services.auth_service import hash_password
+from app.services.tag_service import apply_ai_tags_to_story
 
 
 @pytest.mark.asyncio
@@ -122,9 +129,7 @@ class TestStoryListingAPI:
         db_session.add_all([in_bounds_story, out_bounds_story, null_coord_story])
         await db_session.commit()
 
-        resp = await client.get(
-            "/stories?min_lat=40.9&max_lat=41.1&min_lng=28.9&max_lng=29.1"
-        )
+        resp = await client.get("/stories?min_lat=40.9&max_lat=41.1&min_lng=28.9&max_lng=29.1")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -172,9 +177,7 @@ class TestStoryListingAPI:
         db_session.add_all([in_range_story, out_range_story])
         await db_session.commit()
 
-        resp = await client.get(
-            "/stories?query_start=2025-08-01&query_end=2025-08-31&query_precision=date"
-        )
+        resp = await client.get("/stories?query_start=2025-08-01&query_end=2025-08-31&query_precision=date")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -187,11 +190,70 @@ class TestStoryListingAPI:
         assert resp.status_code == 422
 
     async def test_list_stories_with_invalid_bounds_order_returns_422(self, client):
-        resp = await client.get(
-            "/stories?min_lat=41.1&max_lat=40.9&min_lng=28.9&max_lng=29.1"
-        )
+        resp = await client.get("/stories?min_lat=41.1&max_lat=40.9&min_lng=28.9&max_lng=29.1")
 
         assert resp.status_code == 422
+
+    async def test_list_stories_filters_by_tags_with_or_matching_and_relevance_ranking(self, client, db_session):
+        user = User(
+            username="tagfilterauthor",
+            email="tagfilterauthor@example.com",
+            password_hash=hash_password("StoryPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        multi_tag_story = Story(
+            user_id=user.id,
+            title="Sport History Story",
+            summary="Matches both requested tags",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        sport_story = Story(
+            user_id=user.id,
+            title="Sport Story",
+            summary="Matches one requested tag",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        music_story = Story(
+            user_id=user.id,
+            title="Music Story",
+            summary="Does not match requested tags",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        hidden_story = Story(
+            user_id=user.id,
+            title="Hidden Sport Story",
+            summary="Should not be listed",
+            content="content",
+            status=StoryStatus.DRAFT,
+            visibility=StoryVisibility.PRIVATE,
+            place_name="Istanbul",
+        )
+        db_session.add_all([multi_tag_story, sport_story, music_story, hidden_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, multi_tag_story.id, ["spor", "tarih"])
+        await apply_ai_tags_to_story(db_session, sport_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, music_story.id, ["muzik"])
+        await apply_ai_tags_to_story(db_session, hidden_story.id, ["spor"])
+
+        resp = await client.get("/stories?tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert data["total"] == 2
+        assert titles == ["Sport History Story", "Sport Story"]
 
 
 @pytest.mark.asyncio
@@ -264,7 +326,7 @@ class TestStoryMediaUploadAPI:
         assert "id" in media
         assert "storage_key" in media
         assert "bucket_name" in media
-        assert media["media_url"].endswith(f'/{media["bucket_name"]}/{media["storage_key"]}')
+        assert media["media_url"].endswith(f"/{media['bucket_name']}/{media['storage_key']}")
         assert "created_at" in media
 
     async def test_upload_media_invalid_mime_type(self, client, db_session, monkeypatch):
@@ -300,6 +362,55 @@ class TestStoryMediaUploadAPI:
 
         assert resp.status_code == 422
         assert "Unsupported mime type" in resp.json()["detail"]
+
+    async def test_upload_audio_media_with_transcript_persists_and_skips_background_transcription(
+        self, client, db_session, monkeypatch
+    ):
+        token = await self._create_user_and_token(client)
+
+        user = User(
+            username="storyowner3",
+            email="storyowner3@example.com",
+            password_hash=hash_password("StoryOwner3!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Story with transcripted audio",
+            summary="summary",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+        )
+        db_session.add(story)
+        await db_session.commit()
+
+        monkeypatch.setattr("app.services.story_service.upload_bytes", lambda **kwargs: None)
+        transcribe_media_file = AsyncMock()
+        monkeypatch.setattr("app.services.story_service.transcribe_media_file", transcribe_media_file)
+
+        resp = await client.post(
+            f"/stories/{story.id}/media",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "media_type": "audio",
+                "transcript": "  Reviewed transcript  ",
+                "sort_order": "1",
+            },
+            files={"file": ("audio.webm", b"audio-bytes", "audio/webm")},
+        )
+
+        assert resp.status_code == 201
+        media = resp.json()["media"]
+        assert media["media_type"] == "audio"
+        assert media["transcript"] == "Reviewed transcript"
+
+        result = await db_session.execute(select(MediaFile).where(MediaFile.id == uuid.UUID(media["id"])))
+        persisted_media = result.scalar_one()
+        assert persisted_media.transcript == "Reviewed transcript"
+        transcribe_media_file.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -361,6 +472,7 @@ class TestStoryDetailAPI:
         assert data["date_label"] == "1923"
         assert data["status"] == "published"
         assert data["visibility"] == "public"
+        assert data["like_count"] == 0
         assert "created_at" in data
 
         assert len(data["media_files"]) == 1
@@ -371,6 +483,54 @@ class TestStoryDetailAPI:
         assert media_item["media_type"] == "image"
         assert media_item["file_size_bytes"] == 777
         assert media_item["media_url"].endswith("/images/stories/test/photo.png")
+        assert media_item["transcript"] is None
+
+    async def test_get_story_detail_includes_audio_transcript_when_present(self, client, db_session):
+        author = User(
+            username="detailaudioauthor",
+            email="detailaudioauthor@example.com",
+            password_hash="hashed-password",
+        )
+        db_session.add(author)
+        await db_session.flush()
+
+        story = Story(
+            user_id=author.id,
+            title="Audio Detail Story",
+            summary="Audio summary",
+            content="Audio content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=date(1923, 1, 1),
+            date_end=date(1923, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add(story)
+        await db_session.flush()
+
+        media = MediaFile(
+            story_id=story.id,
+            bucket_name="audio",
+            storage_key="stories/test/audio.webm",
+            original_filename="audio.webm",
+            mime_type="audio/webm",
+            media_type=MediaType.AUDIO,
+            file_size_bytes=321,
+            sort_order=0,
+            transcript="Transcribed local history narration",
+        )
+        db_session.add(media)
+        await db_session.commit()
+
+        resp = await client.get(f"/stories/{story.id}")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["media_files"]) == 1
+        assert data["media_files"][0]["transcript"] == "Transcribed local history narration"
 
     async def test_get_story_detail_not_found(self, client):
         resp = await client.get(f"/stories/{uuid.uuid4()}")
@@ -378,6 +538,243 @@ class TestStoryDetailAPI:
         assert resp.status_code == 404
         data = resp.json()
         assert data["detail"] == "Story not found"
+
+
+@pytest.mark.asyncio
+class TestStoryLikeAPI:
+    async def _create_user_and_token(self, client, username, email):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": "StoryLike1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": "StoryLike1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_like_story_success(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi", "likeauthorapi@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi", "likerapi@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "API Like Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "story_id": story_id,
+            "liked": True,
+            "like_count": 1,
+        }
+
+    async def test_get_like_summary_returns_unliked_state(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi6", "likeauthorapi6@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi6", "likerapi6@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "API Like Summary Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Bursa",
+                "latitude": 40.195,
+                "longitude": 29.06,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        resp = await client.get(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "story_id": story_id,
+            "liked": False,
+            "like_count": 0,
+        }
+
+    async def test_get_like_summary_returns_liked_state(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi7", "likeauthorapi7@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi7", "likerapi7@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "API Like Summary Liked Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Eskisehir",
+                "latitude": 39.7667,
+                "longitude": 30.5256,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        resp = await client.get(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "story_id": story_id,
+            "liked": True,
+            "like_count": 1,
+        }
+
+    async def test_duplicate_like_is_idempotent_and_persists_once(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "likeauthorapi2", "likeauthorapi2@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi2", "likerapi2@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Duplicate Like Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        first_resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        second_resp = await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        like_count_result = await db_session.execute(
+            select(func.count(StoryLike.id)).where(StoryLike.story_id == uuid.UUID(story_id))
+        )
+
+        assert first_resp.status_code == 200
+        assert second_resp.status_code == 200
+        assert first_resp.json()["like_count"] == 1
+        assert second_resp.json()["like_count"] == 1
+        assert like_count_result.scalar_one() == 1
+
+    async def test_unlike_story_success_and_repeat_is_idempotent(self, client):
+        author_token = await self._create_user_and_token(client, "likeauthorapi3", "likeauthorapi3@example.com")
+        liker_token = await self._create_user_and_token(client, "likerapi3", "likerapi3@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Unlike Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Izmir",
+                "latitude": 38.4237,
+                "longitude": 27.1428,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        await client.post(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        first_unlike = await client.delete(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        second_unlike = await client.delete(
+            f"/stories/{story_id}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+        detail_resp = await client.get(f"/stories/{story_id}")
+
+        assert first_unlike.status_code == 200
+        assert second_unlike.status_code == 200
+        assert first_unlike.json()["liked"] is False
+        assert second_unlike.json()["liked"] is False
+        assert first_unlike.json()["like_count"] == 0
+        assert second_unlike.json()["like_count"] == 0
+        assert detail_resp.json()["like_count"] == 0
+
+    async def test_like_story_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi4", "likerapi4@example.com")
+
+        resp = await client.post(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_unlike_story_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi5", "likerapi5@example.com")
+
+        resp = await client.delete(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_get_like_summary_missing_story_returns_404(self, client):
+        liker_token = await self._create_user_and_token(client, "likerapi8", "likerapi8@example.com")
+
+        resp = await client.get(
+            f"/stories/{uuid.uuid4()}/like",
+            headers={"Authorization": f"Bearer {liker_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_like_story_requires_authentication(self, client):
+        resp = await client.post(f"/stories/{uuid.uuid4()}/like")
+
+        assert resp.status_code == 401
+
+    async def test_get_like_summary_requires_authentication(self, client):
+        resp = await client.get(f"/stories/{uuid.uuid4()}/like")
+
+        assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -434,6 +831,7 @@ class TestStoryCreateAPI:
         assert data["status"] == "published"
         assert data["visibility"] == "public"
         assert data["media_files"] == []
+        assert data["new_badge"] == "First Story"
         assert "id" in data
         assert "created_at" in data
 
@@ -607,3 +1005,1452 @@ class TestStoryUpdateAPI:
 
         assert update_resp.status_code == 404
         assert update_resp.json()["detail"] == "Story not found"
+
+
+# --- Issue #133: Story Creation Endpoint (additional cases) ---
+
+
+@pytest.mark.asyncio
+class TestStoryCreateAuthAPI:
+    """Additional creation tests covering #133 — auth rejection and validation."""
+
+    async def test_create_story_unauthenticated_returns_401(self, client):
+        resp = await client.post(
+            "/stories",
+            json={
+                "title": "No Auth Story",
+                "content": "Some content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+
+        assert resp.status_code == 401
+
+    async def test_create_story_missing_title_returns_422(self, client):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": "notitleuser",
+                "email": "notitle@example.com",
+                "password": "NoTitle1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": "notitle@example.com", "password": "NoTitle1!"},
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "content": "No title content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+
+        assert resp.status_code == 422
+
+    async def test_create_story_missing_content_returns_422(self, client):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": "nocontentuser",
+                "email": "nocontent@example.com",
+                "password": "NoContent1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": "nocontent@example.com", "password": "NoContent1!"},
+        )
+        token = login_resp.json()["access_token"]
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "No Content Story",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+
+        assert resp.status_code == 422
+
+
+# --- Issue #134: Story Retrieval Endpoint (additional cases) ---
+
+
+@pytest.mark.asyncio
+class TestStoryRetrievalAPI:
+    """Additional retrieval tests covering #134 — invalid ID format."""
+
+    async def test_get_story_with_invalid_uuid_returns_422(self, client):
+        resp = await client.get("/stories/not-a-uuid")
+
+        assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestStoryCommentAPI:
+    async def _create_user_and_token(self, client, username, email):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": "CommentPass1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": "CommentPass1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_create_comment_success(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor", "commentauthor@example.com")
+        commenter_token = await self._create_user_and_token(client, "commenter", "commenter@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Comments",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "Great story"},
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["story_id"] == story_id
+        assert data["content"] == "Great story"
+        assert data["author"]["username"] == "commenter"
+        assert "created_at" in data
+        assert "updated_at" in data
+
+    async def test_create_comment_requires_authentication(self, client):
+        resp = await client.post(f"/stories/{uuid.uuid4()}/comments", json={"content": "Hello"})
+        assert resp.status_code == 401
+
+    async def test_create_comment_rejects_blank_content(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor2", "commentauthor2@example.com")
+        commenter_token = await self._create_user_and_token(client, "commenter2", "commenter2@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Blank Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "   "},
+        )
+
+        assert resp.status_code == 422
+        detail = resp.json()["detail"]
+        assert isinstance(detail, list)
+        assert detail[0]["loc"] == ["body", "content"]
+
+    async def test_create_comment_missing_story_returns_404(self, client):
+        commenter_token = await self._create_user_and_token(client, "commenter3", "commenter3@example.com")
+
+        resp = await client.post(
+            f"/stories/{uuid.uuid4()}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "Hello"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_list_comments_success_in_chronological_order(self, client, db_session):
+        story_author = User(
+            username="storycommentauthor",
+            email="storycommentauthor@example.com",
+            password_hash=hash_password("StoryPass1!"),
+            display_name="Story Author",
+        )
+        first_commenter = User(
+            username="firstcommenter",
+            email="firstcommenter@example.com",
+            password_hash=hash_password("StoryPass1!"),
+            display_name="First Commenter",
+        )
+        second_commenter = User(
+            username="secondcommenter",
+            email="secondcommenter@example.com",
+            password_hash=hash_password("StoryPass1!"),
+            display_name="Second Commenter",
+        )
+        db_session.add_all([story_author, first_commenter, second_commenter])
+        await db_session.flush()
+
+        story = Story(
+            user_id=story_author.id,
+            title="Comment List Story",
+            summary="summary",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+        )
+        db_session.add(story)
+        await db_session.flush()
+
+        first_comment = StoryComment(
+            story_id=story.id,
+            user_id=first_commenter.id,
+            content="First comment",
+            created_at=datetime(2026, 4, 19, 12, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 4, 19, 12, 0, tzinfo=timezone.utc),
+        )
+        second_comment = StoryComment(
+            story_id=story.id,
+            user_id=second_commenter.id,
+            content="Second comment",
+            created_at=datetime(2026, 4, 19, 12, 5, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 4, 19, 12, 5, tzinfo=timezone.utc),
+        )
+        db_session.add_all([first_comment, second_comment])
+        await db_session.commit()
+
+        resp = await client.get(f"/stories/{story.id}/comments")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+        assert [comment["content"] for comment in data["comments"]] == ["First comment", "Second comment"]
+        assert data["comments"][0]["author"]["username"] == "firstcommenter"
+        assert data["comments"][1]["author"]["display_name"] == "Second Commenter"
+
+    async def test_list_comments_missing_story_returns_404(self, client):
+        resp = await client.get(f"/stories/{uuid.uuid4()}/comments")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_delete_comment_success_for_owner(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor4", "commentauthor4@example.com")
+        commenter_token = await self._create_user_and_token(client, "commenter4", "commenter4@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Deletable Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Izmir",
+                "latitude": 38.4237,
+                "longitude": 27.1428,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        create_comment_resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+            json={"content": "Delete me"},
+        )
+        comment_id = create_comment_resp.json()["id"]
+
+        delete_resp = await client.delete(
+            f"/stories/{story_id}/comments/{comment_id}",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+        )
+        list_resp = await client.get(f"/stories/{story_id}/comments")
+
+        assert delete_resp.status_code == 204
+        assert list_resp.status_code == 200
+        assert list_resp.json() == {"comments": [], "total": 0}
+
+    async def test_delete_comment_returns_403_for_non_owner(self, client):
+        author_token = await self._create_user_and_token(client, "commentauthor5", "commentauthor5@example.com")
+        owner_token = await self._create_user_and_token(client, "commentowner5", "commentowner5@example.com")
+        other_user_token = await self._create_user_and_token(client, "commentother5", "commentother5@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story With Protected Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Bursa",
+                "latitude": 40.1826,
+                "longitude": 29.0665,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        create_comment_resp = await client.post(
+            f"/stories/{story_id}/comments",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"content": "Cannot delete me"},
+        )
+        comment_id = create_comment_resp.json()["id"]
+
+        delete_resp = await client.delete(
+            f"/stories/{story_id}/comments/{comment_id}",
+            headers={"Authorization": f"Bearer {other_user_token}"},
+        )
+
+        assert delete_resp.status_code == 403
+        assert delete_resp.json()["detail"] == "Not allowed to delete this comment"
+
+    async def test_delete_comment_missing_comment_returns_404(self, client):
+        commenter_token = await self._create_user_and_token(client, "commenter6", "commenter6@example.com")
+        author_token = await self._create_user_and_token(client, "commentauthor6", "commentauthor6@example.com")
+
+        create_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Story For Missing Comment",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Adana",
+                "latitude": 37.0,
+                "longitude": 35.3213,
+            },
+        )
+        story_id = create_story_resp.json()["id"]
+
+        delete_resp = await client.delete(
+            f"/stories/{story_id}/comments/{uuid.uuid4()}",
+            headers={"Authorization": f"Bearer {commenter_token}"},
+        )
+
+        assert delete_resp.status_code == 404
+        assert delete_resp.json()["detail"] == "Comment not found"
+
+
+# --- Issue #135: Story Search Endpoint ---
+
+
+@pytest.mark.asyncio
+class TestStorySearchAPI:
+    """API tests for GET /stories/search covering #135."""
+
+    async def _seed_stories(self, db_session):
+        from datetime import date
+
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="searchauthor",
+            email="searchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        istanbul_story = Story(
+            user_id=user.id,
+            title="Istanbul Story",
+            summary="About Istanbul",
+            content="Content about Istanbul",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            date_start=date(1453, 1, 1),
+            date_end=date(1453, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        ankara_story = Story(
+            user_id=user.id,
+            title="Ankara Story",
+            summary="About Ankara",
+            content="Content about Ankara",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+            date_start=date(1923, 1, 1),
+            date_end=date(1923, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        draft_istanbul_story = Story(
+            user_id=user.id,
+            title="Draft Istanbul Story",
+            summary="Draft about Istanbul",
+            content="Draft content",
+            status=StoryStatus.DRAFT,
+            visibility=StoryVisibility.PRIVATE,
+            place_name="Istanbul",
+        )
+        db_session.add_all([istanbul_story, ankara_story, draft_istanbul_story])
+        await db_session.commit()
+
+        return istanbul_story, ankara_story
+
+    async def test_search_by_place_name_returns_matching_stories(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?place_name=Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Istanbul Story"
+        assert data["stories"][0]["place_name"] == "Istanbul"
+
+    async def test_search_by_q_uses_search_contract(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?q=Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Istanbul Story"
+        assert data["stories"][0]["place_name"] == "Istanbul"
+
+    async def test_search_by_q_matches_story_tags(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="semanticsearchauthor",
+            email="semanticsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Neighborhood Memory",
+            summary="A local city story",
+            content="Families remembered the old streets together.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+        await apply_ai_tags_to_story(db_session, story.id, ["gecekondu"])
+
+        resp = await client.get("/stories/search?q=gecek")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Neighborhood Memory"
+        assert data["stories"][0]["tags"] == ["gecekondu"]
+
+    async def test_search_by_q_matches_story_tags_with_typo(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="typosearchauthor",
+            email="typosearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Neighborhood Memory",
+            summary="A local city story",
+            content="Families remembered the old streets together.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+        await apply_ai_tags_to_story(db_session, story.id, ["gecekondu"])
+
+        resp = await client.get("/stories/search?q=gecokondi")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Neighborhood Memory"
+        assert data["stories"][0]["tags"] == ["gecekondu"]
+
+    async def test_search_by_q_matches_story_content(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="contentsearchauthor",
+            email="contentsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        matching_story = Story(
+            user_id=user.id,
+            title="Urban Memory",
+            summary="A local memory",
+            content="A story about old gecekondu streets and neighbors.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        non_matching_story = Story(
+            user_id=user.id,
+            title="Coastal Memory",
+            summary="A seaside memory",
+            content="A story about boats and sea wind.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Izmir",
+        )
+        db_session.add_all([matching_story, non_matching_story])
+        await db_session.commit()
+
+        resp = await client.get("/stories/search?q=gecek")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Urban Memory"
+
+    async def test_search_by_q_matches_story_content_with_typo(self, client, db_session):
+        from app.db.enums import StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="contenttypoauthor",
+            email="contenttypoauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Urban Memory",
+            summary="A local memory",
+            content="A story about old gecekondu streets and neighbors.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+        )
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/search?q=gecokondi")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Urban Memory"
+
+    async def test_search_by_q_no_match_returns_empty(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?q=doesnotexist")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"stories": [], "total": 0}
+
+    async def test_search_by_place_name_returns_only_public_published(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?place_name=Istanbul")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [s["title"] for s in data["stories"]]
+        assert "Draft Istanbul Story" not in titles
+
+    async def test_search_by_place_name_no_match_returns_empty(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        resp = await client.get("/stories/search?place_name=Trabzon")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data == {"stories": [], "total": 0}
+
+    async def test_search_with_date_filter_narrows_results(self, client, db_session):
+        from datetime import date
+
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="datefilterauthor",
+            email="datefilterauthor@example.com",
+            password_hash=hash_password("DateFilter1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        old_story = Story(
+            user_id=user.id,
+            title="Old Izmir Story",
+            summary="Old",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Izmir",
+            latitude=38.4192,
+            longitude=27.1287,
+            date_start=date(1800, 1, 1),
+            date_end=date(1800, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        recent_story = Story(
+            user_id=user.id,
+            title="Recent Izmir Story",
+            summary="Recent",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Izmir",
+            latitude=38.4192,
+            longitude=27.1287,
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add_all([old_story, recent_story])
+        await db_session.commit()
+
+        resp = await client.get(
+            "/stories/search?place_name=Izmir&query_start=2020-01-01&query_end=2020-12-31&query_precision=date"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Recent Izmir Story"
+
+    async def test_search_by_q_with_tags_and_date_filter_narrows_results(self, client, db_session):
+        from datetime import date
+
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="combinedsearchauthor",
+            email="combinedsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        matching_story = Story(
+            user_id=user.id,
+            title="Gecekondu Sports Story",
+            summary="A matching urban sports memory",
+            content="A gecekondu neighborhood sports story.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        wrong_tag_story = Story(
+            user_id=user.id,
+            title="Gecekondu Music Story",
+            summary="Wrong tag",
+            content="A gecekondu neighborhood music story.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        wrong_date_story = Story(
+            user_id=user.id,
+            title="Old Gecekondu Sports Story",
+            summary="Wrong date",
+            content="A gecekondu neighborhood sports story.",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(1980, 1, 1),
+            date_end=date(1980, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add_all([matching_story, wrong_tag_story, wrong_date_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, matching_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, wrong_tag_story.id, ["muzik"])
+        await apply_ai_tags_to_story(db_session, wrong_date_story.id, ["spor"])
+
+        resp = await client.get(
+            "/stories/search?q=gecek&tags=spor&query_start=2020-01-01&query_end=2020-12-31&query_precision=date"
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Gecekondu Sports Story"
+
+    async def test_search_missing_place_name_returns_422(self, client):
+        resp = await client.get("/stories/search")
+
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Either q or place_name is required"
+
+    async def test_search_q_takes_precedence_over_place_name(self, client, db_session):
+        await self._seed_stories(db_session)
+
+        # q=istanbul matches the Istanbul story; place_name=Ankara would have returned
+        # the Ankara story if it took precedence. Only Istanbul results should appear.
+        resp = await client.get("/stories/search?q=istanbul&place_name=Ankara")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [s["title"] for s in data["stories"]]
+        assert "Istanbul Story" in titles
+        assert "Ankara Story" not in titles
+
+    async def test_search_empty_place_name_returns_422(self, client):
+        resp = await client.get("/stories/search?place_name=")
+
+        assert resp.status_code == 422
+
+    async def test_search_empty_q_returns_422(self, client):
+        resp = await client.get("/stories/search?q=")
+
+        assert resp.status_code == 422
+
+    async def test_search_filters_by_place_and_tags_with_relevance_ranking(self, client, db_session):
+        from datetime import date
+
+        from app.db.enums import DatePrecision, StoryStatus, StoryVisibility
+        from app.db.story import Story
+        from app.db.user import User
+        from app.services.auth_service import hash_password
+
+        user = User(
+            username="tagsearchauthor",
+            email="tagsearchauthor@example.com",
+            password_hash=hash_password("SearchPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        multi_tag_istanbul_story = Story(
+            user_id=user.id,
+            title="Istanbul Sport History Story",
+            summary="Matches both requested tags",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2020, 1, 1),
+            date_end=date(2020, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        single_tag_istanbul_story = Story(
+            user_id=user.id,
+            title="Istanbul Sport Story",
+            summary="Matches one requested tag",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            date_start=date(2021, 1, 1),
+            date_end=date(2021, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        ankara_story = Story(
+            user_id=user.id,
+            title="Ankara Sport History Story",
+            summary="Matches tags but not place",
+            content="content",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Ankara",
+            date_start=date(2022, 1, 1),
+            date_end=date(2022, 12, 31),
+            date_precision=DatePrecision.YEAR,
+        )
+        db_session.add_all([multi_tag_istanbul_story, single_tag_istanbul_story, ankara_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, multi_tag_istanbul_story.id, ["spor", "tarih"])
+        await apply_ai_tags_to_story(db_session, single_tag_istanbul_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, ankara_story.id, ["spor", "tarih"])
+
+        resp = await client.get("/stories/search?place_name=Istanbul&tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert data["total"] == 2
+        assert titles == ["Istanbul Sport History Story", "Istanbul Sport Story"]
+
+
+@pytest.mark.asyncio
+class TestStorySaveAPI:
+    async def _create_user_and_token(self, client, username, email):
+        await client.post(
+            "/auth/register",
+            json={
+                "username": username,
+                "email": email,
+                "password": "SavePass1!",
+            },
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": "SavePass1!",
+            },
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_save_story_success(self, client):
+        author_token = await self._create_user_and_token(client, "saveauthor", "saveauthor@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser", "saver@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Savable Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        resp = await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"story_id": story_id, "saved": True}
+
+    async def test_duplicate_save_is_idempotent_and_persists_once(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "saveauthor2", "saveauthor2@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser2", "saver2@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Duplicate Save Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        first_resp = await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+        second_resp = await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        save_result = await db_session.execute(select(StorySave).where(StorySave.story_id == uuid.UUID(story_id)))
+        saves = save_result.scalars().all()
+
+        assert first_resp.status_code == 200
+        assert second_resp.status_code == 200
+        assert first_resp.json()["saved"] is True
+        assert second_resp.json()["saved"] is True
+        assert len(saves) == 1
+
+    async def test_unsave_story_success_and_repeat_is_idempotent(self, client):
+        author_token = await self._create_user_and_token(client, "saveauthor3", "saveauthor3@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser3", "saver3@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Unsave Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Izmir",
+                "latitude": 38.4237,
+                "longitude": 27.1428,
+            },
+        )
+        story_id = create_resp.json()["id"]
+
+        await client.post(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        first_unsave = await client.delete(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+        second_unsave = await client.delete(
+            f"/stories/{story_id}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        assert first_unsave.status_code == 200
+        assert second_unsave.status_code == 200
+        assert first_unsave.json() == {"story_id": story_id, "saved": False}
+        assert second_unsave.json() == {"story_id": story_id, "saved": False}
+
+    async def test_list_saved_stories_returns_only_current_users_saves(self, client):
+        author_token = await self._create_user_and_token(client, "saveauthor4", "saveauthor4@example.com")
+        saver_one_token = await self._create_user_and_token(client, "saveruser4", "saver4@example.com")
+        saver_two_token = await self._create_user_and_token(client, "saveruser5", "saver5@example.com")
+
+        first_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "First Saved Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        second_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Second Saved Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Bursa",
+                "latitude": 40.1826,
+                "longitude": 29.0665,
+            },
+        )
+        first_story_id = first_story_resp.json()["id"]
+        second_story_id = second_story_resp.json()["id"]
+
+        await client.post(f"/stories/{first_story_id}/save", headers={"Authorization": f"Bearer {saver_one_token}"})
+        await client.post(f"/stories/{second_story_id}/save", headers={"Authorization": f"Bearer {saver_two_token}"})
+
+        resp = await client.get("/stories/saved", headers={"Authorization": f"Bearer {saver_one_token}"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "First Saved Story"
+
+    async def test_list_saved_stories_excludes_saved_stories_that_are_no_longer_public(self, client, db_session):
+        author_token = await self._create_user_and_token(client, "saveauthor5", "saveauthor5@example.com")
+        saver_token = await self._create_user_and_token(client, "saveruser7", "saver7@example.com")
+
+        public_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Still Public Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+            },
+        )
+        hidden_story_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {author_token}"},
+            json={
+                "title": "Later Hidden Story",
+                "content": "Story content",
+                "summary": "Story summary",
+                "place_name": "Ankara",
+                "latitude": 39.9334,
+                "longitude": 32.8597,
+            },
+        )
+        public_story_id = public_story_resp.json()["id"]
+        hidden_story_id = hidden_story_resp.json()["id"]
+
+        await client.post(f"/stories/{public_story_id}/save", headers={"Authorization": f"Bearer {saver_token}"})
+        await client.post(f"/stories/{hidden_story_id}/save", headers={"Authorization": f"Bearer {saver_token}"})
+
+        hidden_story = await db_session.get(Story, uuid.UUID(hidden_story_id))
+        hidden_story.visibility = StoryVisibility.PRIVATE
+        await db_session.commit()
+
+        resp = await client.get("/stories/saved", headers={"Authorization": f"Bearer {saver_token}"})
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert [story["id"] for story in data["stories"]] == [public_story_id]
+
+    async def test_save_story_missing_story_returns_404(self, client):
+        saver_token = await self._create_user_and_token(client, "saveruser6", "saver6@example.com")
+
+        resp = await client.post(
+            f"/stories/{uuid.uuid4()}/save",
+            headers={"Authorization": f"Bearer {saver_token}"},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Story not found"
+
+    async def test_saved_story_endpoints_require_authentication(self, client):
+        save_resp = await client.post(f"/stories/{uuid.uuid4()}/save")
+        list_resp = await client.get("/stories/saved")
+
+        assert save_resp.status_code == 401
+        assert list_resp.status_code == 401
+
+
+@pytest.mark.asyncio
+class TestNearbyStoriesAPI:
+    def _make_user(self, username: str, email: str) -> User:
+        return User(
+            username=username,
+            email=email,
+            password_hash=hash_password("TestPass1!"),
+        )
+
+    def _make_story(self, user_id, title, lat, lng, place_name="Istanbul") -> Story:
+        return Story(
+            user_id=user_id,
+            title=title,
+            content="content",
+            summary="summary",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name=place_name,
+            latitude=lat,
+            longitude=lng,
+        )
+
+    async def test_returns_story_within_radius(self, client, db_session):
+        user = self._make_user("nearbyauthor1", "nearby1@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        # Çeliktepe, Istanbul — ~0.4 km from query centre
+        story = self._make_story(user.id, "Nearby Story", lat=41.0739, lng=28.9606)
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/nearby?lat=41.0770&lng=28.9620&radius_km=5")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Nearby Story"
+
+    async def test_excludes_story_outside_radius(self, client, db_session):
+        user = self._make_user("nearbyauthor2", "nearby2@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        # Ankara — ~350 km from Istanbul
+        story = self._make_story(user.id, "Far Away Story", lat=39.9334, lng=32.8597, place_name="Ankara")
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784&radius_km=10")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+
+    async def test_filters_nearby_stories_by_repeated_tags(self, client, db_session):
+        user = self._make_user("nearbytagauthor", "nearbytag@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        multi_tag_story = self._make_story(user.id, "Nearby Sport History", lat=41.0082, lng=28.9784)
+        single_tag_story = self._make_story(user.id, "Nearby Sport", lat=41.0090, lng=28.9790)
+        wrong_tag_story = self._make_story(user.id, "Nearby Music", lat=41.0085, lng=28.9788)
+        far_matching_story = self._make_story(
+            user.id,
+            "Far Sport History",
+            lat=39.9334,
+            lng=32.8597,
+            place_name="Ankara",
+        )
+        db_session.add_all([multi_tag_story, single_tag_story, wrong_tag_story, far_matching_story])
+        await db_session.commit()
+
+        await apply_ai_tags_to_story(db_session, multi_tag_story.id, ["spor", "tarih"])
+        await apply_ai_tags_to_story(db_session, single_tag_story.id, ["spor"])
+        await apply_ai_tags_to_story(db_session, wrong_tag_story.id, ["muzik"])
+        await apply_ai_tags_to_story(db_session, far_matching_story.id, ["spor", "tarih"])
+
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784&radius_km=5&tags=spor&tags=tarih")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        titles = [story["title"] for story in data["stories"]]
+        assert data["total"] == 2
+        assert titles == ["Nearby Sport History", "Nearby Sport"]
+
+    async def test_returns_empty_when_no_stories_exist(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"stories": [], "total": 0}
+
+    async def test_invalid_lat_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=999&lng=28.9784")
+
+        assert resp.status_code == 422
+
+    async def test_invalid_lng_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=999")
+
+        assert resp.status_code == 422
+
+    async def test_non_positive_radius_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082&lng=28.9784&radius_km=0")
+
+        assert resp.status_code == 422
+
+    async def test_missing_lat_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lng=28.9784")
+
+        assert resp.status_code == 422
+
+    async def test_missing_lng_returns_422(self, client):
+        resp = await client.get("/stories/nearby?lat=41.0082")
+
+        assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestTimelineStoriesAPI:
+    def _make_user(self, username: str, email: str) -> User:
+        return User(
+            username=username,
+            email=email,
+            password_hash=hash_password("TestPass1!"),
+        )
+
+    def _make_story(self, user_id, title, lat=None, lng=None, place_name="Istanbul", date_start=None) -> Story:
+        return Story(
+            user_id=user_id,
+            title=title,
+            content="content",
+            summary="summary",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name=place_name,
+            latitude=lat,
+            longitude=lng,
+            date_start=date_start,
+        )
+
+    async def test_returns_200_with_stories_by_coords(self, client, db_session):
+        user = self._make_user("tlauthor1", "tl1@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story = self._make_story(user.id, "Timeline Story", lat=41.0739, lng=28.9606)
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?lat=41.0770&lng=28.9620&radius_km=5")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Timeline Story"
+
+    async def test_returns_200_with_stories_by_place_name(self, client, db_session):
+        user = self._make_user("tlauthor2", "tl2@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story = self._make_story(user.id, "Kadikoy Story", place_name="Kadikoy")
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Kadikoy")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["stories"][0]["title"] == "Kadikoy Story"
+
+    async def test_stories_sorted_by_date_start_asc(self, client, db_session):
+        from datetime import date as date_type
+
+        user = self._make_user("tlauthor3", "tl3@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story_later = self._make_story(user.id, "Later Event", place_name="Uskudar", date_start=date_type(1900, 1, 1))
+        story_earlier = self._make_story(
+            user.id, "Earlier Event", place_name="Uskudar", date_start=date_type(1800, 1, 1)
+        )
+        db_session.add_all([story_later, story_earlier])
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Uskudar")
+
+        assert resp.status_code == 200
+        stories = resp.json()["stories"]
+        assert len(stories) == 2
+        assert stories[0]["title"] == "Earlier Event"
+        assert stories[1]["title"] == "Later Event"
+
+    async def test_null_date_start_sorted_last(self, client, db_session):
+        from datetime import date as date_type
+
+        user = self._make_user("tlauthor4", "tl4@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story_undated = self._make_story(user.id, "Undated Story", place_name="Beyoglu")
+        story_dated = self._make_story(user.id, "Dated Story", place_name="Beyoglu", date_start=date_type(1950, 6, 15))
+        db_session.add_all([story_undated, story_dated])
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Beyoglu")
+
+        assert resp.status_code == 200
+        stories = resp.json()["stories"]
+        assert len(stories) == 2
+        assert stories[0]["title"] == "Dated Story"
+        assert stories[1]["title"] == "Undated Story"
+
+    async def test_excludes_story_outside_radius(self, client, db_session):
+        user = self._make_user("tlauthor5", "tl5@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        story = self._make_story(user.id, "Ankara Story", lat=39.9334, lng=32.8597, place_name="Ankara")
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?lat=41.0082&lng=28.9784&radius_km=10")
+
+        assert resp.status_code == 200
+        assert resp.json()["total"] == 0
+
+    async def test_returns_empty_when_no_stories_exist(self, client):
+        resp = await client.get("/stories/timeline?place_name=Nonexistent")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"stories": [], "total": 0}
+
+    async def test_missing_both_location_params_returns_422(self, client):
+        resp = await client.get("/stories/timeline")
+
+        assert resp.status_code == 422
+
+    async def test_partial_coords_without_place_name_returns_422(self, client):
+        resp = await client.get("/stories/timeline?lat=41.0082")
+
+        assert resp.status_code == 422
+
+    async def test_invalid_lat_returns_422(self, client):
+        resp = await client.get("/stories/timeline?lat=999&lng=28.9784")
+
+        assert resp.status_code == 422
+
+    async def test_pagination_limit_and_offset(self, client, db_session):
+        user = self._make_user("tlauthor6", "tl6@example.com")
+        db_session.add(user)
+        await db_session.flush()
+
+        for i in range(5):
+            db_session.add(self._make_story(user.id, f"Paged Story {i}", place_name="Sisli"))
+        await db_session.commit()
+
+        resp = await client.get("/stories/timeline?place_name=Sisli&limit=2&offset=0")
+
+        assert resp.status_code == 200
+        assert len(resp.json()["stories"]) == 2
+
+    async def test_no_auth_required(self, client):
+        resp = await client.get("/stories/timeline?place_name=Istanbul")
+
+        assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+class TestAnonymousStoryAPI:
+    async def _create_user_and_token(self, client, username: str, email: str) -> str:
+        await client.post(
+            "/auth/register",
+            json={"username": username, "email": email, "password": "AnonPass1!"},
+        )
+        login_resp = await client.post(
+            "/auth/login",
+            json={"email": email, "password": "AnonPass1!"},
+        )
+        return login_resp.json()["access_token"]
+
+    async def test_create_anonymous_story_returns_null_author(self, client):
+        token = await self._create_user_and_token(client, "anonuser1", "anon1@example.com")
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Anonymous Story",
+                "content": "Secret content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": True,
+            },
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["author"] is None
+        assert data["is_anonymous"] is True
+
+    async def test_create_non_anonymous_story_returns_real_author(self, client):
+        token = await self._create_user_and_token(client, "anonuser2", "anon2@example.com")
+
+        resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Named Story",
+                "content": "Public content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": False,
+            },
+        )
+
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["author"] == "anonuser2"
+        assert data["is_anonymous"] is False
+
+    async def test_list_stories_hides_author_for_anonymous_story(self, client, db_session):
+        user = User(
+            username="anonlistuser",
+            email="anonlist@example.com",
+            password_hash=hash_password("AnonPass1!"),
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        story = Story(
+            user_id=user.id,
+            title="Anonymous Listed Story",
+            content="content",
+            summary="summary",
+            status=StoryStatus.PUBLISHED,
+            visibility=StoryVisibility.PUBLIC,
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+            is_anonymous=True,
+        )
+        db_session.add(story)
+        await db_session.commit()
+
+        resp = await client.get("/stories")
+
+        assert resp.status_code == 200
+        items = [s for s in resp.json()["stories"] if s["title"] == "Anonymous Listed Story"]
+        assert len(items) == 1
+        assert items[0]["author"] is None
+        assert items[0]["is_anonymous"] is True
+
+    async def test_update_story_to_anonymous_hides_author(self, client):
+        token = await self._create_user_and_token(client, "anonuser3", "anon3@example.com")
+
+        create_resp = await client.post(
+            "/stories",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Will Be Anonymous",
+                "content": "content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": False,
+            },
+        )
+        assert create_resp.status_code == 201
+        story_id = create_resp.json()["id"]
+        assert create_resp.json()["author"] == "anonuser3"
+
+        update_resp = await client.put(
+            f"/stories/{story_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "Will Be Anonymous",
+                "content": "content",
+                "place_name": "Istanbul",
+                "latitude": 41.0082,
+                "longitude": 28.9784,
+                "is_anonymous": True,
+            },
+        )
+
+        assert update_resp.status_code == 200
+        data = update_resp.json()
+        assert data["author"] is None
+        assert data["is_anonymous"] is True
