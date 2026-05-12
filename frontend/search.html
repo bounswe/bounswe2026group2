@@ -39,26 +39,6 @@
         .material-symbols-outlined {
             font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
         }
-        .distance-btn {
-            padding: 5px 12px;
-            border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            border: 1px solid #e7e2d9;
-            background: white;
-            color: #5f584c;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
-        }
-        .distance-btn.active {
-            background: #1d1c16;
-            color: white;
-            border-color: #1d1c16;
-        }
-        .distance-btn:hover:not(.active) {
-            border-color: #c5a059;
-            color: #775a19;
-        }
     </style>
 </head>
 <body class="bg-background text-textmain font-body min-h-screen pt-[68px]">
@@ -98,17 +78,6 @@
                             <span class="text-textmuted shrink-0 text-sm">—</span>
                             <input id="filter-year-to" type="number" placeholder="to" min="1" max="9999"
                                 class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
-                        </div>
-                    </div>
-                    <!-- Distance -->
-                    <div>
-                        <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Distance</label>
-                        <div class="flex flex-wrap gap-1.5">
-                            <button type="button" class="distance-btn active" data-value="">Anywhere</button>
-                            <button type="button" class="distance-btn" data-value="500">500 m</button>
-                            <button type="button" class="distance-btn" data-value="1000">1 km</button>
-                            <button type="button" class="distance-btn" data-value="10000">10 km</button>
-                            <button type="button" class="distance-btn" data-value="100000">100 km</button>
                         </div>
                     </div>
                     <!-- Tags -->
@@ -191,7 +160,6 @@
         var lastQuery = "";
         var filterYearFrom = "";
         var filterYearTo = "";
-        var filterDistance = "";
         var filterPanelTags = [];
 
         // Read initial state from URL
@@ -207,6 +175,8 @@
 
         searchForm.addEventListener("submit", function (e) {
             e.preventDefault();
+            filterYearFrom = document.getElementById("filter-year-from").value.trim();
+            filterYearTo = document.getElementById("filter-year-to").value.trim();
             var query = searchInput.value.trim();
             updateUrlParams(query);
             performSearch(query);
@@ -309,7 +279,7 @@
         }
 
         function hasActiveFilters() {
-            return filterTags.length > 0 || filterYearFrom !== "" || filterYearTo !== "" || filterDistance !== "";
+            return filterTags.length > 0 || filterYearFrom !== "" || filterYearTo !== "";
         }
 
         function applyFiltersAndSort() {
@@ -422,10 +392,10 @@
 
         function setFiltersToggleActive(active) {
             if (active) {
-                filtersToggleBtn.classList.add("bg-textmain", "text-white", "border-textmain");
+                filtersToggleBtn.classList.add("bg-primary", "text-white", "border-primary");
                 filtersToggleBtn.classList.remove("bg-white", "text-textmuted", "border-border");
             } else {
-                filtersToggleBtn.classList.remove("bg-textmain", "text-white", "border-textmain");
+                filtersToggleBtn.classList.remove("bg-primary", "text-white", "border-primary");
                 filtersToggleBtn.classList.add("bg-white", "text-textmuted", "border-border");
             }
         }
@@ -439,19 +409,7 @@
                 renderPanelTags();
                 document.getElementById("filter-year-from").value = filterYearFrom;
                 document.getElementById("filter-year-to").value = filterYearTo;
-                document.querySelectorAll(".distance-btn").forEach(function (b) {
-                    b.classList.toggle("active", b.dataset.value === filterDistance);
-                });
             }
-        });
-
-        // Distance buttons
-        document.querySelectorAll(".distance-btn").forEach(function (btn) {
-            btn.addEventListener("click", function () {
-                document.querySelectorAll(".distance-btn").forEach(function (b) { b.classList.remove("active"); });
-                filterDistance = this.dataset.value;
-                this.classList.add("active");
-            });
         });
 
         // Panel tag input
@@ -526,15 +484,10 @@
         document.getElementById("filter-reset-btn").addEventListener("click", function () {
             filterYearFrom = "";
             filterYearTo = "";
-            filterDistance = "";
             filterPanelTags = [];
             filterTags = [];
             document.getElementById("filter-year-from").value = "";
             document.getElementById("filter-year-to").value = "";
-            document.querySelectorAll(".distance-btn").forEach(function (b) {
-                b.classList.remove("active");
-                if (b.dataset.value === "") b.classList.add("active");
-            });
             renderPanelTags();
             updateUrlParams(lastQuery);
             allStories = [];
