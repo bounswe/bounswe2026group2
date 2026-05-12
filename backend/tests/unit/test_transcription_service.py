@@ -30,7 +30,7 @@ class _SessionContextManager:
 class TestTranscribeAudioContent:
     async def test_returns_transcript_when_provider_succeeds(self):
         with patch(
-            "app.services.transcription_service._transcribe_with_whisper",
+            "app.services.transcription_service._transcribe_with_openai",
             new=AsyncMock(return_value="Transcribed text"),
         ) as mock_stt:
             result = await transcribe_audio_content(
@@ -44,7 +44,7 @@ class TestTranscribeAudioContent:
 
     async def test_returns_none_when_provider_raises(self):
         with patch(
-            "app.services.transcription_service._transcribe_with_whisper",
+            "app.services.transcription_service._transcribe_with_openai",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ) as mock_stt:
             result = await transcribe_audio_content(
