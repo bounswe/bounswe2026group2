@@ -1,18 +1,10 @@
 // TC_STORY_5 — Anonymous Story Sharing (mobile Appium / WebdriverIO)
 //
-// Skipped until #242 (Frontend: Anonymous Story Sharing UI) ships on dev.
-// When #242 merges:
-//   1. Remove describe.skip — change to describe(...)
-//   2. Uncomment Step 4: add the anonymous toggle click + assertion using the
-//      data-testid="story-anonymous-toggle" added by that PR
-//   3. Uncomment Step 5: add the post-submit redirect assertion once #242
-//      defines the redirect behaviour (currently redirects to map.html)
-//   4. Replace '#story-author' with data-testid once #242 adds it
+// Black-box tests against the Capacitor WebView. Requires a running Appium
+// server, a connected Android emulator with the debug APK installed, and the
+// backend reachable at MOBILE_API_BASE_URL (default: http://10.0.2.2:8000).
 //
-// Two-user flow (sequential single Appium session):
-//   Author registers → creates anonymous story → session cleared
-//   Reader registers/logs in → opens story → asserts author is anonymous
-//   Session cleared → visitor opens story → asserts author is anonymous
+// Tests are skipped automatically when no WEBVIEW context is available.
 
 const assert = require('node:assert/strict');
 const { switchToFirstWebviewContext } = require('../helpers/context');
@@ -36,19 +28,26 @@ async function navigateTo(path) {
 
 async function registerAndLogin(username, email, password) {
   await navigateTo('/register.html');
-  await $('[data-testid="register-username"]').setValue(username);
-  await $('[data-testid="register-email"]').setValue(email);
-  await $('[data-testid="register-password"]').setValue(password);
-  await $('[data-testid="register-confirm-password"]').setValue(password);
-  await $('[data-testid="register-terms"]').click();
-  await $('[data-testid="register-submit"]').click();
-  await $('[data-testid="login-email"]').waitForExist({ timeout: 8_000 });
-  await $('[data-testid="login-email"]').setValue(email);
-  await $('[data-testid="login-password"]').setValue(password);
-  await $('[data-testid="login-submit"]').click();
+  await (await browser.$('[data-testid="register-username"]')).setValue(username);
+  await (await browser.$('[data-testid="register-email"]')).setValue(email);
+  await (await browser.$('[data-testid="register-password"]')).setValue(password);
+  await (await browser.$('[data-testid="register-confirm-password"]')).setValue(password);
+  // Use execute() — native tap on a small checkbox is flaky on mobile.
+  await browser.execute(() => {
+    const cb = document.querySelector('[data-testid="register-terms"]');
+    if (cb && !cb.checked) cb.click();
+  });
+  await (await browser.$('[data-testid="register-submit"]')).click();
+  await browser.waitUntil(
+    async () => (await browser.getUrl()).includes('index.html'),
+    { timeout: 10_000, interval: 500, timeoutMsg: 'Did not redirect to index.html after registration' },
+  );
+  await (await browser.$('[data-testid="login-email"]')).setValue(email);
+  await (await browser.$('[data-testid="login-password"]')).setValue(password);
+  await (await browser.$('[data-testid="login-submit"]')).click();
   await browser.waitUntil(
     async () => (await browser.getUrl()).includes('map.html'),
-    { timeout: 8_000, timeoutMsg: 'expected to reach map.html after login' }
+    { timeout: 10_000, interval: 500, timeoutMsg: 'Did not redirect to map.html after login' },
   );
 }
 
@@ -58,83 +57,114 @@ async function clearSession() {
   });
 }
 
-describe.skip('TC_STORY_5 — Anonymous Story Sharing', () => {
-  before(async () => {
-    await switchToFirstWebviewContext();
-  });
+describe('TC_STORY_5 — Anonymous Story Sharing', () => {
+  it('author identity is hidden when story is published anonymously', async function () {
+    // ── Step 1: Switch to the Capacitor WebView ─────────────────────────────
+    const webviewContext = await switchToFirstWebviewContext();
+    if (!webviewContext) {
+      return this.skip();
+    }
 
-  it('author identity is hidden when story is published anonymously', async () => {
-    // ── Step 1: Register and log in as the author ────────────────────────────
+    // ── Step 2: Register and log in as the author ────────────────────────────
     await registerAndLogin(AUTHOR_USERNAME, AUTHOR_EMAIL, PASSWORD);
 
-    // ── Step 2: Open story creation page ─────────────────────────────────────
+    // ── Step 3: Open story creation page ─────────────────────────────────────
     await navigateTo('/story-create.html');
 
-    // ── Step 3: Fill in title, content, date and location ────────────────────
-    await $('#title').setValue('Old Fountain');
-    await $('#story').setValue('A forgotten fountain in the heart of the old city.');
-    await $('#location').setValue('Istanbul');
-    await $('#date-single').setValue('01/01/2024');
-    // Set hidden lat/lng fields directly — the submit handler validates that
-    // both are non-empty before allowing the form to proceed.
+    // ── Step 4: Fill in title, content, location and date ────────────────────
+    await (await browser.$('#title')).setValue('Old Fountain');
+    await (await browser.$('#story')).setValue('A forgotten fountain in the heart of the old city.');
+    await (await browser.$('#location')).setValue('Istanbul');
+    await (await browser.$('#date-single')).setValue('01/01/2024');
+    // Set lat/lng hidden fields directly — the Leaflet map is not interactive
+    // in the WebView and the submit handler requires non-empty coordinates.
     await browser.execute(() => {
       document.getElementById('latitude').value = '41.0082';
       document.getElementById('longitude').value = '28.9784';
     });
 
-    // ── Step 4: Enable anonymous toggle — assert it is visually selected ─────
-    // TODO: uncomment once #242 adds the anonymous toggle with data-testid
-    // await $('[data-testid="story-anonymous-toggle"]').click();
-    // assert.ok(
-    //   await $('[data-testid="story-anonymous-toggle"]').isSelected(),
-    //   'anonymous toggle must be checked before submitting'
-    // );
+    // ── Step 5: Enable anonymous toggle ──────────────────────────────────────
+    await (await browser.$('#anon-card')).click();
+    const isAnonymous = await browser.execute(
+      () => document.getElementById('is-anonymous').value,
+    );
+    assert.strictEqual(isAnonymous, 'true', 'anonymous hidden input must be "true" after toggling');
 
-    // ── Step 5: Submit and assert story is published ──────────────────────────
-    await $('#btn-publish').click();
-    // TODO: assert post-submit state once #242 defines redirect / success element
-    // Currently story-create.html redirects to map.html on success; #242 may change
-    // this to story-detail.html or expose a dedicated success indicator.
-    // e.g.  await browser.waitUntil(
-    //         async () => (await browser.getUrl()).includes('story-detail.html'),
-    //         { timeout: 8_000 }
-    //       );
+    // ── Step 6: Inject fetch interceptor to capture the story ID ─────────────
+    // story-create.html redirects to map.html after publish, so the story ID
+    // cannot be read from the URL.  We monkey-patch window.fetch to intercept
+    // the POST /stories response and persist the ID in localStorage so it
+    // survives the navigation.
+    await browser.execute(() => {
+      const origFetch = window.fetch;
+      window.fetch = async function (input, init) {
+        const res = await origFetch(input, init);
+        const url = typeof input === 'string' ? input : (input && input.url) || '';
+        if (url.includes('/stories') && init && init.method === 'POST') {
+          try {
+            const data = await res.clone().json();
+            if (data && data.id) localStorage.setItem('__capturedStoryId', String(data.id));
+          } catch (_) { /* ignore parse errors */ }
+        }
+        return res;
+      };
+    });
 
-    // ── Step 6: Capture the story URL for later navigation ───────────────────
-    // Currently story-create.html redirects to map.html after a successful publish
-    // (not to story-detail.html), so this will capture the wrong URL until #242
-    // changes the redirect. When #242 ships, either:
-    //   a) wait for redirect to story-detail.html?id=<uuid> and read browser.getUrl(), or
-    //   b) intercept the POST /stories/ response via browser.mock() to extract the
-    //      story ID, then build: `${await getAppOrigin()}/story-detail.html?id=${id}`
-    const storyUrl = await browser.getUrl();
+    // ── Step 7: Submit the form ───────────────────────────────────────────────
+    await (await browser.$('#btn-publish')).click();
 
-    // ── Step 7: Clear author session and register/login as reader ────────────
+    // Wait until the interceptor has stored the story ID (POST response arrived).
+    await browser.waitUntil(
+      async () => !!(await browser.execute(() => localStorage.getItem('__capturedStoryId'))),
+      { timeout: 10_000, interval: 200, timeoutMsg: 'POST /stories response was not captured within timeout' },
+    );
+    const storyId = await browser.execute(() => {
+      const id = localStorage.getItem('__capturedStoryId');
+      localStorage.removeItem('__capturedStoryId');
+      return id;
+    });
+    assert.ok(storyId, 'story ID must be a non-empty string');
+
+    // ── Step 8: Clear author session, register and log in as the reader ───────
     await clearSession();
     await registerAndLogin(READER_USERNAME, READER_EMAIL, PASSWORD);
 
-    // ── Step 8: Navigate to the story as the reader and verify anonymous author
-    await browser.url(storyUrl);
-    // TODO: replace '#story-author' with data-testid once #242 defines it
-    const authorEl = await $('#story-author');
-    await authorEl.waitForExist({ timeout: 5_000 });
-    const authorText = await authorEl.getText();
-    assert.ok(!authorText.includes(AUTHOR_USERNAME), 'real author username must not be visible to a logged-in reader');
-    assert.ok(authorText.includes('Anonymous'), 'author must appear as Anonymous to a logged-in reader');
+    // ── Step 9: Navigate to the story as the reader ───────────────────────────
+    await navigateTo(`/story-detail.html?id=${storyId}`);
+    const readerAuthorEl = await browser.$('#story-author');
+    await readerAuthorEl.waitForExist({ timeout: 8_000 });
+    const readerAuthorText = await readerAuthorEl.getText();
+    assert.ok(
+      readerAuthorText.includes('Anonymous'),
+      `reader must see "Anonymous", got: "${readerAuthorText}"`,
+    );
+    assert.ok(
+      !readerAuthorText.includes(AUTHOR_USERNAME),
+      `real username "${AUTHOR_USERNAME}" must not be visible to the reader`,
+    );
 
-    // ── Step 9: Clear reader session and open story as unauthenticated visitor
+    // ── Step 10: Clear reader session and verify as an unauthenticated visitor ─
     await clearSession();
-    await browser.url(storyUrl);
-    const visitorAuthorEl = await $('#story-author');
-    await visitorAuthorEl.waitForExist({ timeout: 5_000 });
+    await navigateTo(`/story-detail.html?id=${storyId}`);
+    const visitorAuthorEl = await browser.$('#story-author');
+    await visitorAuthorEl.waitForExist({ timeout: 8_000 });
     const visitorAuthorText = await visitorAuthorEl.getText();
-    assert.ok(!visitorAuthorText.includes(AUTHOR_USERNAME), 'real author username must not be visible to an unauthenticated visitor');
-    assert.ok(visitorAuthorText.includes('Anonymous'), 'author must appear as Anonymous to an unauthenticated visitor');
+    assert.ok(
+      visitorAuthorText.includes('Anonymous'),
+      `visitor must see "Anonymous", got: "${visitorAuthorText}"`,
+    );
+    assert.ok(
+      !visitorAuthorText.includes(AUTHOR_USERNAME),
+      `real username "${AUTHOR_USERNAME}" must not be visible to the visitor`,
+    );
 
-    // ── Step 10: Assert story content is visible ──────────────────────────────
-    const contentEl = await $('#story-content');
-    await contentEl.waitForExist({ timeout: 5_000 });
+    // ── Step 11: Assert story content is visible ──────────────────────────────
+    const contentEl = await browser.$('#story-content');
+    await contentEl.waitForExist({ timeout: 8_000 });
     const contentText = await contentEl.getText();
-    assert.ok(contentText.includes('Old Fountain'), 'story content must remain visible regardless of anonymous setting');
+    assert.ok(
+      contentText.includes('A forgotten fountain in the heart of the old city.'),
+      `story body must be visible to unauthenticated visitors, got: "${contentText}"`,
+    );
   });
 });
