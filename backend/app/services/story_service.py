@@ -937,5 +937,3 @@ async def create_report_for_story(
         )
 
     return StoryReportResponse.model_validate(report)
-
-

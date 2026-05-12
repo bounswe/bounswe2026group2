@@ -13,11 +13,7 @@ class TestAdminRoutingAPI:
             "/stories/admin/stories/{story_id}",
         }
 
-        routes = {
-            route.path: route
-            for route in app.routes
-            if getattr(route, "path", None) in admin_paths
-        }
+        routes = {route.path: route for route in app.routes if getattr(route, "path", None) in admin_paths}
 
         assert set(routes) == admin_paths
         assert all(route.endpoint.__module__ == "app.routers.admin" for route in routes.values())
