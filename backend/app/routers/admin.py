@@ -7,7 +7,8 @@ from app.core.deps import get_current_user
 from app.db.enums import ReportStatus
 from app.db.session import get_db
 from app.db.user import User
-from app.models.story import AdminReportsListResponse, StoryReportResponse, UpdateReportStatusRequest
+from app.models.admin import AdminReportsListResponse, UpdateReportStatusRequest
+from app.models.story import StoryReportResponse
 from app.services.admin_service import (
     ensure_admin_user,
     list_admin_reports,
