@@ -126,6 +126,7 @@ class UserEngagementStatsResponse(BaseModel):
     total_likes_received: int = Field(ge=0)
     total_comments_received: int = Field(ge=0)
     total_saves_received: int = Field(ge=0)
+    total_views_received: int = Field(ge=0)
 
 
 class UserDashboardResponse(BaseModel):
@@ -134,3 +135,4 @@ class UserDashboardResponse(BaseModel):
     total_likes_received: int = Field(ge=0)
     total_comments_received: int = Field(ge=0)
     total_saves_received: int = Field(ge=0)
+    total_views_received: int = Field(ge=0)

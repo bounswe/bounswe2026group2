@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_optional_user
 from app.db.enums import MediaType, ReportStatus, UserRole
 from app.db.session import get_db
 from app.db.story import Story
@@ -163,18 +163,34 @@ async def list_stories(
 @router.get(
     "/search",
     response_model=StoryListResponse,
-    summary="Search stories by place name",
+    summary="Search stories",
     description=(
-        "Search published public stories by place name (case-insensitive substring match). "
+        "Search published public stories by general query (q) across title, summary, content, place name, and tags, "
+        "or by legacy place_name. "
         "Optionally filter by date range using query_start/query_end/query_precision and by tags. "
-        "Multiple tags use OR matching; stories matching more requested tags rank higher."
+        "Multiple tags use OR matching; stories matching more requested tags rank higher. "
+        "Example: /stories/search?q=gecek"
     ),
     responses={
-        422: {"description": "Validation error for place_name or date filter parameters"},
+        422: {"description": "Validation error for search, tags, or date filter parameters"},
     },
 )
 async def search_stories(
-    place_name: str = Query(min_length=1, max_length=255),
+    q: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description=(
+            "General search query matched against story title, summary, content, place name, and tags "
+            "(for example, q=gecek can match a story tagged gecekondu)."
+        ),
+    ),
+    place_name: str | None = Query(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="Legacy place-name search parameter. Kept for backward compatibility.",
+    ),
     query_start: int | str | None = Query(default=None),
     query_end: int | str | None = Query(default=None),
     query_precision: str | None = Query(default=None),
@@ -200,9 +216,16 @@ async def search_stories(
             detail=exc.errors(include_context=False, include_url=False),
         )
 
+    if q is None and place_name is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Either q or place_name is required",
+        )
+
     return await search_available_stories_by_place(
         db,
-        place_name,
+        place_name=place_name,
+        search_query=q,
         query_start=normalized_query_start,
         query_end=normalized_query_end,
         tags=tags,
@@ -301,9 +324,11 @@ async def list_timeline_stories(
 )
 async def get_story_by_id(
     story_id: uuid.UUID,
+    track_view: bool = Query(default=False, description="Set to true only when rendering the story detail page"),
+    current_user: User | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await get_story_detail_by_id(db, story_id)
+    return await get_story_detail_by_id(db, story_id, viewer=current_user, track_view=track_view)
 
 
 @router.get(

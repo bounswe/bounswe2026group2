@@ -982,6 +982,12 @@
             var cluster = event.layer;
             if (!cluster || typeof cluster.getBounds !== "function") return;
 
+            if (map.getZoom() >= map.getMaxZoom() && typeof cluster.spiderfy === "function") {
+                clearTimeout(fetchTimeout);
+                cluster.spiderfy();
+                return;
+            }
+
             var bounds = cluster.getBounds();
             if (!bounds || !bounds.isValid()) return;
 

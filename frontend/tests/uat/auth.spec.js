@@ -56,17 +56,50 @@ test.describe('TC_AUTH_1 — User Registration and Login', () => {
 });
 
 // ---------------------------------------------------------------------------
-// TC_AUTH_2 — Google OAuth Login  (placeholder until issue #238 ships)
+// TC_AUTH_2 — Google OAuth Login
+// ---------------------------------------------------------------------------
+// Real Google consent screens cannot be automated, so we intercept the backend
+// OAuth redirect and inject a test token via the oauth-callback page.  This
+// exercises the full frontend OAuth flow:
+//   button click → /auth/google/login → (intercepted) → oauth-callback.html
+//   → localStorage.setItem('auth_token', ...) → redirect to map.html
 // ---------------------------------------------------------------------------
 test.describe('TC_AUTH_2 — Google OAuth Login', () => {
-  test.skip('logs in via Google OAuth and lands on the map', async ({ page }) => {
-    // TODO: implement when issue #238 (Google OAuth backend) is complete.
-    //
-    // Suggested steps:
-    //   1. page.goto('/index.html')
-    //   2. page.click('[data-testid="login-google"]')   ← add testid to the button
-    //   3. Complete the OAuth consent flow (use a test Google account or mock)
-    //   4. await page.waitForURL('**/map.html')
-    //   5. expect(page).toHaveURL(/map\.html/)
+  const FAKE_TOKEN = 'test.jwt.token';
+
+  test('logs in via Google OAuth and lands on the map', async ({ page }) => {
+    // map.html calls GET /auth/me on load; a 401 would remove the token from
+    // localStorage before we can assert it.  Return a mock user to prevent that.
+    await page.route('**/auth/me', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'test-id', username: 'testuser', email: 'testuser@example.com' }),
+      });
+    });
+
+    // ── Step 1: Open the login page ─────────────────────────────────────────
+    await page.goto('/index.html');
+
+    // ── Step 2: Rewrite the OAuth button href to the callback page ───────────
+    // Avoids going through Google's consent screen while still exercising the
+    // full frontend OAuth callback flow (token extraction → localStorage → redirect).
+    // Using evaluate() keeps the navigation on the frontend origin so the
+    // relative /oauth-callback.html URL resolves correctly.
+    await page.evaluate((token) => {
+      const btn = document.getElementById('google-auth-button');
+      if (btn) btn.href = `/oauth-callback.html#access_token=${token}`;
+    }, FAKE_TOKEN);
+
+    // ── Step 3: Click "Continue with Google" ────────────────────────────────
+    await page.getByTestId('login-google').click();
+
+    // ── Step 4: oauth-callback.html reads the token and redirects to map ────
+    await page.waitForURL('**/map.html', { timeout: 10_000 });
+    await expect(page).toHaveURL(/map\.html/);
+
+    // ── Step 5: Confirm the token was persisted ──────────────────────────────
+    const stored = await page.evaluate(() => localStorage.getItem('auth_token'));
+    expect(stored).toBe(FAKE_TOKEN);
   });
 });

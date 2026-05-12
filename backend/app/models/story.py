@@ -179,6 +179,7 @@ class StoryResponse(BaseModel):
     date_label: str | None
     status: StoryStatus
     visibility: StoryVisibility
+    view_count: int = Field(default=0, ge=0)
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -254,6 +255,7 @@ class StoryResponse(BaseModel):
             date_label=date_label,
             status=story.status,
             visibility=story.visibility,
+            view_count=getattr(story, "view_count", None) or 0,
             created_at=story.created_at,
         )
 

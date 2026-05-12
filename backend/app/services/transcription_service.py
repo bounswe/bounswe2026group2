@@ -1,12 +1,7 @@
-import asyncio
-import functools
 import logging
-import os
 import uuid
-from concurrent.futures import ThreadPoolExecutor
-from functools import lru_cache
-from tempfile import NamedTemporaryFile
 
+import httpx
 from fastapi import UploadFile, status
 from sqlalchemy import select
 
@@ -19,10 +14,7 @@ from app.services.media_validation import read_uploaded_file_content, validate_m
 
 logger = logging.getLogger(__name__)
 
-# Single-worker executor: all transcription work is serialised before a thread is
-# allocated, so no threadpool slots are wasted waiting and only one WhisperModel
-# is ever active. Both preview and background calls share this queue.
-_TRANSCRIPTION_EXECUTOR = ThreadPoolExecutor(max_workers=1)
+_OPENAI_TRANSCRIPTION_URL = "https://api.openai.com/v1/audio/transcriptions"
 
 
 async def transcribe_media_file(
@@ -68,7 +60,7 @@ async def transcribe_audio_content(
     mime_type: str | None,
 ) -> str | None:
     try:
-        return await _transcribe_with_whisper(
+        return await _transcribe_with_openai(
             filename=filename,
             content=content,
             mime_type=mime_type,
@@ -92,48 +84,28 @@ async def preview_audio_transcription(file: UploadFile) -> str | None:
     )
 
 
-async def _transcribe_with_whisper(
+async def _transcribe_with_openai(
     *,
     filename: str,
     content: bytes,
     mime_type: str | None,
 ) -> str | None:
-    loop = asyncio.get_running_loop()
-    fn = functools.partial(_transcribe_with_whisper_sync, filename=filename, content=content, mime_type=mime_type)
-    return await loop.run_in_executor(_TRANSCRIPTION_EXECUTOR, fn)
+    if not settings.OPENAI_API_KEY:
+        logger.warning("OPENAI_API_KEY is not set; skipping transcription")
+        return None
 
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.post(
+            _OPENAI_TRANSCRIPTION_URL,
+            headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
+            data={"model": settings.AI_WHISPER_MODEL},
+            files={"file": (filename, content, mime_type or "application/octet-stream")},
+        )
+        response.raise_for_status()
 
-@lru_cache(maxsize=1)
-def _load_whisper_model():
-    try:
-        from faster_whisper import WhisperModel
-    except ImportError as exc:
-        raise RuntimeError("faster-whisper is not installed") from exc
-
-    return WhisperModel(
-        settings.TRANSCRIPTION_MODEL,
-        device=settings.TRANSCRIPTION_DEVICE,
-        compute_type=settings.TRANSCRIPTION_COMPUTE_TYPE,
-    )
-
-
-def _transcribe_with_whisper_sync(
-    *,
-    filename: str,
-    content: bytes,
-    mime_type: str | None,
-) -> str | None:
-    suffix = os.path.splitext(filename)[1] or ".audio"
-    with NamedTemporaryFile(suffix=suffix, delete=True) as temp_audio:
-        temp_audio.write(content)
-        temp_audio.flush()
-
-        model = _load_whisper_model()
-        segments, _info = model.transcribe(temp_audio.name, beam_size=5)
-        transcript = " ".join(segment.text.strip() for segment in segments if getattr(segment, "text", "").strip())
-
+    transcript = response.json().get("text", "").strip()
     if not transcript:
-        logger.warning("Whisper transcription for %s returned no text", filename)
+        logger.warning("OpenAI Whisper returned no text for %s", filename)
         return None
 
     return transcript

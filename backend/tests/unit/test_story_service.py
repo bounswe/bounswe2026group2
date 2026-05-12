@@ -65,6 +65,7 @@ def _make_story(**overrides):
         "status": StoryStatus.PUBLISHED,
         "visibility": StoryVisibility.PUBLIC,
         "is_anonymous": False,
+        "view_count": 0,
         "created_at": datetime.now(timezone.utc),
         "story_likes": [],
     }
@@ -266,6 +267,31 @@ class TestSearchAvailableStoriesByPlaceService:
         assert result.stories == []
         db.execute.assert_awaited_once()
 
+    async def test_general_search_returns_mapped_stories_and_total(self):
+        story = _make_story(title="Gecekondu Memory", place_name="Istanbul")
+
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: [(story, "storyauthor")]
+
+        result = await search_available_stories_by_place(db, search_query="gecek")
+
+        assert result.total == 1
+        assert len(result.stories) == 1
+        assert result.stories[0].id == story.id
+        assert result.stories[0].title == "Gecekondu Memory"
+        assert result.stories[0].author == "storyauthor"
+        db.execute.assert_awaited_once()
+
+    async def test_general_search_returns_empty_response_when_no_match(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        result = await search_available_stories_by_place(db, search_query="unknown")
+
+        assert result.total == 0
+        assert result.stories == []
+        db.execute.assert_awaited_once()
+
     async def test_search_query_includes_date_overlap_filters(self):
         db = AsyncMock()
         db.execute.return_value.all = lambda: []
@@ -282,6 +308,48 @@ class TestSearchAvailableStoriesByPlaceService:
 
         assert "stories.date_start <=" in sql
         assert "stories.date_end >=" in sql
+
+    async def test_general_search_query_includes_story_text_place_and_tag_matching(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, search_query="gecokondi")
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LEFT OUTER JOIN story_tags" in sql
+        assert "LEFT OUTER JOIN tags" in sql
+        assert "stories.title" in sql
+        assert "stories.summary" in sql
+        assert "stories.content" in sql
+        assert "stories.place_name" in sql
+        assert "tags.name" in sql
+        assert "similarity" in sql.lower()
+        assert "word_similarity" in sql.lower()
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY" in sql
+        assert "stories.created_at DESC" in sql
+
+    async def test_general_search_query_with_tags_keeps_hybrid_search_and_applies_tag_filter(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await search_available_stories_by_place(db, search_query="gecek", tags=["history"])
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "LEFT OUTER JOIN story_tags" in sql
+        assert "LEFT OUTER JOIN tags" in sql
+        assert "stories.title" in sql
+        assert "stories.summary" in sql
+        assert "stories.content" in sql
+        assert "stories.place_name" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+        assert "ORDER BY" in sql
+        assert "stories.created_at DESC" in sql
 
     async def test_search_query_includes_tag_or_filter_and_relevance_sorting_when_tags_provided(self):
         db = AsyncMock()
@@ -703,7 +771,7 @@ class TestGetStoryDetailByIdService:
         db = AsyncMock()
         db.execute.side_effect = [
             SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
-            SimpleNamespace(scalar_one=lambda: 2),
+            SimpleNamespace(scalar_one=lambda: 2),  # like_count
         ]
 
         result = await get_story_detail_by_id(db, story_id)
@@ -717,6 +785,59 @@ class TestGetStoryDetailByIdService:
         assert result.media_files[0].media_url.endswith("/images/stories/key.png")
         assert result.media_files[1].media_url.endswith("/images/stories/key.png")
         assert result.like_count == 2
+        assert result.view_count == 0
+        assert db.execute.await_count == 2
+        db.commit.assert_not_awaited()
+
+    async def test_view_count_is_incremented_when_track_view_true(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, view_count=5, media_files=[])
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 0),  # like_count
+            SimpleNamespace(),  # UPDATE view_count
+        ]
+
+        result = await get_story_detail_by_id(db, story_id, viewer=None, track_view=True)
+
+        assert result.view_count == 5
+        db.commit.assert_awaited_once()
+        assert db.execute.await_count == 3
+
+    async def test_view_count_not_incremented_when_track_view_false(self):
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, view_count=5, media_files=[])
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 0),  # like_count
+        ]
+
+        result = await get_story_detail_by_id(db, story_id, viewer=None, track_view=False)
+
+        assert result.view_count == 5
+        db.commit.assert_not_awaited()
+        assert db.execute.await_count == 2
+
+    async def test_view_count_not_incremented_when_owner_views(self):
+        owner_id = uuid.uuid4()
+        story_id = uuid.uuid4()
+        story = _make_story(id=story_id, user_id=owner_id, view_count=3, media_files=[])
+        owner = _make_user(id=owner_id)
+
+        db = AsyncMock()
+        db.execute.side_effect = [
+            SimpleNamespace(one_or_none=lambda: (story, "storyauthor")),
+            SimpleNamespace(scalar_one=lambda: 0),  # like_count
+        ]
+
+        result = await get_story_detail_by_id(db, story_id, viewer=owner, track_view=True)
+
+        assert result.view_count == 3
+        db.commit.assert_not_awaited()
         assert db.execute.await_count == 2
 
     async def test_raises_404_when_story_not_found(self):

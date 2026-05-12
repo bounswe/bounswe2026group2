@@ -75,8 +75,8 @@ describe("profile page unit tests", () => {
             <span id="profile-location"><span class="material-symbols-outlined">location_on</span></span>
             <div id="profile-avatar"><span class="material-symbols-outlined">person</span></div>
             <div id="profile-stories-container"></div>
-            <div id="stat-saved"></div>
             <div id="stat-stories"></div>
+            <div id="stat-views"></div>
         `;
 
         global.authFetch
@@ -93,10 +93,10 @@ describe("profile page unit tests", () => {
                 ok: true,
                 json: () => Promise.resolve({ stories: [] })
             })
-            // /stories/saved
+            // /users/me/stats
             .mockResolvedValueOnce({
                 ok: true,
-                json: () => Promise.resolve({ stories: [] })
+                json: () => Promise.resolve({ total_views_received: 0 })
             });
 
         await loadProfile();
@@ -111,8 +111,8 @@ describe("profile page unit tests", () => {
             <span id="profile-location"><span class="material-symbols-outlined">location_on</span></span>
             <div id="profile-avatar"><span class="material-symbols-outlined">person</span></div>
             <div id="profile-stories-container"></div>
-            <div id="stat-saved"></div>
             <div id="stat-stories"></div>
+            <div id="stat-views"></div>
         `;
 
         global.authFetch
@@ -129,10 +129,10 @@ describe("profile page unit tests", () => {
                 ok: true,
                 json: () => Promise.resolve({ stories: [] })
             })
-            // /stories/saved
+            // /users/me/stats
             .mockResolvedValueOnce({
                 ok: true,
-                json: () => Promise.resolve({ stories: [] })
+                json: () => Promise.resolve({ total_views_received: 0 })
             });
 
         await loadProfile();
@@ -150,8 +150,8 @@ describe("profile page unit tests", () => {
             <span id="profile-location"><span class="material-symbols-outlined">location_on</span></span>
             <div id="profile-avatar"><span class="material-symbols-outlined">person</span></div>
             <div id="profile-stories-container"></div>
-            <div id="stat-saved"></div>
             <div id="stat-stories"></div>
+            <div id="stat-views"></div>
         `;
 
         global.authFetch
@@ -168,10 +168,10 @@ describe("profile page unit tests", () => {
                 ok: true,
                 json: () => Promise.resolve({ stories: [] })
             })
-            // /stories/saved
+            // /users/me/stats
             .mockResolvedValueOnce({
                 ok: true,
-                json: () => Promise.resolve({ stories: [] })
+                json: () => Promise.resolve({ total_views_received: 0 })
             });
 
         await loadProfile();
