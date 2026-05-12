@@ -813,7 +813,9 @@ async def get_nearby_stories(
     center_lat: float,
     center_lng: float,
     radius_km: float = 10.0,
+    tags: list[str] | None = None,
 ) -> StoryListResponse:
+    normalized_tags = normalize_tag_list(tags)
     lat1 = func.radians(center_lat)
     lat2 = func.radians(Story.latitude)
     lon1 = func.radians(center_lng)
@@ -837,8 +839,19 @@ async def get_nearby_stories(
             Story.longitude.is_not(None),
             distance_km <= radius_km,
         )
-        .order_by(distance_km)
     )
+
+    if normalized_tags:
+        tag_match_count = func.count(Tag.id)
+        stmt = (
+            stmt.join(story_tags_table, story_tags_table.c.story_id == Story.id)
+            .join(Tag, Tag.id == story_tags_table.c.tag_id)
+            .where(Tag.name.in_(normalized_tags))
+            .group_by(Story.id, User.username)
+            .order_by(tag_match_count.desc(), distance_km)
+        )
+    else:
+        stmt = stmt.order_by(distance_km)
 
     result = await db.execute(stmt)
     rows = result.all()

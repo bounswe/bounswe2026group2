@@ -1578,6 +1578,42 @@ class TestGetNearbyStoriesService:
         assert "ORDER BY" in sql
         assert "DESC" not in sql
 
+    async def test_query_includes_tag_filter_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(
+            db,
+            center_lat=41.0082,
+            center_lng=28.9784,
+            tags=[" Spor ", "history", "spor"],
+        )
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "JOIN story_tags" in sql
+        assert "JOIN tags" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+
+    async def test_query_ranks_tag_matches_then_distance_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(
+            db,
+            center_lat=41.0082,
+            center_lng=28.9784,
+            tags=["spor", "tarih"],
+        )
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "ORDER BY count(tags.id) DESC" in sql
+        assert "asin" in sql
+
 
 @pytest.mark.asyncio
 class TestGetTimelineStoriesService:
