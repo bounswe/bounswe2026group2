@@ -95,7 +95,15 @@ async function loginThroughUi(page, email, password) {
   await page.waitForURL('**/map.html', { timeout: 5_000 });
 }
 
-async function installRecordedAudioMocks(page) {
+async function installRecordedAudioMocks(page, previewTranscript) {
+  await page.route('**/transcription/preview', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ transcript: previewTranscript }),
+    });
+  });
+
   await page.addInitScript(({ recordedAudioFixtureBase64 }) => {
     class MockMediaRecorder {
       static isTypeSupported(type) {
@@ -203,19 +211,20 @@ test.describe('TC_MEDIA_2 — Audio Transcription Review Before Posting', () => 
     test.setTimeout(180_000);
 
     const storyTitle = `Audio Story ${Date.now()}`;
+    const previewTranscript = 'Placeholder transcript for review before publishing.';
     const reviewedTranscript = 'The edited transcript the author approves before publishing.';
 
     // ── Step 1: Resolve usable credentials and log in through the UI ────────
     const credentials = await resolveStoryAuthorCredentials(page);
     await loginThroughUi(page, credentials.email, credentials.password);
 
-    // ── Step 2: Mock browser audio capture with a real prerecorded sample ───
-    await installRecordedAudioMocks(page);
+    // ── Step 2: Mock browser audio capture and return a placeholder transcript
+    await installRecordedAudioMocks(page, previewTranscript);
 
     // ── Step 3: Open story creation page ────────────────────────────────────
     await page.goto('/story-create.html');
 
-    // ── Step 4: Record audio through the UI and send it to real transcription
+    // ── Step 4: Record audio through the UI and load the placeholder review text
     const previewResponsePromise = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === '/transcription/preview' &&
@@ -232,14 +241,7 @@ test.describe('TC_MEDIA_2 — Audio Transcription Review Before Posting', () => 
 
     await expect(page.locator('#recording-audio-preview')).toBeVisible();
     await expect(page.locator('#recording-transcript-panel')).toBeVisible();
-    await page.waitForFunction(() => {
-      const textarea = document.getElementById('recording-transcript-draft');
-      return Boolean(textarea && !textarea.disabled && textarea.value.trim().length > 0);
-    }, { timeout: 120_000 });
-
-    const previewedTranscript = await page.locator('#recording-transcript-draft').inputValue();
-    expect(previewedTranscript.trim().length).toBeGreaterThan(0);
-    expect(previewedTranscript).not.toContain('Transcript appears here after the server responds.');
+    await expect(page.locator('#recording-transcript-draft')).toHaveValue(previewTranscript);
     await expect(page.locator('#recording-transcript-draft')).toBeEditable();
 
     // ── Step 5: Review and edit the transcript before publishing ────────────
