@@ -3,8 +3,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
-from sqlalchemy import func, nulls_last, select, update
-from sqlalchemy import and_, case, exists, func, nulls_last, or_, select
+from sqlalchemy import and_, case, exists, func, nulls_last, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
