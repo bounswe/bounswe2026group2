@@ -475,6 +475,13 @@
             </div>
         </div>
 
+        <!-- Reopen sidebar button (right side, desktop only) -->
+        <button id="btn-open-sidebar"
+            class="hidden absolute top-48 right-4 z-[1000] glass-panel w-11 h-11 items-center justify-center rounded-xl text-primary shadow-sm hover:bg-white transition-colors border border-border/30 md:flex"
+            title="Show recent stories">
+            <span class="material-symbols-outlined text-xl">menu_open</span>
+        </button>
+
         <!-- Discovery Sidebar -->
         <aside id="sidebar"
             class="relative z-[1000] m-4 mt-5 glass-panel rounded-2xl p-5 shadow-sm border border-border/20 md:absolute md:top-48 md:right-4 md:m-0 md:mt-0 md:w-72 md:max-h-[calc(100vh-296px)] md:overflow-y-auto">
@@ -836,16 +843,15 @@
                 : '<div style="background:linear-gradient(135deg,#e9dfcd,#f7f3eb);height:100px;display:flex;align-items:center;justify-content:center;position:relative;">' +
                   '<span class="material-symbols-outlined" style="font-size:36px;color:#775a19;opacity:0.4;">photo_library</span>' + dateBadge + '</div>';
             var reportBtn = isLoggedIn()
-                ? '<button onclick="openReportModal(\'' + story.id + '\')" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#dc2626;font-weight:600;background:none;border:none;cursor:pointer;padding:0;line-height:1;">' +
-                  '<span class="material-symbols-outlined" style="font-size:13px;">flag</span>Report</button>'
+                ? '<button onclick="openReportModal(\'' + story.id + '\')" title="Report story" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:none;border:1px solid #e7e2d9;cursor:pointer;color:#dc2626;flex-shrink:0;">' +
+                  '<span class="material-symbols-outlined" style="font-size:14px;">flag</span></button>'
                 : '';
 
             return '<div style="width:300px;">' +
                 headerHtml +
-                '<div style="padding:16px;">' +
-                '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 6px 0;line-height:1.3;">' + story.title + '</h3>' +
+                '<div style="padding:14px 16px 14px;">' +
+                '<h3 style="font-family:\'Noto Serif\',serif;font-size:16px;font-weight:700;color:#1d1c16;margin:0 0 4px 0;line-height:1.3;">' + story.title + '</h3>' +
                 '<p style="font-size:11px;color:#5f584c;margin:0 0 8px 0;' + (isAnonymousStory(story) ? 'font-style:italic;' : '') + '">' + getAuthorByLine(story) + '</p>' +
-                '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 12px 0;font-style:italic;">"' + preview + '"</p>' +
                 '<p style="font-size:13px;color:#5f584c;line-height:1.5;margin:0 0 10px 0;font-style:italic;">"' + preview + '"</p>' +
                 (story.tags && story.tags.length > 0
                     ? '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">' +
@@ -855,12 +861,12 @@
                       }).join('') +
                       '</div>'
                     : '') +
-                '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-                (placeName ? '<span style="font-size:11px;color:#35618f;font-weight:600;">' + placeName + '</span>' : '<span></span>') +
-                '<div style="display:flex;align-items:center;gap:10px;">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+                (placeName ? '<span style="font-size:11px;color:#5f584c;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + placeName + '</span>' : '<span style="flex:1;"></span>') +
+                '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">' +
                 reportBtn +
                 timelineLink +
-                '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read Story →</a>' +
+                '<a href="story-detail.html?id=' + story.id + '" style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:#775a19;color:#fff;font-size:12px;font-weight:700;text-decoration:none;border-radius:8px;">Read Story</a>' +
                 '</div></div></div></div>';
         }
 
@@ -982,13 +988,18 @@
             var cluster = event.layer;
             if (!cluster || typeof cluster.getBounds !== "function") return;
 
-            if (map.getZoom() >= map.getMaxZoom() && typeof cluster.spiderfy === "function") {
+            var bounds = cluster.getBounds();
+            // Spiderfy when at max zoom OR when all markers share the exact same
+            // spot (bounds collapses to a point — zooming in would do nothing).
+            var isPointCluster = bounds.isValid() &&
+                bounds.getNorthEast().distanceTo(bounds.getSouthWest()) < 1;
+
+            if ((map.getZoom() >= map.getMaxZoom() || isPointCluster) && typeof cluster.spiderfy === "function") {
                 clearTimeout(fetchTimeout);
                 cluster.spiderfy();
                 return;
             }
 
-            var bounds = cluster.getBounds();
             if (!bounds || !bounds.isValid()) return;
 
             flyWithMarkerFade(function () {
@@ -1165,15 +1176,16 @@
                         return;
                     }
 
-                    // Center the camera on the clicked story so the popup
-                    // never opens near the edge — that was the source of the
-                    // popup-closing bug (popup autoPan → moveend → refetch →
-                    // marker rebuild → popup destroyed).
-                    map.flyTo(
-                        [story.latitude, story.longitude],
-                        Math.max(map.getZoom(), 15),
-                        { duration: FLY_DURATION }
-                    );
+                    // Skip flyTo when the marker is spiderfied — the map movement
+                    // would collapse the spiderfy and immediately close the popup.
+                    var isSpiderfied = !!marker._spiderLeg;
+                    if (!isSpiderfied) {
+                        map.flyTo(
+                            [story.latitude, story.longitude],
+                            Math.max(map.getZoom(), 15),
+                            { duration: FLY_DURATION }
+                        );
+                    }
 
                     // Highlight active marker
                     document.querySelectorAll(".story-marker").forEach(function (el) {
@@ -1263,6 +1275,16 @@
         // Close sidebar
         document.getElementById("btn-close-sidebar").addEventListener("click", function () {
             document.getElementById("sidebar").classList.add("hidden");
+            document.getElementById("btn-open-sidebar").classList.remove("hidden");
+            document.getElementById("btn-open-sidebar").classList.add("flex");
+            syncMapSize();
+        });
+
+        // Reopen sidebar
+        document.getElementById("btn-open-sidebar").addEventListener("click", function () {
+            document.getElementById("sidebar").classList.remove("hidden");
+            document.getElementById("btn-open-sidebar").classList.add("hidden");
+            document.getElementById("btn-open-sidebar").classList.remove("flex");
             syncMapSize();
         });
 
