@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     FRONTEND_GOOGLE_CALLBACK_URL: str = "http://localhost:3000/oauth-callback.html"
 
     # ── Speech-to-Text ───────────────────────────────────────────────────────
+    STT_PROVIDER: str = "local"
+    STT_MODEL: str = "gemini-2.5-flash"
     TRANSCRIPTION_MODEL: str = "base"
     TRANSCRIPTION_DEVICE: str = "cpu"
     TRANSCRIPTION_COMPUTE_TYPE: str = "int8"
