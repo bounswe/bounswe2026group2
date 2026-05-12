@@ -34,9 +34,7 @@ def upgrade() -> None:
         "stories",
         [sa.text("created_at DESC")],
         unique=False,
-        postgresql_where=sa.text(
-            "status = 'published' AND visibility = 'public' AND deleted_at IS NULL"
-        ),
+        postgresql_where=sa.text("status = 'published' AND visibility = 'public' AND deleted_at IS NULL"),
     )
 
 
