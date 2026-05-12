@@ -401,7 +401,7 @@
     <div id="site-header"></div>
 
     <!-- Map Filter Panel (fixed below header, toggled by the Filters button in the header) -->
-    <div id="map-filter-panel" class="hidden fixed right-4 sm:right-8 top-[76px] w-72 rounded-2xl border border-border bg-white shadow-soft z-[1050] p-5">
+    <div id="map-filter-panel" class="hidden fixed w-72 rounded-2xl border border-border bg-white shadow-soft z-[1050] p-5">
         <div class="flex flex-col gap-5">
             <!-- Year Range -->
             <div>
@@ -536,18 +536,19 @@
     <script>
         mountSiteHeader({
             extraCenter:
-                '<form id="search-form" class="relative flex w-full max-w-md items-center" action="search.html" method="get">' +
+                '<div class="flex items-center gap-2 w-full max-w-xl">' +
+                '<form id="search-form" class="relative flex flex-1 items-center" action="search.html" method="get">' +
                 '<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl pointer-events-none">search</span>' +
                 '<input id="search-input" name="q" type="text" autocomplete="off"' +
                 ' class="w-full pl-10 pr-4 py-2 bg-white border border-border rounded-xl text-sm focus:border-primary focus:ring-primary transition-all"' +
                 ' placeholder="Search stories by location..." />' +
-                '</form>',
-            extraRight:
+                '</form>' +
                 '<button id="map-filters-toggle-btn" type="button"' +
-                ' class="inline-flex items-center gap-1.5 bg-white border border-border text-textmuted px-4 py-2 rounded-xl text-sm font-semibold hover:border-primary/50 hover:text-textmain transition-all">' +
+                ' class="inline-flex items-center gap-1.5 bg-white border border-border text-textmuted px-4 py-2 rounded-xl text-sm font-semibold hover:border-primary/50 hover:text-textmain transition-all shrink-0">' +
                 '<span class="material-symbols-outlined text-xl">tune</span>' +
                 '<span class="hidden sm:inline">Filters</span>' +
-                '</button>'
+                '</button>' +
+                '</div>'
         });
 
         // ─── Map filter state ───
@@ -1351,7 +1352,13 @@
             var isHidden = mapFilterPanelEl.classList.toggle("hidden");
             setMapFiltersToggleActive(!isHidden);
             if (!isHidden) {
-                // Panel açıldı: mevcut aktif filtreleri panele yükle
+                var rect = mapFiltersToggleBtn.getBoundingClientRect();
+                var panelWidth = 288; // w-72
+                var left = rect.right - panelWidth;
+                if (left < 8) left = 8;
+                mapFilterPanelEl.style.top = (rect.bottom + 8) + "px";
+                mapFilterPanelEl.style.left = left + "px";
+
                 mapFilterPanelTags = mapFilterTags.slice();
                 renderMapPanelTags();
                 document.getElementById("map-filter-year-from").value = mapFilterYearFrom;
