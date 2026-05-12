@@ -952,12 +952,21 @@
         }
 
         const markers = [];
-        const markerClusterLayer = L.markerClusterGroup();
+        const markerClusterLayer = L.markerClusterGroup({
+            zoomToBoundsOnClick: false,
+            spiderfyOnMaxZoom: false
+        });
         map.addLayer(markerClusterLayer);
 
         markerClusterLayer.on("clusterclick", function (event) {
             var cluster = event.layer;
             if (!cluster || typeof cluster.getBounds !== "function") return;
+
+            if (map.getZoom() >= map.getMaxZoom() && typeof cluster.spiderfy === "function") {
+                clearTimeout(fetchTimeout);
+                cluster.spiderfy();
+                return;
+            }
 
             var bounds = cluster.getBounds();
             if (!bounds || !bounds.isValid()) return;
