@@ -164,7 +164,7 @@
           </div>
           <div>
             <label for="date-single" class="mb-2 block text-sm font-semibold text-textmain">Date</label>
-            <input id="date-single" type="date" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+            <input id="date-single" type="text" inputmode="numeric" placeholder="mm/dd/yyyy" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
           </div>
         </div>
 
@@ -177,11 +177,11 @@
           <div id="date-range-fields" class="mt-3 hidden grid gap-4 md:grid-cols-2">
             <div>
               <label for="date-start" class="mb-2 block text-sm font-semibold text-textmain">Start Date</label>
-              <input id="date-start" type="date" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+              <input id="date-start" type="text" inputmode="numeric" placeholder="mm/dd/yyyy" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
             </div>
             <div>
               <label for="date-end" class="mb-2 block text-sm font-semibold text-textmain">End Date</label>
-              <input id="date-end" type="date" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
+              <input id="date-end" type="text" inputmode="numeric" placeholder="mm/dd/yyyy" class="w-full rounded-xl border-border bg-white px-4 py-3 text-sm focus:border-primary focus:ring-primary" />
             </div>
           </div>
         </div>
@@ -499,11 +499,15 @@
 
   // ─── Date Range Toggle ───
   function isValidDateInput(value) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(value);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
   }
 
   function getISODateFromDateInput(value) {
-    return value; // native date input already returns yyyy-mm-dd
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return value;
+    }
+    var parts = value.split("/");
+    return parts[2] + "-" + parts[0] + "-" + parts[1];
   }
 
   document.getElementById("date-range-toggle").addEventListener("change", function () {
@@ -1137,7 +1141,7 @@
     }
 
     if (!usingDateRange && !isValidDateInput(dateSingle)) {
-      errorEl.textContent = "Date must use mm/dd/yyyy format.";
+      errorEl.textContent = "Date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -1149,13 +1153,13 @@
     }
 
     if (usingDateRange && !isValidDateInput(dateStart)) {
-      errorEl.textContent = "Start date must use mm/dd/yyyy format.";
+      errorEl.textContent = "Start date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
 
     if (usingDateRange && !isValidDateInput(dateEnd)) {
-      errorEl.textContent = "End date must use mm/dd/yyyy format.";
+      errorEl.textContent = "End date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
