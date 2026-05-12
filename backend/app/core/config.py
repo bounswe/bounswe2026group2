@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     # ── Speech-to-Text ───────────────────────────────────────────────────────
     OPENAI_API_KEY: str = ""
+    AI_WHISPER_MODEL: str = "whisper-1"
     GEMINI_API_KEY: str = ""
     AI_TAGGING_MODEL: str = "gemini-2.5-flash"
 

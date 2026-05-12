@@ -98,7 +98,7 @@ async def _transcribe_with_openai(
         response = await client.post(
             _OPENAI_TRANSCRIPTION_URL,
             headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-            data={"model": "whisper-1"},
+            data={"model": settings.AI_WHISPER_MODEL},
             files={"file": (filename, content, mime_type or "application/octet-stream")},
         )
         response.raise_for_status()
