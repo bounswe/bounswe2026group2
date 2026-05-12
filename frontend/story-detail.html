@@ -132,7 +132,7 @@
             <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">edit</span>
             Edit Story
           </a>
-          <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
+          <a id="btn-return-login" href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
           <button id="btn-report" class="hidden inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50" onclick="openReportModal()">
             <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">flag</span>
             Report
@@ -378,10 +378,14 @@
       allLocations.forEach(function (loc, idx) {
         var icon = isMulti
           ? buildNumberedIcon(L, idx, { color: "#35618f", size: 32 })
-          : undefined;
-        var marker = icon
-          ? L.marker([loc.latitude, loc.longitude], { icon: icon }).addTo(detailMap)
-          : L.marker([loc.latitude, loc.longitude]).addTo(detailMap);
+          : L.divIcon({
+              className: "",
+              html: '<div style="width:40px;height:40px;border-radius:50%;border:3px solid #fff;background:#775a19;box-shadow:0 4px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;"><span class="material-symbols-outlined" style="font-size:18px;">auto_stories</span></div>',
+              iconSize: [40, 40],
+              iconAnchor: [20, 20],
+              popupAnchor: [0, -24]
+            });
+        var marker = L.marker([loc.latitude, loc.longitude], { icon: icon }).addTo(detailMap);
         var coords = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
         var popupTitle = isMulti
           ? ((idx + 1) + ". " + (loc.label || coords))
@@ -468,6 +472,7 @@
 
   if (isLoggedIn()) {
     document.getElementById("btn-report").classList.remove("hidden");
+    document.getElementById("btn-return-login").classList.add("hidden");
   }
 
   function setSubmitEnabled(enabled) {
