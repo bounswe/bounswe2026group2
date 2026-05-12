@@ -937,34 +937,3 @@ async def create_report_for_story(
         )
 
     return StoryReportResponse.model_validate(report)
-
-
-async def remove_story_as_admin(
-    db: AsyncSession,
-    story_id: uuid.UUID,
-    current_user: User,
-) -> None:
-    story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))
-    story = story_result.scalar_one_or_none()
-    if story is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Story not found",
-        )
-
-    story.deleted_at = datetime.now(timezone.utc)
-    story.deleted_by = current_user.id
-    db.add(story)
-
-    reports_result = await db.execute(
-        select(StoryReport).where(
-            StoryReport.story_id == story_id,
-            StoryReport.status == ReportStatus.PENDING,
-        )
-    )
-    pending_reports = reports_result.scalars().all()
-    for report in pending_reports:
-        report.status = ReportStatus.REMOVED
-        db.add(report)
-
-    await db.commit()
