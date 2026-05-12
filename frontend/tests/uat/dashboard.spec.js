@@ -1,7 +1,6 @@
-// UAT — Dashboard / Profile view count flow
+// UAT — Dashboard / Profile view count flow (web only; see tests/mobile-e2e for Appium).
 //
 // TC_DASH_1 — A user sees view counts; after another view, the count increases.
-// NOTE: Keep skipped until #236 (backend dashboard APIs) and #245 (dashboard UI) ship.
 
 const { test, expect } = require('@playwright/test');
 
@@ -105,11 +104,12 @@ test.describe('TC_DASH_1 — Dashboard view counts', () => {
     await goToProfileFromMenu(ownerPage);
 
     // The profile stats load async; poll until the count updates.
-    const afterViews = await expect.poll(
-      async () => readTotalViewsFromProfile(ownerPage),
-      { timeout: 20_000, intervals: [250, 500, 1000, 1500, 2000] }
-    );
-    expect(afterViews).toBeGreaterThanOrEqual(beforeViews + 1);
+    await expect
+      .poll(async () => readTotalViewsFromProfile(ownerPage), {
+        timeout: 20_000,
+        intervals: [250, 500, 1000, 1500, 2000],
+      })
+      .toBeGreaterThanOrEqual(beforeViews + 1);
 
     await ownerContext.close();
   });
