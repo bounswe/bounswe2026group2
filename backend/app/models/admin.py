@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.db.enums import ReportReason, ReportStatus
+from app.db.enums import ReportReason, ReportStatus, UserRole
 
 
 class AdminReportListItem(BaseModel):
@@ -17,7 +17,10 @@ class AdminReportListItem(BaseModel):
     status: ReportStatus
     created_at: datetime
     story_title: str | None = None
+    story_author_user_id: uuid.UUID | None = None
     story_author_username: str | None = None
+    reported_user_id: uuid.UUID | None = None
+    reported_username: str | None = None
     reporter_username: str | None = None
 
     model_config = {"from_attributes": True}
@@ -34,3 +37,15 @@ class UpdateReportStatusRequest(BaseModel):
     """Request to update report status."""
 
     status: ReportStatus = Field(..., description="New status for the report")
+
+
+class AdminUserRestrictionResponse(BaseModel):
+    """Restricted-state response for admin user moderation actions."""
+
+    id: uuid.UUID
+    username: str
+    email: str
+    role: UserRole
+    is_restricted: bool
+
+    model_config = {"from_attributes": True}

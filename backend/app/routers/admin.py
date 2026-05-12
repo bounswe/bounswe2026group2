@@ -7,16 +7,20 @@ from app.core.deps import get_current_user
 from app.db.enums import ReportStatus
 from app.db.session import get_db
 from app.db.user import User
-from app.models.admin import AdminReportsListResponse, UpdateReportStatusRequest
+from app.models.admin import AdminReportsListResponse, AdminUserRestrictionResponse, UpdateReportStatusRequest
 from app.models.story import StoryReportResponse
 from app.services.admin_service import (
     ensure_admin_user,
     list_admin_reports,
     remove_story_as_admin,
+    restrict_user_as_admin,
+    unrestrict_user_as_admin,
     update_report_status_as_admin,
 )
 
-router = APIRouter(prefix="/stories/admin", tags=["admin"])
+router = APIRouter(tags=["admin"])
+story_admin_router = APIRouter(prefix="/stories/admin")
+user_admin_router = APIRouter(prefix="/admin/users")
 
 
 async def get_admin_context(
@@ -27,7 +31,7 @@ async def get_admin_context(
     return current_user, db
 
 
-@router.get(
+@story_admin_router.get(
     "/reports",
     response_model=AdminReportsListResponse,
     summary="Get reported stories (admin only)",
@@ -45,7 +49,7 @@ async def get_admin_reports(
     return await list_admin_reports(db, report_status=report_status)
 
 
-@router.put(
+@story_admin_router.put(
     "/reports/{report_id}",
     response_model=StoryReportResponse,
     summary="Update report status (admin only)",
@@ -67,7 +71,7 @@ async def update_report_status(
     return await update_report_status_as_admin(db, report_id, payload)
 
 
-@router.delete(
+@story_admin_router.delete(
     "/stories/{story_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Remove story (admin only)",
@@ -84,3 +88,45 @@ async def admin_remove_story(
 ):
     current_user, db = context
     await remove_story_as_admin(db, story_id, current_user)
+
+
+@user_admin_router.patch(
+    "/{user_id}/restrict",
+    response_model=AdminUserRestrictionResponse,
+    summary="Restrict user (admin only)",
+    description="Prevent a user from modifying stories while keeping browse access available.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "User is not an admin"},
+        404: {"description": "User not found"},
+    },
+)
+async def restrict_user(
+    user_id: uuid.UUID,
+    context: tuple[User, AsyncSession] = Depends(get_admin_context),
+):
+    _, db = context
+    return await restrict_user_as_admin(db, user_id)
+
+
+@user_admin_router.patch(
+    "/{user_id}/unrestrict",
+    response_model=AdminUserRestrictionResponse,
+    summary="Unrestrict user (admin only)",
+    description="Restore a user's ability to modify stories.",
+    responses={
+        401: {"description": "Missing or invalid authentication token"},
+        403: {"description": "User is not an admin"},
+        404: {"description": "User not found"},
+    },
+)
+async def unrestrict_user(
+    user_id: uuid.UUID,
+    context: tuple[User, AsyncSession] = Depends(get_admin_context),
+):
+    _, db = context
+    return await unrestrict_user_as_admin(db, user_id)
+
+
+router.include_router(story_admin_router)
+router.include_router(user_admin_router)

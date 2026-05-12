@@ -216,6 +216,14 @@ def _build_media_storage_key(story_id: uuid.UUID, filename: str) -> str:
     return f"stories/{story_id}/media/{uuid.uuid4()}{ext}"
 
 
+def _ensure_user_can_modify_stories(current_user: User) -> None:
+    if getattr(current_user, "is_restricted", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Restricted users cannot modify stories",
+        )
+
+
 async def _get_story_or_404(
     db: AsyncSession,
     story_id: uuid.UUID,
@@ -566,6 +574,8 @@ async def create_story_with_location(
     current_user: User,
     payload: StoryCreateRequest,
 ) -> StoryDetailResponse:
+    _ensure_user_can_modify_stories(current_user)
+
     place_name = payload.place_name.strip() if payload.place_name else None
     if not place_name:
         raise HTTPException(
@@ -625,6 +635,8 @@ async def update_story_with_location_and_dates(
     current_user: User,
     payload: StoryUpdateRequest,
 ) -> StoryDetailResponse:
+    _ensure_user_can_modify_stories(current_user)
+
     story_result = await db.execute(
         select(Story)
         .options(selectinload(Story.locations))
@@ -732,8 +744,12 @@ async def upload_media_for_story(
     story_id: uuid.UUID,
     file: UploadFile,
     payload: MediaUploadRequest,
+    current_user: User | None = None,
     background_tasks: BackgroundTasks | None = None,
 ) -> MediaUploadResponse:
+    if current_user is not None:
+        _ensure_user_can_modify_stories(current_user)
+
     normalized_content_type = validate_media_upload(file, payload.media_type)
 
     story_result = await db.execute(select(Story).where(Story.id == story_id, Story.deleted_at.is_(None)))

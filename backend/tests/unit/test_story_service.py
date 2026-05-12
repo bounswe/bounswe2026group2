@@ -402,6 +402,22 @@ class TestSearchAvailableStoriesByPlaceService:
 
 @pytest.mark.asyncio
 class TestUploadMediaForStoryService:
+    async def test_restricted_user_cannot_upload_media(self):
+        story_id = uuid.uuid4()
+        payload = MediaUploadRequest(media_type=MediaType.IMAGE)
+        file = _make_upload_file("photo.png", b"fake-image-bytes", "image/png")
+        current_user = _make_user(is_restricted=True)
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, story_id, file, payload, current_user=current_user)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Restricted users cannot modify stories"
+        db.execute.assert_not_awaited()
+        mock_upload.assert_not_called()
+
     async def test_upload_successful(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id)
@@ -1257,6 +1273,26 @@ class TestStoryLikeService:
 
 @pytest.mark.asyncio
 class TestCreateStoryWithLocationService:
+    async def test_restricted_user_cannot_create_story(self):
+        payload = StoryCreateRequest(
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser", is_restricted=True)
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_story_with_location(db, current_user, payload)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Restricted users cannot modify stories"
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
     async def test_create_story_with_valid_location(self):
         payload = StoryCreateRequest(
             title="New Story",
@@ -1389,6 +1425,26 @@ class TestCreateStoryWithLocationService:
 
 @pytest.mark.asyncio
 class TestUpdateStoryWithLocationAndDatesService:
+    async def test_restricted_user_cannot_update_story(self):
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser", is_restricted=True)
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_story_with_location_and_dates(db, uuid.uuid4(), current_user, payload)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Restricted users cannot modify stories"
+        db.execute.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
     async def test_update_story_success(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id, user_id=uuid.uuid4())

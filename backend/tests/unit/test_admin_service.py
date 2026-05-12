@@ -12,6 +12,8 @@ from app.services.admin_service import (
     ensure_admin_user,
     list_admin_reports,
     remove_story_as_admin,
+    restrict_user_as_admin,
+    unrestrict_user_as_admin,
     update_report_status_as_admin,
 )
 
@@ -67,6 +69,7 @@ class TestAdminReportsService:
             status=ReportStatus.PENDING,
             created_at=created_at,
             story_title="Reported Story",
+            story_author_user_id=uuid.uuid4(),
             reporter_username="reporter",
             story_author_username="author",
         )
@@ -87,6 +90,8 @@ class TestAdminReportsService:
         assert result.reports[0].story_title == "Reported Story"
         assert result.reports[0].reporter_username == "reporter"
         assert result.reports[0].story_author_username == "author"
+        assert result.reports[0].reported_user_id == row.story_author_user_id
+        assert result.reports[0].reported_username == "author"
         db.execute.assert_awaited_once()
 
     async def test_list_admin_reports_applies_status_filter(self):
@@ -200,4 +205,60 @@ class TestAdminRemoveStoryService:
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"
+        db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestAdminUserRestrictionService:
+    async def test_restrict_user_sets_restricted_flag(self):
+        user = SimpleNamespace(
+            id=uuid.uuid4(),
+            username="target",
+            email="target@example.com",
+            role=UserRole.USER,
+            is_restricted=False,
+        )
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: user)
+
+        result = await restrict_user_as_admin(db, user.id)
+
+        assert user.is_restricted is True
+        assert result.is_restricted is True
+        db.add.assert_called_once_with(user)
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once_with(user)
+
+    async def test_unrestrict_user_clears_restricted_flag(self):
+        user = SimpleNamespace(
+            id=uuid.uuid4(),
+            username="target",
+            email="target@example.com",
+            role=UserRole.USER,
+            is_restricted=True,
+        )
+
+        db = AsyncMock()
+        db.add = MagicMock()
+        db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: user)
+
+        result = await unrestrict_user_as_admin(db, user.id)
+
+        assert user.is_restricted is False
+        assert result.is_restricted is False
+        db.add.assert_called_once_with(user)
+        db.commit.assert_awaited_once()
+        db.refresh.assert_awaited_once_with(user)
+
+    async def test_restrict_user_raises_404_when_user_missing(self):
+        db = AsyncMock()
+        db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
+
+        with pytest.raises(HTTPException) as exc_info:
+            await restrict_user_as_admin(db, uuid.uuid4())
+
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail == "User not found"
         db.commit.assert_not_awaited()

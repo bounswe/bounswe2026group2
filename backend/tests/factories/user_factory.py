@@ -68,6 +68,7 @@ def make_user_entity(
     avatar_bucket_name: str | None = None,
     avatar_storage_key: str | None = None,
     is_active: bool = True,
+    is_restricted: bool = False,
     password_hash: str | None = None,
     suffix: int | str | None = None,
 ) -> User:
@@ -84,4 +85,5 @@ def make_user_entity(
         avatar_storage_key=avatar_storage_key,
         role=role,
         is_active=is_active,
+        is_restricted=is_restricted,
     )
