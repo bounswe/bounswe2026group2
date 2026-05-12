@@ -1,12 +1,13 @@
 // UAT — Profile total view count (web). Mirrors manual steps against the deployed app.
 //
-// Run (Render dev):
-//   UAT_BASE_URL=https://localhistorymap-dev.onrender.com npx playwright test tests/uat/dashboard.spec.js
-//
-// Run (local stack):
+// Default app origin for this file (CI / quick runs). Override any time:
 //   UAT_BASE_URL=http://localhost:3000 npx playwright test tests/uat/dashboard.spec.js
 
 const { test, expect } = require('@playwright/test');
+
+/** Deployed dev frontend; env UAT_BASE_URL overrides for local Docker, staging, etc. */
+const DEFAULT_UAT_BASE_URL = 'https://localhistorymap-dev.onrender.com';
+const UAT_BASE_URL = process.env.UAT_BASE_URL || DEFAULT_UAT_BASE_URL;
 
 const UAT_EMAIL = process.env.UAT_OWNER_EMAIL || 'test@gmail.com';
 const UAT_PASSWORD = process.env.UAT_OWNER_PASSWORD || 'Test1234%';
@@ -85,6 +86,8 @@ async function leaveStoryDetailToMap(page) {
 }
 
 test.describe('TC_DASH — Profile view count (UAT script)', () => {
+  test.use({ baseURL: UAT_BASE_URL });
+
   test('view count after anonymous story visit matches manual UAT steps', async ({ page }) => {
     // 1–2
     await loginFromIndex(page);
