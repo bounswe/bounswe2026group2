@@ -77,13 +77,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
-<main class="max-w-6xl mx-auto px-6 py-10 lg:px-10">
+<div id="site-header"></div>
+<main class="max-w-6xl mx-auto px-6 pt-32 pb-10 lg:px-10">
   <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
     <div>
-      <a href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-        <span aria-hidden="true">&larr;</span> Back to Map
-      </a>
-      <h1 id="story-title" class="mt-3 font-headline text-4xl font-extrabold leading-tight text-textmain">Loading Story...</h1>
+      <h1 id="story-title" class="font-headline text-4xl font-extrabold leading-tight text-textmain">Loading Story...</h1>
       <p id="story-summary" class="mt-4 max-w-3xl text-base leading-7 text-textmuted italic">
       </p>
     </div>
@@ -129,13 +127,12 @@
         </div>
 
         <div class="mt-8 flex flex-wrap items-center gap-3">
-          <a href="map.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Back to Map</a>
-          <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Create Another Story</a>
+          <a href="story-create.html" class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:opacity-95">Create Another Story</a>
           <a id="btn-edit" href="story-edit.html" class="hidden inline-flex items-center gap-2 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-primary transition hover:bg-stone-50">
             <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">edit</span>
             Edit Story
           </a>
-          <a href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
+          <a id="btn-return-login" href="index.html" class="inline-flex items-center justify-center rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-textmain transition hover:bg-stone-50">Return to Login</a>
           <button id="btn-report" class="hidden inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50" onclick="openReportModal()">
             <span class="material-symbols-outlined" style="font-size:16px;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 20;">flag</span>
             Report
@@ -213,8 +210,10 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script src="auth.js"></script>
-<script src="likes.js"></script>
 <script src="config.js"></script>
+<script src="site-header.js"></script>
+<script>mountSiteHeader();</script>
+<script src="likes.js"></script>
 <script src="comments.js"></script>
 <script src="saves.js"></script>
 <script src="anonymous.js"></script>
@@ -379,10 +378,14 @@
       allLocations.forEach(function (loc, idx) {
         var icon = isMulti
           ? buildNumberedIcon(L, idx, { color: "#35618f", size: 32 })
-          : undefined;
-        var marker = icon
-          ? L.marker([loc.latitude, loc.longitude], { icon: icon }).addTo(detailMap)
-          : L.marker([loc.latitude, loc.longitude]).addTo(detailMap);
+          : L.divIcon({
+              className: "",
+              html: '<div style="width:40px;height:40px;border-radius:50%;border:3px solid #fff;background:#775a19;box-shadow:0 4px 12px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;color:white;font-size:16px;"><span class="material-symbols-outlined" style="font-size:18px;">auto_stories</span></div>',
+              iconSize: [40, 40],
+              iconAnchor: [20, 20],
+              popupAnchor: [0, -24]
+            });
+        var marker = L.marker([loc.latitude, loc.longitude], { icon: icon }).addTo(detailMap);
         var coords = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
         var popupTitle = isMulti
           ? ((idx + 1) + ". " + (loc.label || coords))
@@ -469,6 +472,7 @@
 
   if (isLoggedIn()) {
     document.getElementById("btn-report").classList.remove("hidden");
+    document.getElementById("btn-return-login").classList.add("hidden");
   }
 
   function setSubmitEnabled(enabled) {

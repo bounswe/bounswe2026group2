@@ -48,36 +48,13 @@
 
 <body class="bg-background text-textmain font-body min-h-screen">
 
-  <!-- Top Navigation Bar -->
-  <header class="fixed top-0 left-0 right-0 z-[1000] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
-    <div class="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
-      <div class="flex items-center gap-8">
-        <h1 class="text-2xl font-bold font-headline text-textmain tracking-tight">Local History Map</h1>
-        <nav class="hidden md:flex items-center gap-6">
-          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="map.html">Map</a>
-          <a class="text-textmain font-medium hover:text-tertiary transition-colors"
-            href="story-create.html">Create Story</a>
-          <a class="text-tertiary font-semibold" href="saved.html">Saved</a>
-          <a class="text-textmain font-medium hover:text-tertiary transition-colors" href="profile.html">Profile</a>
-        </nav>
-      </div>
-      <div class="flex items-center gap-3 sm:gap-4">
-        <a href="profile.html"
-          class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-primary bg-primary/10 text-primary shadow-sm transition hover:bg-primary/20"
-          aria-label="Open profile">
-          <span class="material-symbols-outlined text-[20px] leading-none">account_circle</span>
-        </a>
-      </div>
-    </div>
-  </header>
+  <!-- Top Navigation Bar (rendered by site-header.js) -->
+  <div id="site-header"></div>
 
   <main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14 max-w-5xl mx-auto">
     <header class="mb-8 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div>
-        <a href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-          <span aria-hidden="true">&larr;</span> Back to Map
-        </a>
-        <h1 class="mt-3 font-headline text-3xl md:text-4xl font-extrabold leading-tight text-textmain">Saved Stories</h1>
+        <h1 class="font-headline text-3xl md:text-4xl font-extrabold leading-tight text-textmain">Saved Stories</h1>
         <p class="mt-2 text-textmuted">Stories you've bookmarked for later. They stay here until you remove them.</p>
       </div>
       <p id="saved-count" class="text-sm text-textmuted"></p>
@@ -92,6 +69,8 @@
 
   <script src="config.js"></script>
   <script src="auth.js"></script>
+  <script src="site-header.js"></script>
+  <script>mountSiteHeader();</script>
   <script src="saved.js"></script>
 </body>
 

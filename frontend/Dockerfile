@@ -33,6 +33,7 @@ COPY story-edit.html /usr/share/nginx/html/story-edit.html
 COPY story-transcript.js /usr/share/nginx/html/story-transcript.js
 COPY anonymous.js /usr/share/nginx/html/anonymous.js
 COPY multi-location.js /usr/share/nginx/html/multi-location.js
+COPY site-header.js /usr/share/nginx/html/site-header.js
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
 EXPOSE 80

@@ -77,13 +77,28 @@ module.exports = [
         },
     },
     {
-        files: ["eslint.config.js", "playwright.config.js"],
+        files: ["eslint.config.js", "playwright.config.js", "playwright.e2e.config.js"],
         languageOptions: {
             sourceType: "commonjs",
             globals: {
                 module: "readonly",
                 require: "readonly",
                 process: "readonly",
+            },
+        },
+    },
+    {
+        files: ["tests/e2e/**/*.spec.js"],
+        languageOptions: {
+            sourceType: "commonjs",
+            globals: {
+                require: "readonly",
+                process: "readonly",
+                test: "readonly",
+                expect: "readonly",
+                describe: "readonly",
+                // browser-scope globals referenced inside page.evaluate() callbacks
+                picker: "readonly",
             },
         },
     },
@@ -112,8 +127,14 @@ module.exports = [
                 __dirname: "readonly",
                 describe: "readonly",
                 it: "readonly",
+                before: "readonly",
+                after: "readonly",
+                beforeEach: "readonly",
+                afterEach: "readonly",
                 expect: "readonly",
                 browser: "readonly",
+                $: "readonly",
+                $$: "readonly",
             },
         },
     },

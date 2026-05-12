@@ -83,14 +83,11 @@
   </style>
 </head>
 <body class="bg-background text-textmain font-body min-h-screen">
-<main class="w-full px-4 py-10 lg:px-8 xl:px-10 2xl:px-14">
+<div id="site-header"></div>
+<main class="w-full px-4 pt-32 pb-10 lg:px-8 xl:px-10 2xl:px-14">
   <header class="mb-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
-      <a href="map.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
-        <span aria-hidden="true">&larr;</span>
-        Back to map
-      </a>
-      <h1 class="mt-5 font-headline text-4xl font-extrabold leading-tight text-textmain">Share a piece of local history</h1>
+      <h1 class="font-headline text-4xl font-extrabold leading-tight text-textmain">Share a piece of local history</h1>
       <p class="mt-4 max-w-4xl text-base leading-7 text-textmuted">
         Add a memory, attach media, choose a location, and place your story on the map for others to discover.
       </p>
@@ -352,6 +349,8 @@
 <!-- Auth -->
 <script src="config.js"></script>
 <script src="auth.js"></script>
+<script src="site-header.js"></script>
+<script>mountSiteHeader();</script>
 <script src="recording.js"></script>
 <script src="tags.js"></script>
 <script src="multi-location.js"></script>
@@ -500,10 +499,13 @@
 
   // ─── Date Range Toggle ───
   function isValidDateInput(value) {
-    return /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) || /^(0[1-9]|1[0-2])\/(0[1-9]|[12][0-9]|3[01])\/\d{4}$/.test(value);
   }
 
   function getISODateFromDateInput(value) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return value;
+    }
     var parts = value.split("/");
     return parts[2] + "-" + parts[0] + "-" + parts[1];
   }
@@ -1139,7 +1141,7 @@
     }
 
     if (!usingDateRange && !isValidDateInput(dateSingle)) {
-      errorEl.textContent = "Date must use mm/dd/yyyy format.";
+      errorEl.textContent = "Date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -1151,13 +1153,13 @@
     }
 
     if (usingDateRange && !isValidDateInput(dateStart)) {
-      errorEl.textContent = "Start date must use mm/dd/yyyy format.";
+      errorEl.textContent = "Start date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }
 
     if (usingDateRange && !isValidDateInput(dateEnd)) {
-      errorEl.textContent = "End date must use mm/dd/yyyy format.";
+      errorEl.textContent = "End date must use mm/dd/yyyy or yyyy-mm-dd format.";
       errorEl.classList.remove("hidden");
       return;
     }

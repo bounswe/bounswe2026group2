@@ -1,6 +1,6 @@
 module.exports = {
     testEnvironment: "jsdom",
-    testPathIgnorePatterns: ["/node_modules/", "/tests/uat/", "/tests/mobile-e2e/"],
+    testPathIgnorePatterns: ["/node_modules/", "/tests/uat/", "/tests/mobile-e2e/", "/tests/e2e/"],
     reporters: [
         "default",
         ["jest-html-reporter", { outputPath: "test-report.html", pageTitle: "Frontend Unit Tests" }],

@@ -45,6 +45,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=True,
         server_default=text("true"),
     )
+    is_restricted: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
 
     stories: Mapped[list["Story"]] = relationship(
         back_populates="user",

@@ -52,6 +52,29 @@ function sortStories(stories, order) {
     return sorted;
 }
 
+function filterStoriesByYear(stories, yearFrom, yearTo) {
+    var from = yearFrom !== "" ? parseInt(yearFrom, 10) : null;
+    var to = yearTo !== "" ? parseInt(yearTo, 10) : null;
+    return (stories || []).filter(function (story) {
+        var dateStart = story.date_start || "";
+        if (!dateStart) return true;
+        var year = parseInt(dateStart.substring(0, 4), 10);
+        if (isNaN(year)) return true;
+        if (from !== null && year < from) return false;
+        if (to !== null && year > to) return false;
+        return true;
+    });
+}
+
+function filterStoriesByLocation(stories, locationText) {
+    if (!locationText) return stories || [];
+    var lower = locationText.toLowerCase();
+    return (stories || []).filter(function (story) {
+        var placeName = (story.place_name || "").toLowerCase();
+        return placeName.indexOf(lower) !== -1;
+    });
+}
+
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { parseTagsFromUrl, serializeTagsToUrl, parseSortFromUrl, filterStoriesByTags, sortStories };
+    module.exports = { parseTagsFromUrl, serializeTagsToUrl, parseSortFromUrl, filterStoriesByTags, sortStories, filterStoriesByYear, filterStoriesByLocation };
 }

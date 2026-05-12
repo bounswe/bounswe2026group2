@@ -41,15 +41,13 @@
         }
     </style>
 </head>
-<body class="bg-background text-textmain font-body min-h-screen">
+<body class="bg-background text-textmain font-body min-h-screen pt-[68px]">
 
-    <!-- Header -->
-    <header class="sticky top-0 z-50 bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
+    <div id="site-header"></div>
+
+    <!-- Search toolbar (sticks below the site-header) -->
+    <header class="sticky top-[68px] z-40 bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">
         <div class="flex items-center gap-4 w-full px-6 py-4 max-w-screen-xl mx-auto">
-            <a href="map.html" class="flex items-center gap-2 text-textmuted hover:text-textmain transition-colors shrink-0">
-                <span class="material-symbols-outlined text-xl">arrow_back</span>
-                <span class="text-sm font-semibold hidden sm:inline">Map</span>
-            </a>
             <form id="search-form" class="flex-1 flex items-center gap-3">
                 <div class="relative flex-1 max-w-2xl">
                     <span class="absolute left-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-textmuted text-xl">search</span>
@@ -62,33 +60,52 @@
                     Search
                 </button>
             </form>
-        </div>
-
-        <!-- Filter Bar -->
-        <div class="border-t border-border/20 bg-[#f5f0e8]/80">
-            <div class="max-w-screen-xl mx-auto px-6 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-2">
-                <!-- Tag filter -->
-                <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                    <span class="text-xs font-semibold text-textmuted shrink-0">Tags:</span>
-                    <div id="active-filter-chips" class="flex flex-wrap gap-1.5 items-center"></div>
-                    <div id="tag-filter-wrap" class="flex items-center gap-1">
-                        <input id="tag-filter-input" type="text" autocomplete="off"
-                            class="text-xs border border-border rounded-full px-3 py-1 bg-white focus:border-primary outline-none w-28 placeholder:text-textmuted/60 transition-[width] focus:w-36"
-                            placeholder="filter by tag"
-                            onkeydown="if(event.key==='Enter'){event.preventDefault();addTagFromInput();}" />
-                        <button type="button"
-                            class="shrink-0 text-xs font-semibold text-white bg-primary rounded-full px-2.5 py-1 hover:opacity-90 transition-opacity leading-none"
-                            onclick="addTagFromInput()">+</button>
+            <div class="relative shrink-0">
+                <button id="filters-toggle-btn" type="button"
+                    class="inline-flex items-center gap-1.5 bg-white border border-border text-textmuted px-4 py-3 rounded-xl text-sm font-semibold hover:border-primary/50 hover:text-textmain transition-all">
+                    <span class="material-symbols-outlined text-xl">tune</span>
+                    Filters
+                </button>
+                <!-- Filter Panel (dropdown) -->
+                <div id="filter-panel" class="hidden absolute right-0 top-[calc(100%+0.5rem)] w-72 rounded-2xl border border-border bg-white shadow-soft z-50 p-5">
+                <div class="flex flex-col gap-5">
+                    <!-- Year Range -->
+                    <div>
+                        <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Year Range</label>
+                        <div class="flex items-center gap-2">
+                            <input id="filter-year-from" type="number" placeholder="from" min="1" max="9999"
+                                class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
+                            <span class="text-textmuted shrink-0 text-sm">—</span>
+                            <input id="filter-year-to" type="number" placeholder="to" min="1" max="9999"
+                                class="flex-1 min-w-0 border border-border rounded-lg px-3 py-2 text-sm focus:border-primary outline-none text-textmain placeholder:text-textmuted/50" />
+                        </div>
                     </div>
-                </div>
-                <!-- Sort -->
-                <div class="flex items-center gap-2 shrink-0">
-                    <span class="text-xs font-semibold text-textmuted">Sort:</span>
-                    <select id="sort-select" class="text-xs border border-border rounded-lg px-2.5 py-1.5 bg-white focus:border-primary outline-none text-textmain cursor-pointer">
-                        <option value="relevance">Relevance</option>
-                        <option value="newest">Newest first</option>
-                        <option value="oldest">Oldest first</option>
-                    </select>
+                    <!-- Tags -->
+                    <div>
+                        <label class="block text-xs font-semibold text-textmuted uppercase tracking-wider mb-2.5">Tags</label>
+                        <div id="filter-panel-tags" class="flex flex-wrap gap-1.5 mb-2 min-h-[28px]"></div>
+                        <div class="flex items-center gap-2">
+                            <input id="filter-panel-tag-input" type="text" placeholder="Tag name..."
+                                class="hidden text-xs border border-border rounded-full px-3 py-1.5 outline-none focus:border-primary w-28 text-textmain placeholder:text-textmuted/50"
+                                onkeydown="if(event.key==='Enter'){event.preventDefault();addPanelTag();}" />
+                            <button id="filter-panel-add-tag-btn" type="button"
+                                class="inline-flex items-center gap-1 text-xs font-semibold text-primary border border-primary/30 bg-[rgba(119,90,25,0.05)] rounded-full px-3 py-1.5 hover:bg-[rgba(119,90,25,0.1)] transition-colors">
+                                <span class="material-symbols-outlined" style="font-size:14px;line-height:1.2;">add</span>
+                                Add tag
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Actions -->
+                    <div class="pt-4 border-t border-border/30 flex items-center justify-end gap-3">
+                        <button id="filter-reset-btn" type="button"
+                            class="px-4 py-2 text-sm font-semibold text-textmuted border border-border rounded-xl hover:border-primary/50 hover:text-textmain transition-all">
+                            Reset
+                        </button>
+                        <button id="filter-apply-btn" type="button"
+                            class="px-4 py-2 text-sm font-semibold text-white bg-primary rounded-xl hover:opacity-95 transition-all shadow-sm">
+                            Apply
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -120,6 +137,9 @@
     </main>
 
     <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="site-header.js"></script>
+    <script>mountSiteHeader();</script>
     <script src="anonymous.js"></script>
     <script src="tags.js"></script>
     <script src="search-filters.js"></script>
@@ -131,9 +151,6 @@
         var resultsEl = document.getElementById("results");
         var emptyEl = document.getElementById("empty");
         var emptyDetail = document.getElementById("empty-detail");
-        var activeFilterChipsEl = document.getElementById("active-filter-chips");
-        var tagFilterInput = document.getElementById("tag-filter-input");
-        var sortSelect = document.getElementById("sort-select");
 
         // State
         var storyCache = {};
@@ -141,6 +158,9 @@
         var filterTags = [];
         var sortOrder = "relevance";
         var lastQuery = "";
+        var filterYearFrom = "";
+        var filterYearTo = "";
+        var filterPanelTags = [];
 
         // Read initial state from URL
         filterTags = parseTagsFromUrl(window.location.search);
@@ -148,8 +168,6 @@
         var initialQuery = new URLSearchParams(window.location.search).get("q") || "";
 
         if (initialQuery) searchInput.value = initialQuery;
-        sortSelect.value = sortOrder;
-        renderFilterChips();
         if (initialQuery) performSearch(initialQuery);
         else if (filterTags.length > 0) performSearch("");
 
@@ -157,84 +175,14 @@
 
         searchForm.addEventListener("submit", function (e) {
             e.preventDefault();
+            filterYearFrom = document.getElementById("filter-year-from").value.trim();
+            filterYearTo = document.getElementById("filter-year-to").value.trim();
             var query = searchInput.value.trim();
-            if (query.length < 1 && filterTags.length === 0) return;
             updateUrlParams(query);
             performSearch(query);
         });
 
-        // ─── Sort ─────────────────────────────────────────────────────────────
-
-        sortSelect.addEventListener("change", function () {
-            sortOrder = sortSelect.value;
-            updateUrlParams(lastQuery);
-            applyFiltersAndSort();
-        });
-
-        // ─── Tag filter input ─────────────────────────────────────────────────
-
-        function addTagFromInput() {
-            var inputEl = document.getElementById("tag-filter-input");
-            if (!inputEl) return;
-            var val = inputEl.value.trim().toLowerCase();
-            if (!val) return;
-            if (filterTags.indexOf(val) === -1) {
-                filterTags.push(val);
-                renderFilterChips();
-                updateUrlParams(lastQuery);
-                if (allStories.length > 0) applyFiltersAndSort();
-                else performSearch(lastQuery);
-            }
-            inputEl.value = "";
-            inputEl.focus();
-        }
-
         // ─── Filter state management ──────────────────────────────────────────
-
-        function addFilterTag(name) {
-            name = name.trim().toLowerCase();
-            if (!name || filterTags.indexOf(name) !== -1) return;
-            filterTags.push(name);
-            renderFilterChips();
-            updateUrlParams(lastQuery);
-            if (allStories.length > 0) applyFiltersAndSort();
-            else performSearch(lastQuery);
-        }
-
-        function removeFilterTag(name) {
-            filterTags = filterTags.filter(function (t) { return t !== name; });
-            renderFilterChips();
-            updateUrlParams(lastQuery);
-            if (allStories.length > 0) applyFiltersAndSort();
-            else performSearch(lastQuery);
-        }
-
-        function renderFilterChips() {
-            var activeFilterChipsEl = document.getElementById("active-filter-chips");
-            if (!activeFilterChipsEl) return;
-            activeFilterChipsEl.innerHTML = "";
-            filterTags.forEach(function (tag) {
-                var chip = document.createElement("span");
-                chip.className = "inline-flex items-center gap-1 rounded-full bg-[rgba(119,90,25,0.12)] border border-[rgba(119,90,25,0.2)] px-2.5 py-0.5 text-xs font-semibold text-primary";
-
-                var nameSpan = document.createElement("span");
-                nameSpan.textContent = tag;
-
-                var removeIcon = document.createElement("span");
-                removeIcon.textContent = "×";
-                removeIcon.setAttribute("aria-label", "Remove filter " + tag);
-                removeIcon.style.cssText = "cursor:pointer;line-height:1;opacity:0.6;font-size:14px;";
-                removeIcon.addEventListener("mouseover", function () { removeIcon.style.opacity = "1"; });
-                removeIcon.addEventListener("mouseout", function () { removeIcon.style.opacity = "0.6"; });
-                (function (t) {
-                    removeIcon.addEventListener("click", function () { removeFilterTag(t); });
-                }(tag));
-
-                chip.appendChild(nameSpan);
-                chip.appendChild(removeIcon);
-                activeFilterChipsEl.appendChild(chip);
-            });
-        }
 
         function updateUrlParams(query) {
             var url = new URL(window.location);
@@ -262,14 +210,26 @@
             loadingEl.classList.remove("hidden");
 
             try {
-                var fetchUrl = query
-                    ? API_BASE + "/stories/search?place_name=" + encodeURIComponent(query)
-                    : API_BASE + "/stories";
+                var params = new URLSearchParams();
+                if (filterYearFrom !== "" || filterYearTo !== "") {
+                    params.set("query_start", filterYearFrom !== "" ? filterYearFrom : "1");
+                    params.set("query_end", filterYearTo !== "" ? filterYearTo : "9999");
+                    params.set("query_precision", "year");
+                }
+                filterTags.forEach(function (t) { params.append("tags", t); });
+                var fetchUrl;
+                if (query) {
+                    params.set("place_name", query);
+                    fetchUrl = API_BASE + "/stories/search?" + params.toString();
+                } else {
+                    var paramStr = params.toString();
+                    fetchUrl = API_BASE + "/stories" + (paramStr ? "?" + paramStr : "");
+                }
 
                 var response = await fetch(fetchUrl);
                 if (!response.ok) throw new Error("Search request failed");
                 var data = await response.json();
-                var stories = data.stories || [];
+                var stories = data.stories || (Array.isArray(data) ? data : []);
 
                 loadingEl.classList.add("hidden");
 
@@ -318,11 +278,15 @@
             return detail;
         }
 
+        function hasActiveFilters() {
+            return filterTags.length > 0 || filterYearFrom !== "" || filterYearTo !== "";
+        }
+
         function applyFiltersAndSort() {
             if (allStories.length === 0) return;
 
-            var filtered = filterStoriesByTags(allStories, filterTags);
-            var sorted = sortStories(filtered, sortOrder);
+            // tags and year are already filtered by the backend; only sort client-side
+            var sorted = sortStories(allStories, sortOrder);
 
             resultsEl.innerHTML = "";
             emptyEl.classList.add("hidden");
@@ -333,20 +297,20 @@
 
             if (count === 0) {
                 emptyEl.classList.remove("hidden");
-                emptyDetail.textContent = filterTags.length > 0
-                    ? "No stories match the selected tags. Try removing some filters."
+                emptyDetail.textContent = hasActiveFilters()
+                    ? "No stories match the selected filters. Try adjusting your filters."
                     : 'No stories found for "' + lastQuery + '". Try a different place name.';
                 statusEl.innerHTML = '<p class="text-textmuted text-sm">Found <strong class="text-textmain">0</strong> of <strong class="text-textmain">' + total + '</strong> ' + (total === 1 ? 'story' : 'stories') + ' matching your filters.</p>';
                 return;
             }
 
             var countText;
-            if (lastQuery && filterTags.length > 0) {
+            if (lastQuery && hasActiveFilters()) {
                 countText = '<strong class="text-textmain">' + count + '</strong> of <strong class="text-textmain">' + total + '</strong> ' + (total === 1 ? 'story' : 'stories') + ' matching filters for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"';
             } else if (lastQuery) {
                 countText = '<strong class="text-textmain">' + count + '</strong> ' + (count === 1 ? 'story' : 'stories') + ' for "<strong class="text-textmain">' + escapeHtml(lastQuery) + '</strong>"';
             } else {
-                countText = '<strong class="text-textmain">' + count + '</strong> ' + (count === 1 ? 'story' : 'stories') + ' matching selected tags';
+                countText = '<strong class="text-textmain">' + count + '</strong> ' + (count === 1 ? 'story' : 'stories') + ' matching selected filters';
             }
             statusEl.innerHTML = '<p class="text-textmuted text-sm">Found ' + countText + '</p>';
 
@@ -420,6 +384,115 @@
             div.appendChild(document.createTextNode(str || ""));
             return div.innerHTML;
         }
+
+        // ─── Filter Panel ─────────────────────────────────────────────────────
+
+        var filtersToggleBtn = document.getElementById("filters-toggle-btn");
+        var filterPanelEl = document.getElementById("filter-panel");
+
+        function setFiltersToggleActive(active) {
+            if (active) {
+                filtersToggleBtn.classList.add("bg-primary", "text-white", "border-primary");
+                filtersToggleBtn.classList.remove("bg-white", "text-textmuted", "border-border");
+            } else {
+                filtersToggleBtn.classList.remove("bg-primary", "text-white", "border-primary");
+                filtersToggleBtn.classList.add("bg-white", "text-textmuted", "border-border");
+            }
+        }
+
+        filtersToggleBtn.addEventListener("click", function () {
+            var isHidden = filterPanelEl.classList.toggle("hidden");
+            setFiltersToggleActive(!isHidden);
+            if (!isHidden) {
+                // Panel açıldı: mevcut aktif filtreleri panele yükle
+                filterPanelTags = filterTags.slice();
+                renderPanelTags();
+                document.getElementById("filter-year-from").value = filterYearFrom;
+                document.getElementById("filter-year-to").value = filterYearTo;
+            }
+        });
+
+        // Panel tag input
+        function addPanelTag() {
+            var input = document.getElementById("filter-panel-tag-input");
+            var val = input.value.trim().toLowerCase();
+            if (!val || filterPanelTags.indexOf(val) !== -1) return;
+            filterPanelTags.push(val);
+            renderPanelTags();
+            input.value = "";
+            input.focus();
+        }
+
+        function renderPanelTags() {
+            var container = document.getElementById("filter-panel-tags");
+            if (!container) return;
+            container.innerHTML = "";
+            filterPanelTags.forEach(function (tag) {
+                var chip = document.createElement("span");
+                chip.className = "inline-flex items-center gap-1 rounded-full bg-[rgba(119,90,25,0.12)] border border-[rgba(119,90,25,0.2)] px-2.5 py-0.5 text-xs font-semibold text-primary";
+                var nameSpan = document.createElement("span");
+                nameSpan.textContent = tag;
+                var removeIcon = document.createElement("span");
+                removeIcon.textContent = "×";
+                removeIcon.style.cssText = "cursor:pointer;line-height:1;opacity:0.6;font-size:14px;";
+                removeIcon.addEventListener("mouseover", function () { this.style.opacity = "1"; });
+                removeIcon.addEventListener("mouseout", function () { this.style.opacity = "0.6"; });
+                (function (t) {
+                    removeIcon.addEventListener("click", function () {
+                        filterPanelTags = filterPanelTags.filter(function (x) { return x !== t; });
+                        renderPanelTags();
+                    });
+                }(tag));
+                chip.appendChild(nameSpan);
+                chip.appendChild(removeIcon);
+                container.appendChild(chip);
+            });
+        }
+
+        document.getElementById("filter-panel-add-tag-btn").addEventListener("click", function () {
+            var input = document.getElementById("filter-panel-tag-input");
+            if (input.classList.contains("hidden")) {
+                input.classList.remove("hidden");
+                this.classList.add("hidden");
+                input.focus();
+            } else {
+                addPanelTag();
+            }
+        });
+
+        document.getElementById("filter-panel-tag-input").addEventListener("blur", function () {
+            if (!this.value.trim()) {
+                this.classList.add("hidden");
+                document.getElementById("filter-panel-add-tag-btn").classList.remove("hidden");
+            }
+        });
+
+        document.getElementById("filter-apply-btn").addEventListener("click", function () {
+            filterYearFrom = document.getElementById("filter-year-from").value.trim();
+            filterYearTo = document.getElementById("filter-year-to").value.trim();
+            filterTags = filterPanelTags.slice();
+            filterPanelTags = [];
+            renderPanelTags();
+            filterPanelEl.classList.add("hidden");
+            setFiltersToggleActive(false);
+            allStories = [];
+            var query = searchInput.value.trim() || lastQuery;
+            updateUrlParams(query);
+            performSearch(query);
+        });
+
+        document.getElementById("filter-reset-btn").addEventListener("click", function () {
+            filterYearFrom = "";
+            filterYearTo = "";
+            filterPanelTags = [];
+            filterTags = [];
+            document.getElementById("filter-year-from").value = "";
+            document.getElementById("filter-year-to").value = "";
+            renderPanelTags();
+            updateUrlParams(lastQuery);
+            allStories = [];
+            performSearch(lastQuery);
+        });
     </script>
 </body>
 </html>

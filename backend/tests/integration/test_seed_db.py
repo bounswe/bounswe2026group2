@@ -17,17 +17,23 @@ class TestSeededDatabaseContent:
             assert resp.status_code == 200, f"Login failed for {email}: {resp.json()}"
             assert "access_token" in resp.json()
 
-    async def test_three_public_stories_in_listing(self, client, seeded_db):
+    async def test_five_public_stories_in_listing(self, client, seeded_db):
         resp = await client.get("/stories")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 3
+        assert data["total"] == 5
 
     async def test_public_story_titles_in_listing(self, client, seeded_db):
         resp = await client.get("/stories")
         assert resp.status_code == 200
         titles = {s["title"] for s in resp.json()["stories"]}
-        assert titles == {"Fall of Constantinople", "Atatürk's Ankara", "Ancient Ephesus"}
+        assert titles == {
+            "Fall of Constantinople",
+            "Atatürk's Ankara",
+            "Ancient Ephesus",
+            "Battle of Gallipoli",
+            "Admin's Historical Note",
+        }
 
     async def test_draft_story_excluded_from_listing(self, client, seeded_db):
         resp = await client.get("/stories")
@@ -45,8 +51,11 @@ class TestSeededDatabaseContent:
         resp = await client.get("/stories/search?place_name=Ankara")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == 1
-        assert data["stories"][0]["title"] == "Atatürk's Ankara"
+        # Two seeded stories share place_name "Ankara"
+        assert data["total"] == 2
+        titles = {s["title"] for s in data["stories"]}
+        assert "Atatürk's Ankara" in titles
+        assert "Admin's Historical Note" in titles
 
     async def test_bounds_filter_returns_istanbul_story(self, client, seeded_db):
         # Tight bounding box around Istanbul (41.0082, 28.9784)
@@ -77,3 +86,28 @@ class TestSeededDatabaseContent:
         assert "Atatürk's Ankara" in titles
         assert "Fall of Constantinople" not in titles
         assert "Ancient Ephesus" not in titles
+
+    async def test_story_detail_includes_seeded_media_file(self, client, seeded_db):
+        story_id = seeded_db["stories"]["Fall of Constantinople"].id
+        resp = await client.get(f"/stories/{story_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["media_files"]) == 1
+        mf = data["media_files"][0]
+        assert mf["original_filename"] == "constantinople.png"
+        assert mf["media_type"] == "image"
+
+    async def test_date_precision_story_retrievable(self, client, seeded_db):
+        story_id = seeded_db["stories"]["Battle of Gallipoli"].id
+        resp = await client.get(f"/stories/{story_id}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["date_precision"] == "date"
+        assert data["date_start"] == "1915-04-25"
+        assert data["date_end"] == "1915-04-25"
+
+    async def test_admin_story_appears_in_public_listing(self, client, seeded_db):
+        resp = await client.get("/stories")
+        assert resp.status_code == 200
+        titles = [s["title"] for s in resp.json()["stories"]]
+        assert "Admin's Historical Note" in titles

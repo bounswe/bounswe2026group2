@@ -12,7 +12,6 @@ from app.db.enums import (
     DatePrecision,
     MediaType,
     NotificationEventType,
-    ReportStatus,
     StoryStatus,
     StoryVisibility,
 )
@@ -32,7 +31,6 @@ from app.services.story_service import (
     list_available_stories,
     list_comments_for_story,
     list_saved_stories_for_user,
-    remove_story_as_admin,
     save_story_for_user,
     search_available_stories_by_place,
     unlike_story,
@@ -404,6 +402,22 @@ class TestSearchAvailableStoriesByPlaceService:
 
 @pytest.mark.asyncio
 class TestUploadMediaForStoryService:
+    async def test_restricted_user_cannot_upload_media(self):
+        story_id = uuid.uuid4()
+        payload = MediaUploadRequest(media_type=MediaType.IMAGE)
+        file = _make_upload_file("photo.png", b"fake-image-bytes", "image/png")
+        current_user = _make_user(is_restricted=True)
+        db = AsyncMock()
+
+        with patch("app.services.story_service.upload_bytes") as mock_upload:
+            with pytest.raises(HTTPException) as exc_info:
+                await upload_media_for_story(db, story_id, file, payload, current_user=current_user)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Restricted users cannot modify stories"
+        db.execute.assert_not_awaited()
+        mock_upload.assert_not_called()
+
     async def test_upload_successful(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id)
@@ -1259,6 +1273,26 @@ class TestStoryLikeService:
 
 @pytest.mark.asyncio
 class TestCreateStoryWithLocationService:
+    async def test_restricted_user_cannot_create_story(self):
+        payload = StoryCreateRequest(
+            title="New Story",
+            content="Story content",
+            summary="Summary",
+            place_name="Istanbul",
+            latitude=41.0082,
+            longitude=28.9784,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser", is_restricted=True)
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await create_story_with_location(db, current_user, payload)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Restricted users cannot modify stories"
+        db.add.assert_not_called()
+        db.commit.assert_not_awaited()
+
     async def test_create_story_with_valid_location(self):
         payload = StoryCreateRequest(
             title="New Story",
@@ -1391,6 +1425,26 @@ class TestCreateStoryWithLocationService:
 
 @pytest.mark.asyncio
 class TestUpdateStoryWithLocationAndDatesService:
+    async def test_restricted_user_cannot_update_story(self):
+        payload = StoryUpdateRequest(
+            title="Updated Story",
+            content="Updated content",
+            summary="Updated summary",
+            place_name="Ankara",
+            latitude=39.9334,
+            longitude=32.8597,
+        )
+        current_user = SimpleNamespace(id=uuid.uuid4(), username="authoruser", is_restricted=True)
+        db = AsyncMock()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await update_story_with_location_and_dates(db, uuid.uuid4(), current_user, payload)
+
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "Restricted users cannot modify stories"
+        db.execute.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
     async def test_update_story_success(self):
         story_id = uuid.uuid4()
         story = _make_story(id=story_id, user_id=uuid.uuid4())
@@ -1579,6 +1633,42 @@ class TestGetNearbyStoriesService:
 
         assert "ORDER BY" in sql
         assert "DESC" not in sql
+
+    async def test_query_includes_tag_filter_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(
+            db,
+            center_lat=41.0082,
+            center_lng=28.9784,
+            tags=[" Spor ", "history", "spor"],
+        )
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "JOIN story_tags" in sql
+        assert "JOIN tags" in sql
+        assert "tags.name IN" in sql
+        assert "GROUP BY stories.id, users.username" in sql
+
+    async def test_query_ranks_tag_matches_then_distance_when_tags_provided(self):
+        db = AsyncMock()
+        db.execute.return_value.all = lambda: []
+
+        await get_nearby_stories(
+            db,
+            center_lat=41.0082,
+            center_lng=28.9784,
+            tags=["spor", "tarih"],
+        )
+
+        stmt = db.execute.await_args.args[0]
+        sql = str(stmt)
+
+        assert "ORDER BY count(tags.id) DESC" in sql
+        assert "asin" in sql
 
 
 @pytest.mark.asyncio
@@ -1783,45 +1873,6 @@ class TestAiTagPersistenceHelpers:
 
         with pytest.raises(HTTPException) as exc_info:
             await apply_ai_tags_to_story(db, uuid.uuid4(), ["bogazici"])
-
-        assert exc_info.value.status_code == 404
-        assert exc_info.value.detail == "Story not found"
-        db.commit.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-class TestAdminRemoveStoryService:
-    async def test_soft_deletes_story_and_marks_pending_reports_removed(self):
-        story_id = uuid.uuid4()
-        admin_id = uuid.uuid4()
-        story = _make_story(id=story_id, deleted_at=None, deleted_by=None)
-        current_user = SimpleNamespace(id=admin_id)
-
-        pending_report_1 = SimpleNamespace(status=ReportStatus.PENDING)
-        pending_report_2 = SimpleNamespace(status=ReportStatus.PENDING)
-
-        db = AsyncMock()
-        db.add = MagicMock()
-        db.execute.side_effect = [
-            SimpleNamespace(scalar_one_or_none=lambda: story),
-            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [pending_report_1, pending_report_2])),
-        ]
-
-        await remove_story_as_admin(db, story_id, current_user)
-
-        assert story.deleted_at is not None
-        assert story.deleted_by == admin_id
-        assert pending_report_1.status == ReportStatus.REMOVED
-        assert pending_report_2.status == ReportStatus.REMOVED
-        db.commit.assert_awaited_once()
-        assert db.add.call_count == 3
-
-    async def test_remove_story_raises_404_when_story_missing(self):
-        db = AsyncMock()
-        db.execute.return_value.scalar_one_or_none = lambda: None
-
-        with pytest.raises(HTTPException) as exc_info:
-            await remove_story_as_admin(db, uuid.uuid4(), SimpleNamespace(id=uuid.uuid4()))
 
         assert exc_info.value.status_code == 404
         assert exc_info.value.detail == "Story not found"

@@ -389,8 +389,69 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start full stack
+        run: |
+          cp backend/.env.example backend/.env
+          docker compose up -d --build
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8000/health && break
+            sleep 3
+          done
+          curl -sf http://localhost:8000/health || exit 1
+
+      - name: Wait for frontend
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:3000 && break
+            sleep 3
+          done
+
       - name: Run E2E tests
-        run: echo "playwright test"  # placeholder
+        run: cd frontend && npx playwright test tests/e2e/ --config playwright.e2e.config.js
+
+      - name: Upload E2E test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-reports
+          path: |
+            frontend/playwright-e2e-report/
+            frontend/e2e-report.xml
+
+      - name: Summarise results
+        if: always()
+        run: |
+          python3 << 'PYEOF'
+          import xml.etree.ElementTree as ET, os
+          try:
+              root = ET.parse('frontend/e2e-report.xml').getroot()
+              ss = list(root) if root.tag == 'testsuites' else [root]
+              t  = sum(int(x.get('tests',    0)) for x in ss)
+              f  = sum(int(x.get('failures', 0)) + int(x.get('errors', 0)) for x in ss)
+              sk = sum(int(x.get('skipped',  0)) for x in ss)
+              p  = t - f - sk
+              icon = '✅' if f == 0 else '❌'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as gh:
+                  gh.write(f'{icon} **E2E Tests** — {t} tests, {p} passed, {f} failed, {sk} skipped\n\n')
+          except Exception as e:
+              print(f'summary error: {e}')
+          PYEOF
 
   # ── 5. UAT TESTS ──────────────────────────────────────────────────────────────
 
@@ -508,6 +569,7 @@ jobs:
               ('Backend API',         'api-report.xml'),
               ('Backend Integration', 'integration-report.xml'),
               ('Frontend Unit',       'test-report.xml'),
+              ('E2E',                 'e2e-report.xml'),
               ('UAT',                 'uat-report.xml'),
           ]
 
