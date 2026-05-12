@@ -1,7 +1,7 @@
 """Add partial covering index for story list/search base filter.
 
 All public-facing list and search endpoints share the predicate:
-    status = 'published' AND visibility = 'public' AND deleted_at IS NULL
+    status = 'PUBLISHED' AND visibility = 'PUBLIC' AND deleted_at IS NULL
 
 Individual B-tree indexes on each column exist, but PostgreSQL must bitmap-AND
 three separate scans to satisfy this filter.  A single partial index covering
@@ -34,7 +34,7 @@ def upgrade() -> None:
         "stories",
         [sa.text("created_at DESC")],
         unique=False,
-        postgresql_where=sa.text("status = 'published' AND visibility = 'public' AND deleted_at IS NULL"),
+        postgresql_where=sa.text("status = 'PUBLISHED' AND visibility = 'PUBLIC' AND deleted_at IS NULL"),
     )
 
 

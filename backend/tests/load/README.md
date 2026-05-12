@@ -28,11 +28,13 @@
 **Query pattern** (`GET /stories`, `GET /stories/search`, `GET /stories/timeline`, `GET /stories/nearby`):
 
 ```sql
-WHERE status = 'published'
-  AND visibility = 'public'
+WHERE status = 'PUBLISHED'
+  AND visibility = 'PUBLIC'
   AND deleted_at IS NULL
 ORDER BY created_at DESC
 ```
+
+Note: SQLAlchemy stores the enum member name (`PUBLISHED`, `PUBLIC`) as the VARCHAR value, not the Python `.value` attribute (`published`, `public`).
 
 **Problem:** Three separate B-tree indexes (`ix_stories_status`, `ix_stories_visibility`, `ix_stories_deleted_at`) require PostgreSQL to perform three bitmap index scans and then bitmap-AND them together.  On a table with many draft/private/deleted rows this is efficient, but as the fraction of published+public rows grows the bitmap overhead increases.
 
@@ -41,7 +43,7 @@ ORDER BY created_at DESC
 ```sql
 CREATE INDEX ix_stories_published_public_active
 ON stories (created_at DESC)
-WHERE status = 'published' AND visibility = 'public' AND deleted_at IS NULL;
+WHERE status = 'PUBLISHED' AND visibility = 'PUBLIC' AND deleted_at IS NULL;
 ```
 
 The planner can now satisfy the full filter with **one index scan** ordered by `created_at DESC`, avoiding the bitmap-AND path entirely for the common list case.
@@ -112,7 +114,7 @@ If `GET /stories` p95 exceeds 500 ms under 50 concurrent users, investigate with
 
 ```bash
 docker compose exec db psql -U postgres -c \
-  "EXPLAIN (ANALYZE, BUFFERS) SELECT s.id, u.username FROM stories s JOIN users u ON u.id = s.user_id WHERE s.status = 'published' AND s.visibility = 'public' AND s.deleted_at IS NULL ORDER BY s.created_at DESC;"
+  "EXPLAIN (ANALYZE, BUFFERS) SELECT s.id, u.username FROM stories s JOIN users u ON u.id = s.user_id WHERE s.status = 'PUBLISHED' AND s.visibility = 'PUBLIC' AND s.deleted_at IS NULL ORDER BY s.created_at DESC;"
 ```
 
 Look for `Index Scan using ix_stories_published_public_active` — if you see `Bitmap Heap Scan` instead, run `ANALYZE stories;` to refresh planner statistics.
