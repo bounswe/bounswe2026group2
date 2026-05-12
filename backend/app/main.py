@@ -1,16 +1,19 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.logging import configure_logging
 from app.db.session import engine
 from app.routers.auth import router as auth_router
 from app.routers.story import router as story_router
 from app.routers.transcription import router as transcription_router
 from app.routers.users import router as users_router
 from app.services.storage import check_connection
+
+configure_logging(settings.LOG_LEVEL)
 
 
 @asynccontextmanager
@@ -54,7 +57,7 @@ def root():
 
 
 @app.get("/health")
-async def health():
+async def health(response: Response | None = None):
     # Check DB connectivity
     try:
         async with engine.connect() as conn:
@@ -71,6 +74,9 @@ async def health():
         storage_status = f"unreachable: {e}"
 
     all_ok = db_status == "ok" and storage_status == "ok"
+    if not all_ok and response is not None:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
     return {
         "status": "ok" if all_ok else "degraded",
         "db": db_status,

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     # Set to "true" in .env to write every SQL query to logs/sql.log
     LOG_SQL: bool = False
+    LOG_LEVEL: str = "INFO"
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Comma-separated list of allowed origins
