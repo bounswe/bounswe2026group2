@@ -21,6 +21,7 @@ def upgrade() -> None:
         "story_tags",
         ["tag_id", "story_id"],
         unique=False,
+        if_not_exists=True,
     )
 
 
