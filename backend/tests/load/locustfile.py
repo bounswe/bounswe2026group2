@@ -17,26 +17,21 @@ Endpoints exercised (weighted by real-world read:write ratio):
 """
 
 import random
+import uuid
 
 from locust import HttpUser, between, task
 
-# Seed place names that match the seeded_db fixture data.
 PLACE_NAMES = [
     "Istanbul",
     "Ankara",
     "Bosphorus",
     "Galata",
     "Topkapi",
-    "Beşiktaş",
     "Kapadokya",
     "Troy",
 ]
 
-# Credentials that exist in the seeded_db fixture.
-SEED_USERS = [
-    {"username": "alice", "password": "alice_password123!"},
-    {"username": "bob", "password": "bob_password123!"},
-]
+PASSWORD = "LoadTest1!"
 
 
 class StoryMapUser(HttpUser):
@@ -45,31 +40,37 @@ class StoryMapUser(HttpUser):
     wait_time = between(0.5, 2.0)
 
     def on_start(self) -> None:
-        """Log in once at the start of each simulated user session."""
-        creds = random.choice(SEED_USERS)
+        """Register a unique user then log in to get a JWT for the session."""
+        uid = uuid.uuid4().hex[:10]
+        self._email = f"loadtest_{uid}@example.com"
+        self._username = f"loadtest_{uid}"
+
+        self.client.post(
+            "/auth/register",
+            json={
+                "username": self._username,
+                "email": self._email,
+                "password": PASSWORD,
+            },
+            name="/auth/register [setup]",
+        )
+
         resp = self.client.post(
             "/auth/login",
-            json={"username": creds["username"], "password": creds["password"]},
+            json={"email": self._email, "password": PASSWORD},
             name="/auth/login [setup]",
         )
-        if resp.status_code == 200:
-            self._token = resp.json().get("access_token", "")
-        else:
-            self._token = ""
+        self._token = resp.json().get("access_token", "") if resp.status_code == 200 else ""
         self._story_ids: list[str] = []
 
     def _auth_headers(self) -> dict:
-        if self._token:
-            return {"Authorization": f"Bearer {self._token}"}
-        return {}
+        return {"Authorization": f"Bearer {self._token}"} if self._token else {}
 
     @task(50)
     def list_stories(self) -> None:
         resp = self.client.get("/stories", name="/stories")
         if resp.status_code == 200:
-            stories = resp.json().get("stories", [])
-            # Cache IDs for the detail task so we hit real rows.
-            for s in stories[:5]:
+            for s in resp.json().get("stories", [])[:5]:
                 sid = s.get("id")
                 if sid and sid not in self._story_ids:
                     self._story_ids.append(sid)
@@ -93,9 +94,8 @@ class StoryMapUser(HttpUser):
 
     @task(5)
     def login(self) -> None:
-        creds = random.choice(SEED_USERS)
         self.client.post(
             "/auth/login",
-            json={"username": creds["username"], "password": creds["password"]},
+            json={"email": self._email, "password": PASSWORD},
             name="/auth/login",
         )
