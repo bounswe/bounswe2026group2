@@ -5,15 +5,11 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_optional_user
-from app.db.enums import MediaType, ReportStatus, UserRole
+from app.db.enums import MediaType
 from app.db.session import get_db
-from app.db.story import Story
-from app.db.story_report import StoryReport
 from app.db.user import User
 from app.models.comment import CommentCreateRequest, CommentListResponse, CommentResponse
 from app.models.story import (
-    AdminReportListItem,
-    AdminReportsListResponse,
     MediaUploadRequest,
     MediaUploadResponse,
     StoryBoundsFilter,
@@ -26,7 +22,6 @@ from app.models.story import (
     StoryReportResponse,
     StorySaveResponse,
     StoryUpdateRequest,
-    UpdateReportStatusRequest,
 )
 from app.services.ai_tagging_system import is_ai_tagging_configured, run_ai_tagging_for_story
 from app.services.story_service import (
@@ -42,7 +37,6 @@ from app.services.story_service import (
     list_available_stories,
     list_comments_for_story,
     list_saved_stories_for_user,
-    remove_story_as_admin,
     save_story_for_user,
     search_available_stories_by_place,
     unlike_story,
@@ -541,153 +535,3 @@ async def report_story(
     db: AsyncSession = Depends(get_db),
 ):
     return await create_report_for_story(db, story_id, current_user, payload)
-
-
-@router.get(
-    "/admin/reports",
-    response_model=AdminReportsListResponse,
-    tags=["admin"],
-    summary="Get reported stories (admin only)",
-    description="Retrieve all reported stories with filtering options. Admin access required.",
-    responses={
-        401: {"description": "Missing or invalid authentication token"},
-        403: {"description": "User is not an admin"},
-    },
-)
-async def get_admin_reports(
-    status: ReportStatus | None = Query(None, description="Filter by report status"),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    # Admin check
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    # Build query with joins to get related data for both the reporter and story author.
-    from sqlalchemy import select
-    from sqlalchemy.orm import aliased
-
-    story_author = aliased(User)
-    reporter = aliased(User)
-
-    query = (
-        select(
-            StoryReport.id,
-            StoryReport.story_id,
-            StoryReport.user_id,
-            StoryReport.reason,
-            StoryReport.description,
-            StoryReport.status,
-            StoryReport.created_at,
-            Story.title.label("story_title"),
-            story_author.username.label("story_author_username"),
-            reporter.username.label("reporter_username"),
-        )
-        .join(Story, StoryReport.story_id == Story.id)
-        .join(story_author, Story.user_id == story_author.id)
-        .join(reporter, StoryReport.user_id == reporter.id)
-    )
-
-    if status:
-        query = query.where(StoryReport.status == status)
-
-    query = query.order_by(StoryReport.created_at.desc())
-
-    result = await db.execute(query)
-    rows = result.fetchall()
-
-    reports = [
-        AdminReportListItem(
-            id=row.id,
-            story_id=row.story_id,
-            user_id=row.user_id,
-            reason=row.reason,
-            description=row.description,
-            status=row.status,
-            created_at=row.created_at,
-            story_title=row.story_title,
-            reporter_username=row.reporter_username,
-            story_author_username=row.story_author_username,
-        )
-        for row in rows
-    ]
-
-    return AdminReportsListResponse(total=len(reports), reports=reports)
-
-
-@router.put(
-    "/admin/reports/{report_id}",
-    response_model=StoryReportResponse,
-    tags=["admin"],
-    summary="Update report status (admin only)",
-    description="Mark a reported story as reviewed. Story removal is handled by the admin remove-story endpoint.",
-    responses={
-        401: {"description": "Missing or invalid authentication token"},
-        400: {"description": "Invalid report status transition"},
-        403: {"description": "User is not an admin"},
-        404: {"description": "Report not found"},
-        409: {"description": "Report can no longer be updated"},
-    },
-)
-async def update_report_status(
-    report_id: uuid.UUID,
-    payload: UpdateReportStatusRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    # Admin check
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    # Fetch the report
-    from sqlalchemy import select
-
-    query = select(StoryReport).where(StoryReport.id == report_id)
-    result = await db.execute(query)
-    report = result.scalars().first()
-
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-
-    if payload.status == ReportStatus.REMOVED:
-        raise HTTPException(
-            status_code=400,
-            detail="Use the admin remove story endpoint to mark reports as removed",
-        )
-
-    if report.status == ReportStatus.REMOVED:
-        raise HTTPException(
-            status_code=409,
-            detail="Removed reports cannot be updated",
-        )
-
-    # MVP moderation flow: this endpoint is only for acknowledging a report as reviewed.
-    report.status = payload.status
-    db.add(report)
-    await db.commit()
-    await db.refresh(report)
-
-    return report
-
-
-@router.delete(
-    "/admin/stories/{story_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    tags=["admin"],
-    summary="Remove story (admin only)",
-    description="Soft-delete a story and mark its pending reports as removed. Admin access required.",
-    responses={
-        401: {"description": "Missing or invalid authentication token"},
-        403: {"description": "User is not an admin"},
-        404: {"description": "Story not found"},
-    },
-)
-async def admin_remove_story(
-    story_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    await remove_story_as_admin(db, story_id, current_user)

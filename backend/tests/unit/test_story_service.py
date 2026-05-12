@@ -20,6 +20,7 @@ from app.db.notification import Notification
 from app.db.tag import Tag
 from app.models.comment import CommentCreateRequest
 from app.models.story import MediaUploadRequest, StoryCreateRequest, StoryResponse, StoryUpdateRequest
+from app.services.admin_service import remove_story_as_admin
 from app.services.story_service import (
     create_comment_for_story,
     create_story_with_location,
@@ -32,7 +33,6 @@ from app.services.story_service import (
     list_available_stories,
     list_comments_for_story,
     list_saved_stories_for_user,
-    remove_story_as_admin,
     save_story_for_user,
     search_available_stories_by_place,
     unlike_story,
