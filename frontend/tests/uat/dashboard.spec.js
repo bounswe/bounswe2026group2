@@ -1,117 +1,126 @@
-// UAT — Dashboard / Profile view count flow (web only; see tests/mobile-e2e for Appium).
+// UAT — Profile total view count (web). Mirrors manual steps against the deployed app.
 //
-// TC_DASH_1 — A user sees view counts; after another view, the count increases.
+// Run (Render dev):
+//   UAT_BASE_URL=https://localhistorymap-dev.onrender.com npx playwright test tests/uat/dashboard.spec.js
+//
+// Run (local stack):
+//   UAT_BASE_URL=http://localhost:3000 npx playwright test tests/uat/dashboard.spec.js
 
 const { test, expect } = require('@playwright/test');
 
-const OWNER_EMAIL = process.env.UAT_OWNER_EMAIL || 'test@gmail.com';
-const OWNER_PASSWORD = process.env.UAT_OWNER_PASSWORD || 'Test1234%';
-
-// Seeded story id used in the original UAT scenario (#276 / #276 steps).
+const UAT_EMAIL = process.env.UAT_OWNER_EMAIL || 'test@gmail.com';
+const UAT_PASSWORD = process.env.UAT_OWNER_PASSWORD || 'Test1234%';
 const SEEDED_STORY_ID =
   process.env.UAT_SEEDED_STORY_ID || 'bb43034b-8e1a-49a8-92b9-56346f50767a';
 
-async function login(page, { email, password }) {
+const profileBtn = (page) => page.locator('#site-header-profile-btn');
+const profileMenu = (page) => page.locator('#site-header-profile-menu');
+
+async function loginFromIndex(page) {
   await page.goto('/');
-  await expect(page.getByTestId('login-form')).toBeVisible();
-  await page.getByTestId('login-email').fill(email);
-  await page.getByTestId('login-password').fill(password);
-  // Attach the navigation wait before the click (best practice) and allow for
-  // slow backend/auth under load.
+  await expect(page.getByTestId('login-form')).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId('login-email').fill(UAT_EMAIL);
+  await page.getByTestId('login-password').fill(UAT_PASSWORD);
   await Promise.all([
-    page
-      .waitForURL('**/map.html', { timeout: 30_000 })
-      .catch(() => null), // some builds don't always redirect; token check below covers it
+    page.waitForURL('**/map.html', { timeout: 45_000 }),
     page.getByTestId('login-submit').click(),
   ]);
-
-  // If the app did not redirect but token exists, navigate explicitly.
-  await page
-    .waitForFunction(() => !!localStorage.getItem('auth_token'), null, { timeout: 30_000 })
-    .catch(() => null);
-  const token = await page.evaluate(() => localStorage.getItem('auth_token'));
-  if (token && !/map\.html/.test(page.url())) {
-    await page.goto('/map.html');
-    await page.waitForURL('**/map.html', { timeout: 30_000 });
-  }
+  await page.waitForLoadState('domcontentloaded');
+  await expect(profileBtn(page)).toBeVisible({ timeout: 20_000 });
 }
 
-async function openProfileMenu(page) {
-  const button = page.locator('#btn-profile');
-  await expect(button).toBeVisible();
-  await button.click();
-  await expect(page.locator('#profile-menu')).toBeVisible();
+async function openAccountMenu(page) {
+  const menu = profileMenu(page);
+  if (await menu.isVisible()) return;
+  await expect(profileBtn(page)).toBeVisible({ timeout: 20_000 });
+  await profileBtn(page).click();
+  await expect(menu).toBeVisible({ timeout: 15_000 });
 }
 
-async function goToProfileFromMenu(page) {
-  await openProfileMenu(page);
+async function clickViewProfile(page) {
+  await openAccountMenu(page);
   await page.getByRole('menuitem', { name: 'View Profile' }).click();
-  await page.waitForURL('**/profile.html', { timeout: 10_000 });
+  await page.waitForURL('**/profile.html', { timeout: 15_000 });
 }
 
-async function signOutFromMenu(page) {
-  await openProfileMenu(page);
+async function clickSignOut(page) {
+  await openAccountMenu(page);
   await page.getByRole('menuitem', { name: 'Sign Out' }).click();
-  // Best-effort: some builds redirect immediately, others just clear the token.
-  await page.waitForTimeout(250);
+  await page.waitForURL('**/index.html', { timeout: 15_000 });
 }
 
-async function readTotalViewsFromProfile(page) {
+async function clickSignInFromMenu(page) {
+  await openAccountMenu(page);
+  await page.getByRole('menuitem', { name: 'Sign In' }).click();
+  await page.waitForURL('**/index.html', { timeout: 15_000 });
+}
+
+async function waitForProfileStats(page) {
+  await page.waitForResponse(
+    (resp) =>
+      resp.request().method() === 'GET' &&
+      resp.ok() &&
+      /\/users\/me\/stats(\?|$)/.test(resp.url()),
+    { timeout: 25_000 }
+  );
+}
+
+async function readTotalViews(page) {
   await expect(page.locator('#stat-views')).toBeVisible();
-  await expect(page.locator('#stat-views')).not.toHaveText('…');
-  const txt = (await page.locator('#stat-views').innerText()).trim();
-  const n = Number.parseInt(txt, 10);
-  expect(Number.isFinite(n)).toBeTruthy();
+  const raw = (await page.locator('#stat-views').innerText()).trim();
+  const n = Number.parseInt(raw, 10);
+  expect(Number.isFinite(n), `Expected numeric view count, got: ${raw}`).toBeTruthy();
   return n;
 }
 
-test.describe('TC_DASH_1 — Dashboard view counts', () => {
-  test('view count increases after another user views a story', async ({ browser }) => {
-    // Owner context (stays logged in)
-    const ownerContext = await browser.newContext();
-    const ownerPage = await ownerContext.newPage();
+/** Step 10: some builds use “Back to Map”; this repo’s story-detail may only expose the header brand or “View on full map”. */
+async function leaveStoryDetailToMap(page) {
+  const back = page.getByRole('link', { name: /Back to Map/i });
+  if ((await back.count()) > 0) {
+    await back.first().click();
+  } else {
+    await page.getByRole('link', { name: 'Local History Map' }).click();
+  }
+  await page.waitForURL('**/map.html', { timeout: 20_000 });
+}
 
-    await login(ownerPage, { email: OWNER_EMAIL, password: OWNER_PASSWORD });
+test.describe('TC_DASH — Profile view count (UAT script)', () => {
+  test('view count after anonymous story visit matches manual UAT steps', async ({ page }) => {
+    // 1–2
+    await loginFromIndex(page);
 
-    // Steps 3-6: profile menu → view profile → read views → go back to map
-    await goToProfileFromMenu(ownerPage);
-    const beforeViews = await readTotalViewsFromProfile(ownerPage);
+    // 3–5
+    await clickViewProfile(page);
+    await waitForProfileStats(page);
+    const viewsBefore = await readTotalViews(page);
 
-    await ownerPage.getByRole('link', { name: 'Local History Map' }).click();
-    await ownerPage.waitForURL('**/map.html', { timeout: 10_000 });
+    // 6
+    await page.getByRole('link', { name: 'Local History Map' }).click();
+    await page.waitForURL('**/map.html', { timeout: 15_000 });
 
-    // Steps 7-8: sign out (owner session ends)
-    await signOutFromMenu(ownerPage);
+    // 7–8
+    await clickSignOut(page);
 
-    // Second context: unauthenticated user views story to record a view
-    const viewerContext = await browser.newContext();
-    const viewerPage = await viewerContext.newPage();
+    // 9 (anonymous visit — should record at least one view for the story owner)
+    await page.goto(`/story-detail.html?id=${encodeURIComponent(SEEDED_STORY_ID)}`);
+    await expect(page.locator('#story-title')).not.toHaveText(/loading/i, { timeout: 20_000 });
 
-    // Steps 9-10: open story detail, then go back to map
-    await viewerPage.goto(`/story-detail.html?id=${encodeURIComponent(SEEDED_STORY_ID)}`);
-    await expect(viewerPage.locator('#story-title')).toBeVisible();
-    await viewerPage.getByRole('link', { name: /Back to Map/i }).first().click();
-    await viewerPage.waitForURL('**/map.html', { timeout: 10_000 });
+    // 10
+    await leaveStoryDetailToMap(page);
 
-    await viewerContext.close();
+    // 11–13
+    await clickSignInFromMenu(page);
+    await loginFromIndex(page);
 
-    // Steps 11-16: sign back in and verify views increased
-    await openProfileMenu(ownerPage);
-    await ownerPage.getByRole('menuitem', { name: 'Sign In' }).click();
-    await ownerPage.waitForURL('**/index.html', { timeout: 10_000 });
+    // 14–16
+    await clickViewProfile(page);
+    await waitForProfileStats(page);
 
-    await login(ownerPage, { email: OWNER_EMAIL, password: OWNER_PASSWORD });
-    await goToProfileFromMenu(ownerPage);
-
-    // The profile stats load async; poll until the count updates.
     await expect
-      .poll(async () => readTotalViewsFromProfile(ownerPage), {
-        timeout: 20_000,
-        intervals: [250, 500, 1000, 1500, 2000],
+      .poll(async () => readTotalViews(page), {
+        timeout: 30_000,
+        intervals: [300, 600, 1200, 2000, 3000],
       })
-      .toBeGreaterThanOrEqual(beforeViews + 1);
-
-    await ownerContext.close();
+      .toBeGreaterThanOrEqual(viewsBefore + 1);
   });
 });
-
