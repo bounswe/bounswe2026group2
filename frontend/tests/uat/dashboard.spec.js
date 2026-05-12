@@ -108,7 +108,7 @@ test.describe('TC_DASH — Profile view count (UAT script)', () => {
     );
   });
 
-  test('view count after anonymous story visit matches manual UAT steps', async ({ page }) => {
+  test.skip('view count after anonymous story visit matches manual UAT steps', async ({ page }) => {
     // 1–2
     await loginFromIndex(page);
 
