@@ -57,7 +57,7 @@ def root():
 
 
 @app.get("/health")
-async def health(response: Response | None = None):
+async def health(response: Response = None):
     # Check DB connectivity
     try:
         async with engine.connect() as conn:
