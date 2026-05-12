@@ -615,9 +615,7 @@ async def create_story_with_location(
 
     if payload.tags:
         story_row = (
-            await db.execute(
-                select(Story).options(selectinload(Story.tags)).where(Story.id == story_id)
-            )
+            await db.execute(select(Story).options(selectinload(Story.tags)).where(Story.id == story_id))
         ).scalar_one()
         new_tags = await get_or_create_tags(db, payload.tags)
         attach_tags_to_story(story_row, new_tags)
