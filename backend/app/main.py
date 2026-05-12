@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.logging import configure_logging
 from app.db.session import engine
+from app.routers.admin import router as admin_router
 from app.routers.auth import router as auth_router
 from app.routers.story import router as story_router
 from app.routers.transcription import router as transcription_router
@@ -46,6 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(story_router)
 app.include_router(transcription_router)
 app.include_router(users_router)
