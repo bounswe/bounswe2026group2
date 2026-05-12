@@ -91,7 +91,7 @@ test.describe('TC_DASH — Profile view count (UAT script)', () => {
 
   test.beforeAll(() => {
     if (process.env.SKIP_UAT_SEED === '1') return;
-    const repoRoot = path.resolve(__dirname, '../../..');
+    const repoRoot = path.resolve(process.cwd(), '..');
     execSync(
       [
         'docker compose run --rm -T',

@@ -195,7 +195,7 @@ function setupComments(apiBase, storyId) {
 
             input.value = "";
             renderComments(state);
-        } catch (err) {
+        } catch {
             setCommentError("Unable to post comment yet.");
         } finally {
             submit.disabled = false;
