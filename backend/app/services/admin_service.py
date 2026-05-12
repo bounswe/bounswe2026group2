@@ -10,7 +10,12 @@ from app.db.enums import ReportStatus, UserRole
 from app.db.story import Story
 from app.db.story_report import StoryReport
 from app.db.user import User
-from app.models.admin import AdminReportListItem, AdminReportsListResponse, UpdateReportStatusRequest
+from app.models.admin import (
+    AdminReportListItem,
+    AdminReportsListResponse,
+    AdminUserRestrictionResponse,
+    UpdateReportStatusRequest,
+)
 from app.models.story import StoryReportResponse
 
 
@@ -79,6 +84,32 @@ async def remove_story_as_admin(
     await db.commit()
 
 
+async def restrict_user_as_admin(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+) -> AdminUserRestrictionResponse:
+    user = await _get_user_or_404(db, user_id)
+    user.is_restricted = True
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return AdminUserRestrictionResponse.model_validate(user)
+
+
+async def unrestrict_user_as_admin(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+) -> AdminUserRestrictionResponse:
+    user = await _get_user_or_404(db, user_id)
+    user.is_restricted = False
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return AdminUserRestrictionResponse.model_validate(user)
+
+
 async def _fetch_admin_report_rows(
     db: AsyncSession,
     report_status: ReportStatus | None,
@@ -96,6 +127,7 @@ async def _fetch_admin_report_rows(
             StoryReport.status,
             StoryReport.created_at,
             Story.title.label("story_title"),
+            Story.user_id.label("story_author_user_id"),
             story_author.username.label("story_author_username"),
             reporter.username.label("reporter_username"),
         )
@@ -123,8 +155,11 @@ def _map_admin_report_row(row) -> AdminReportListItem:
         status=row.status,
         created_at=row.created_at,
         story_title=row.story_title,
+        story_author_user_id=row.story_author_user_id,
         reporter_username=row.reporter_username,
         story_author_username=row.story_author_username,
+        reported_user_id=row.story_author_user_id,
+        reported_username=row.story_author_username,
     )
 
 
@@ -151,6 +186,18 @@ async def _get_story_or_404(
         )
 
     return story
+
+
+async def _get_user_or_404(db: AsyncSession, user_id: uuid.UUID) -> User:
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    return user
 
 
 async def _list_pending_reports_for_story(

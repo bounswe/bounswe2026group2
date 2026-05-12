@@ -8,6 +8,8 @@ def _route_by_path(path: str):
 class TestAdminRoutingAPI:
     def test_admin_routes_are_exposed_from_admin_router(self):
         admin_paths = {
+            "/admin/users/{user_id}/restrict",
+            "/admin/users/{user_id}/unrestrict",
             "/stories/admin/reports",
             "/stories/admin/reports/{report_id}",
             "/stories/admin/stories/{story_id}",
@@ -29,6 +31,8 @@ class TestAdminRoutingAPI:
 
     def test_story_router_does_not_own_admin_paths(self):
         admin_routes = [
+            _route_by_path("/admin/users/{user_id}/restrict"),
+            _route_by_path("/admin/users/{user_id}/unrestrict"),
             _route_by_path("/stories/admin/reports"),
             _route_by_path("/stories/admin/reports/{report_id}"),
             _route_by_path("/stories/admin/stories/{story_id}"),
