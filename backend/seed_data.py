@@ -454,7 +454,7 @@ def seed() -> None:
     print("  alice   / Alice123!   (role: user)")
     print("  bob     / Bobbb123!   (role: user)")
     print("  charlie / Charlie123! (role: user)")
-    print(f"\nBrowse at http://localhost:8000/docs  or open the frontend at http://localhost:3000")
+    print("\nBrowse at http://localhost:8000/docs  or open the frontend at http://localhost:3000")
 
 
 if __name__ == "__main__":
