@@ -58,7 +58,7 @@ async function fillRequiredStoryFields(page, storyNumber) {
     `Automated acceptance story ${storyNumber} for verifying the first story badge award flow.`
   );
   await page.locator('#location').fill('Bogazici University, Istanbul');
-  await page.locator('#date-single').fill('05/12/2026');
+  await page.locator('#date-single').fill('2026-05-12');
 
   await page.evaluate(() => {
     document.querySelector('#latitude').value = '41.0857';

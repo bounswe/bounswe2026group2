@@ -53,7 +53,7 @@ test.describe('TC_STORY_5 — Anonymous Story Sharing', () => {
     await authorPage.fill('#title', 'Old Fountain');
     await authorPage.fill('#story', 'A forgotten fountain in the heart of the old city.');
     await authorPage.fill('#location', 'Istanbul');
-    await authorPage.fill('#date-single', '01/01/2024');
+    await authorPage.fill('#date-single', '2024-01-01');
 
     // Set lat/lng hidden fields directly — the Leaflet map click is not
     // reliable in headless mode and the submit handler requires these values.
