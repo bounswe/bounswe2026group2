@@ -216,7 +216,7 @@ describe('TC_MAP_2 — Multi-Location Story Display on Map', () => {
       () => (document.querySelector('.leaflet-popup-content') || {}).textContent || '',
     );
     assert.ok(popup1Text.includes('Stop 1'), `First pin popup should contain "Stop 1", got "${popup1Text}"`);
-    assert.ok(popup1Text.includes('Read full story'), `First pin popup should contain story link, got "${popup1Text}"`);
+    assert.ok(popup1Text.includes('Read Story'), `First pin popup should contain story link, got "${popup1Text}"`);
 
     // ── Step 14: Tap second pin and verify the same story link appears ──────
     // Close the current popup first.
