@@ -20,11 +20,11 @@
 
         return (
             '<header class="fixed top-0 left-0 right-0 z-[1100] bg-[#f8f3ea]/95 backdrop-blur-sm border-b border-border/30">' +
-            '<div class="flex justify-between items-center w-full px-6 sm:px-8 py-4 max-w-screen-2xl mx-auto gap-4">' +
-            '<div class="flex items-center gap-8 shrink-0">' +
-            '<a href="map.html" class="text-xl sm:text-2xl font-bold font-headline text-textmain tracking-tight hover:text-tertiary transition-colors">Local History Map</a>' +
+            '<div class="flex justify-between items-center w-full px-4 sm:px-6 md:px-8 py-3 md:py-4 max-w-screen-2xl mx-auto gap-2 md:gap-4">' +
+            '<div class="flex items-center shrink-0">' +
+            '<a href="map.html" class="text-base sm:text-xl md:text-2xl font-bold font-headline text-textmain tracking-tight hover:text-tertiary transition-colors whitespace-nowrap">Local History Map</a>' +
             '</div>' +
-            (extra ? '<div class="hidden md:flex flex-1 items-center justify-center min-w-0">' + extra + '</div>' : '') +
+            (extra ? '<div class="flex flex-1 items-center justify-center min-w-0">' + extra + '</div>' : '') +
             '<div class="flex items-center gap-3 sm:gap-4 shrink-0">' +
             (options && options.extraRight ? options.extraRight : '') +
             '<div class="relative">' +
