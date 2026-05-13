@@ -668,6 +668,27 @@
             }
         });
 
+        // ─── Locate Button (just fly to user position, no radius) ───
+        var btnLocate = document.getElementById("btn-locate");
+        btnLocate.addEventListener("click", function () {
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported in this browser.");
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                function (pos) {
+                    var latlng = [pos.coords.latitude, pos.coords.longitude];
+                    try { renderUserLocation(latlng, pos.coords.accuracy); } catch (e) {}
+                    map.flyTo(latlng, 14, { duration: FLY_DURATION });
+                },
+                function (err) {
+                    console.error("Geolocation error:", err);
+                    alert("Could not get your location.");
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+            );
+        });
+
         // ─── Stories Near Me ───
         var nearMeActive = false;
         var nearMeRadiusKm = 5;
