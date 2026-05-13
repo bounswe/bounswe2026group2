@@ -124,7 +124,7 @@ test.describe('TC_MAP_2 — Multi-Location Story Display on Map', () => {
       const popup = page.locator('.leaflet-popup-content');
       await expect(popup).toBeVisible({ timeout: 5_000 });
       await expect(popup).toContainText('Stop 1');
-      await expect(popup).toContainText('Read full story');
+      await expect(popup).toContainText('Read Story');
 
       // ── Step 9: Click second pin and verify the same story link appears ───
       await page.locator('.leaflet-popup-close-button').click();
@@ -132,7 +132,7 @@ test.describe('TC_MAP_2 — Multi-Location Story Display on Map', () => {
       await expect(popup).toBeVisible({ timeout: 5_000 });
       await expect(popup).toContainText('Stop 2');
       // Both pins link to the same story detail page.
-      await expect(popup.locator('a')).toHaveAttribute('href', `story-detail.html?id=${storyId}`);
+      await expect(popup.locator('a[href*="story-detail.html"]')).toHaveAttribute('href', `story-detail.html?id=${storyId}`);
     },
   );
 });
