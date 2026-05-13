@@ -668,6 +668,27 @@
             }
         });
 
+        // ─── Locate Button (just fly to user position, no radius) ───
+        var btnLocate = document.getElementById("btn-locate");
+        btnLocate.addEventListener("click", function () {
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported in this browser.");
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                function (pos) {
+                    var latlng = [pos.coords.latitude, pos.coords.longitude];
+                    try { renderUserLocation(latlng, pos.coords.accuracy); } catch (e) {}
+                    map.flyTo(latlng, 14, { duration: FLY_DURATION });
+                },
+                function (err) {
+                    console.error("Geolocation error:", err);
+                    alert("Could not get your location.");
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+            );
+        });
+
         // ─── Stories Near Me ───
         var nearMeActive = false;
         var nearMeRadiusKm = 5;
@@ -1064,20 +1085,57 @@
                 focusPolyline = null;
             }
 
+            var stopCoverImage = null;
+            function buildStopPopupHtml(loc, idx, coverImage) {
+                var coordsText = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
+                var stopStory = Object.assign({}, story, {
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    place_name: loc.label || coordsText
+                });
+                var stopBadge =
+                    '<div style="padding:8px 16px 0;font-size:11px;font-weight:700;color:#35618f;text-transform:uppercase;letter-spacing:0.06em;">' +
+                    'Stop ' + (idx + 1) + ' / ' + locs.length +
+                    '</div>';
+                return buildPopupHtml(stopStory, coverImage).replace(
+                    '<div style="padding:14px 16px 14px;">',
+                    stopBadge + '<div style="padding:6px 16px 14px;">'
+                );
+            }
+
             locs.forEach(function (loc, idx) {
                 var marker = L.marker([loc.latitude, loc.longitude], {
                     icon: buildNumberedIcon(L, idx, { color: "#35618f", size: 36 })
                 });
                 var coordsText = loc.latitude.toFixed(4) + ", " + loc.longitude.toFixed(4);
                 var stopTitle = (idx + 1) + ". " + (loc.label || coordsText);
-                marker.bindPopup(
-                    '<div style="font-family:Inter,sans-serif;min-width:200px;">' +
-                    '<div style="font-size:11px;font-weight:700;color:#35618f;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;">Stop ' + (idx + 1) + ' / ' + locs.length + '</div>' +
-                    '<div style="font-size:13px;font-weight:700;color:#1d1c16;margin-bottom:6px;">' + (loc.label || coordsText) + '</div>' +
-                    '<a href="story-detail.html?id=' + story.id + '" style="font-size:12px;color:#775a19;font-weight:700;text-decoration:none;">Read full story →</a>' +
-                    '</div>',
-                    { closeButton: true }
-                );
+                marker.bindPopup(buildStopPopupHtml(loc, idx, stopCoverImage), {
+                    maxWidth: 300,
+                    minWidth: 300,
+                    closeButton: true,
+                    autoPan: true
+                });
+                marker.on("popupopen", function () {
+                    if (stopCoverImage) {
+                        marker.setPopupContent(buildStopPopupHtml(loc, idx, stopCoverImage));
+                        return;
+                    }
+                    fetch(API_BASE + "/stories/" + story.id)
+                        .then(function (res) { return res.json(); })
+                        .then(function (detail) {
+                            if (!detail.media_files) return;
+                            for (var i = 0; i < detail.media_files.length; i++) {
+                                if (detail.media_files[i].media_type === "image") {
+                                    stopCoverImage = detail.media_files[i].media_url;
+                                    break;
+                                }
+                            }
+                            if (stopCoverImage) {
+                                marker.setPopupContent(buildStopPopupHtml(loc, idx, stopCoverImage));
+                            }
+                        })
+                        .catch(function () { /* keep placeholder on error */ });
+                });
                 marker.bindTooltip(stopTitle, { direction: "top", offset: [0, -18] });
                 focusLayer.addLayer(marker);
             });
