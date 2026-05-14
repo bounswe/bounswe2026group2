@@ -15,6 +15,9 @@ A collaborative platform for sharing and discovering local history stories tied 
 
 Monitoring and log aggregation setup is documented in [docs/wiki/monitoring-and-logs.md](docs/wiki/monitoring-and-logs.md).
 
+## Live App
+[localhistorymap.app](https://localhistorymap.app/map.html)
+
 ## Quick Start
 
 ```bash
